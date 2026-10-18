@@ -1,0 +1,22 @@
+{
+  "probe": "p5-value-refresh-rate",
+  "client": { "version": "", "date": "2026-10-19", "locale": "zh-CN" },
+  "runs": 1,
+  "probe_sha256": "b449d0a341280da1d12ac232d3be3fded31d77eb143afa7496d34d3491a33ea3",
+  "hypothesis": "Position Of refreshes about 12.5 times per second (about 38 distinct values in 188 samples); Update Every Frame gives about 62.5 (about 188 distinct values)",
+  "observed": [
+    {
+      "samples": 188,
+      "sample_interval_ms": 16,
+      "pos_distinct_values": 188,
+      "everyframe_distinct_values": 188,
+      "lines_where_pos_differs_from_everyframe": 0,
+      "start_line": "P5 start spawned=true pos=(-29.90, -8.04, -78.18)",
+      "first_sample": "pos=(-29.90, -8.21, -78.23)",
+      "last_sample": "pos=(-14.61, -5.48, -78.82)",
+      "forward_step_per_tick": "about 0.088 (x axis, from i=8 to i=119)"
+    }
+  ],
+  "result": "mismatch",
+  "notes": "Single run so far; README requires 3 consistent runs before this is final. Client version not recorded. Position Of changed on every one of the 188 consecutive 16 ms samples, so in this access pattern (read inside an action, once per tick) it is NOT held for several ticks; the 12.5 Hz hypothesis is not supported. Update Every Frame returned exactly the same value as plain Position Of on all 188 lines, so it made no observable difference here. The step of about 0.088 per tick matches 5.5 m/s x 0.016 s. This does not test Update Every Frame inside continuously re-evaluated elements such as HUD text or effects. The raw 188-line Inspector log was not saved to disk; keep the copy from the client if it is needed as a fixture. An earlier first run (host not spawned, every sample 0) was discarded as invalid."
+}

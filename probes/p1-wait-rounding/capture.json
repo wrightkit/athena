@@ -1,0 +1,17 @@
+{
+  "probe": "p1-wait-rounding",
+  "client": { "version": "", "date": "2026-10-19", "locale": "zh-CN" },
+  "runs": 1,
+  "probe_sha256": "33ab7f3d01d9db88391486cf1c0b069aaa8ec0b8faebe79f34aa4a89e50e2a30",
+  "hypothesis": "wait rounds up to a whole number of ticks (tick = 0.016 s)",
+  "observed": [
+    { "requested_ms": 1, "elapsed_ms": 16.0 },
+    { "requested_ms": 16, "elapsed_ms": 16.0 },
+    { "requested_ms": 17, "elapsed_ms": 32.0 },
+    { "requested_ms": 30, "elapsed_ms": 32.0 },
+    { "requested_ms": 100, "elapsed_ms": 112.0 },
+    { "requested_ms": 500, "elapsed_ms": 512.0 }
+  ],
+  "result": "match",
+  "notes": "Single run so far; README requires 3 consistent runs before this is final. Client version not recorded. Final variables: i=6, t0=3.231 (3.023 + 0.208, the sum of the first five elapsed values, consistent with the P0 start time)."
+}
