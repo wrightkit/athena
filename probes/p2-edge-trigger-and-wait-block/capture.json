@@ -1,0 +1,14 @@
+{
+  "probe": "p2-edge-trigger-and-wait-block",
+  "client": { "version": "", "date": "2026-10-19", "locale": "zh-CN" },
+  "runs": 1,
+  "probe_sha256": "b9b5b592813bcc0bcfbca4fa2447674c31634acfe663613bf0e5850701fd10fd",
+  "hypothesis": "Ongoing is edge-triggered; an edge that occurs while the rule is in a Wait is dropped; a still-true condition at Wait end does not rerun",
+  "observed": [
+    { "run": 1, "start_t_ms": 0, "end_t_ms": 1008 },
+    { "run": 2, "start_t_ms": 2624, "end_t_ms": 3632 },
+    { "total_runs": 2 }
+  ],
+  "result": "match",
+  "notes": "Single run so far; README requires 3 consistent runs before this is final. Client version not recorded. Driver edges at 0, 208, 416, 2416, 2624 ms. No run at ~1008 (edge at 416 during Wait was dropped, not queued) and no run at ~3632 (condition still true at Wait end did not rerun). Final variables: f=true, runs=2, t0=3.023."
+}
