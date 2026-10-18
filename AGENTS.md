@@ -37,7 +37,6 @@ probes/<id>/
   capture-2.txt        optional, run 2
   capture-3.txt        optional, run 3
   capture.json         client, hypothesis, observed, runs, result, notes
-.agents/skills/run-workshop-probe/SKILL.md   the procedure for running one probe
 ```
 
 ## Invariants
@@ -77,10 +76,10 @@ probes/<id>/
 
 ## Running a probe
 
-Follow `.agents/skills/run-workshop-probe/SKILL.md`. Driving the game client is a
-human step for now: the agent prepares the file and judges the result, the user pastes
-into the client and copies the Inspector back. Do not claim a probe was run unless a
-capture exists.
+Follow the workspace skill `.agents/skills/wrightkit-run-workshop-probe/SKILL.md`.
+Driving the game client is a human step for now: the agent prepares the file and
+judges the result, the user pastes into the client and copies the Inspector back. Do
+not claim a probe was run unless a capture exists.
 
 ## Verification and delivery
 
