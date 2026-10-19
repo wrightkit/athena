@@ -27,7 +27,8 @@ in the same change.
 This repository owns the probe programs, the captures, and the capture convention and
 verdict rules in `docs/`. It does **not** own Workshop semantics, the catalog, parsing
 or emission (`workshop-rs`), or Wright orchestration (`wright`). The scheduler
-simulator does not exist yet; it will be a crate here, depending on `workshop-rs` (`docs/placement.md`).
+simulator is the crate `crates/runtime-sim`, depending on `workshop-rs` (`docs/placement.md`).
+It is built in layers; behavior without a passing capture fixture must return `Unsupported`.
 Do not add confirmed behavior to `workshop-rs` from here, and do not promote a result
 with fewer than three agreeing runs.
 
