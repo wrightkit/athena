@@ -50,3 +50,11 @@ Not included: player world, damage, hit detection, values that depend on the wor
 Acceptance: for every probe with result `match`, `sim(probe.workshop)` equals the capture's `observed`. For `mismatch`, the capture wins and the simulator follows it. For `inconclusive`, the test is an explicit unasserted case.
 
 Load figures are relative counts of evaluations, never real server cost.
+
+## Choices no capture covers yet
+
+The simulator makes these choices only to stay deterministic; each needs a probe before it counts as measured:
+
+- A rule's condition is tracked every tick, also while its run is suspended; an edge during a Wait is dropped (P2). A rising edge on the exact tick a Wait ends is treated as dropped too.
+- Rules run in file order within a tick; several runs waking on the same tick resume in file order.
+- Comparing values of different types with `==` gives false; `Null` equals `0`.
