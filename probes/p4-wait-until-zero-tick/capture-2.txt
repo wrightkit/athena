@@ -1,0 +1,15 @@
+变量
+{
+	全局:
+		0: t0
+}
+
+动作
+{
+	全局.t0 = 3.071;
+}
+
+[00:00:03] P4a Wait Until(True, 0) elapsed_ms=0
+[00:00:03] P4b Wait(0) elapsed_ms=16.00
+[00:00:03] P4c Wait Until(False, 0.03) elapsed_ms=32.00
+[00:00:03] P4d Wait Until(False, 0.1) elapsed_ms=112.00

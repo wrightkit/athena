@@ -1,0 +1,30 @@
+变量
+{
+	全局:
+		0: f
+		1: t0
+		2: nIgnore
+		3: nAbort
+		4: nRestart
+		5: endIgnore
+		7: endRestart
+}
+
+动作
+{
+	全局.f = 假;
+	全局.t0 = 3.023;
+	全局.nIgnore = 1;
+	全局.nAbort = 2;
+	全局.nRestart = 2;
+	全局.endIgnore = 1;
+	全局.endRestart = 1;
+}
+
+[00:00:03] P6 flag=true t_ms=0
+[00:00:03] P6 flag=false t_ms=208.00
+[00:00:03] P6 flag=true t_ms=416.00
+[00:00:03] P6 flag=false t_ms=624.00
+[00:00:04] P6 Ignore end t_ms=1008.00
+[00:00:04] P6 Restart end t_ms=1424
+[00:00:05] P6 done t_ms=2624.00
