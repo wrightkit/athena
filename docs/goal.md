@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Build a code-level, non-UI model of how Overwatch Workshop rules are scheduled and executed, grounded in public information and tests against the real client. The model is a scheduler simulator; this repository holds the measurements it is checked against.
+Build a code-level model of how Overwatch Workshop rules are scheduled and executed, grounded in public information and tests against the real client. The model is a scheduler simulator; this repository holds the measurements it is checked against.
 
 Measured behavior is recorded as captures. Captures become test fixtures: for every probe whose result is `match`, the simulator output must equal the recorded observation. Where the client disagrees with a hypothesis, the client wins and the simulator follows it.
 
 ## Intended consumers
 
-The owner's intent: a verified, UI-less, logic-level Workshop runtime that can be used to check the high-level layers (`workshop-rs`, OverPy, OSTW) against expected behavior. It is a shared checking tool for those layers, not a feature of any one of them.
+The owner's intent: a verified, logic-level Workshop runtime that checks the high-level layers (`workshop-rs`, OverPy, OSTW) against expected behavior and backs the `wright` UI with execution simulation. It is a shared tool for those layers, not a feature of any one of them. The UI itself lives in `wright`; this repository holds no UI.
 
 ## Method
 
@@ -28,6 +28,6 @@ Out: physics, hit detection, hero or ability simulation, a player world. Any loa
 
 ## Relation to WrightKit
 
-This supports the tooling goals in the organization goal (`docs/goal.md` in `wrightkit/.github`), mainly principle 9 (verified technical facts about the Workshop environment) and server-load evaluation under principle 5. The workspace goal lists "a game runtime simulator" as a non-goal. A scheduler model with no game world is narrower than that, but the owner has decided to set the question aside until feasibility is established (see [placement.md](placement.md#still-open)). It is not resolved.
+This supports the tooling goals in the organization goal (`docs/goal.md` in `wrightkit/.github`), mainly principle 9 (verified technical facts about the Workshop environment) and server-load evaluation under principle 5. The workspace goal keeps a game-world simulator out of scope and names `runtime` as the owner of Workshop execution modelling.
 
 Workshop semantics belong to `workshop-rs`. A confirmed behavior may later inform catalog metadata there; this repository does not add it.
