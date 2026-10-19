@@ -1,0 +1,10 @@
+[package]
+name = "runtime-sim"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Scheduler simulator for Overwatch Workshop rules, checked against real-client captures."
+
+[dependencies]
+workshop-rs = "1.17"
