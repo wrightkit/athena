@@ -1,7 +1,7 @@
 {
   "probe": "p0-timer-resolution",
-  "client": { "version": "", "date": "2026-10-19", "locale": "zh-CN" },
-  "runs": 1,
+  "client": { "version": "2.25.0.0 - 154461.1", "date": "2026-10-19", "locale": "zh-CN" },
+  "runs": 3,
   "probe_sha256": "8f05821c3b6ab76d0f564a70a94db562fa8c4faa32ce8f36cfe1e4e52bc53a9b",
   "hypothesis": "Total Time Elapsed advances in whole ticks of 0.016 s; 8 x Wait(0.016) are 16 ms apart",
   "observed": [
@@ -15,5 +15,5 @@
     { "i": 7, "t_ms": 128.0 }
   ],
   "result": "match",
-  "notes": "Single run so far; README requires 3 consistent runs before this is final. Client version not recorded. Final variables: i=8, t0=3.023."
+  "notes": "Three saved captures agree: 16 ms steps through 128 ms; final i=8, t0=3.023 in all three. Client version 2.25.0.0 - 154461.1 was read during runs 2 and 3; run 1 version was not recorded."
 }
