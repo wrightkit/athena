@@ -25,8 +25,8 @@ The simulator is outside the semantic crate. It takes a Workshop program as pars
 Consumer to `workshop-rs`, never the reverse:
 
 ```text
-runtime simulator ──► workshop-rs
-opy-rs, deltin-rs tests ──► runtime (dev-dependency, not yet agreed)
+athena simulator ──► workshop-rs
+opy-rs, deltin-rs tests ──► athena (dev-dependency, not yet agreed)
 ```
 
 `workshop-rs` takes no dependency on this project. A confirmed behavior reaches `workshop-rs` only through a request to its owners (an Issue), not by editing it from here. Only behavior that is a declarative Workshop fact is a candidate for catalog metadata; scheduling rules are behavior and belong in typed code (`workshop-rs` core boundaries). Nothing is promoted from a result with fewer than three agreeing runs.

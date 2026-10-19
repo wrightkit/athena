@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use runtime_sim::{Options, SimError, Trace, Val, run_text};
+use athena_sim::{Options, SimError, Trace, Val, run_text};
 
 const LOG_TOLERANCE: f64 = 0.0051;
 const VARIABLE_TOLERANCE: f64 = 0.0006;

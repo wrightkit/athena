@@ -1,4 +1,4 @@
-# runtime
+# athena
 
 Runtime-behavior probes for Overwatch Workshop rules, and the captures recorded from the real client.
 
@@ -6,7 +6,7 @@ A probe is a small hand-written Workshop program. A human pastes it into the cli
 
 ## Status
 
-Probes P0 to P6 exist; measured results and run counts are in `probes/<id>/capture.json`. The scheduler simulator (`crates/runtime-sim`) is being built in layers; its fixtures are the probe captures (`cargo test`). It is a standalone project depending on `workshop-rs`: [docs/placement.md](docs/placement.md).
+Probes P0 to P6 exist; measured results and run counts are in `probes/<id>/capture.json`. The scheduler simulator (`crates/athena-sim`) is being built in layers; its fixtures are the probe captures (`cargo test`). It is a standalone project depending on `workshop-rs`: [docs/placement.md](docs/placement.md).
 
 ## Run a probe
 
