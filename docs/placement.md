@@ -18,9 +18,9 @@ Decision (2026-10-19, project owner): `runtime` is a **standalone project** that
 
 ## Still open
 
-1. The workspace routing table in `wrightkit/.github` has no row for this project; ownership needs an Architect-approved row. **[verified]** that none exists.
-2. The workspace goal lists "a game runtime simulator" as a non-goal. The project owner granted this project a dedicated exception (2026-10-19) and told us to start building. `wrightkit/.github` is not edited yet: its goal and routing table still need an owner-approved amendment before the simulator is published or routed to.
-3. WIR versus `Program` as simulator input; start with `Program`.
-4. A remote and CI that runs `wright check` on probes and compares `probe_sha256`; none exists, and no script does it today.
-5. Whether `opy-rs` and `deltin-rs` want to consume the simulator.
-6. Whether the Chinese procedure is translated to English.
+1. WIR versus `Program` as simulator input; start with `Program`.
+2. A remote and CI that runs `wright check` on probes and compares `probe_sha256`; none exists, and no script does it today.
+3. Whether `opy-rs` and `deltin-rs` want to consume the simulator.
+4. Whether the Chinese procedure is translated to English.
+
+Resolved (2026-10-20): the workspace goal and routing table in `wrightkit/.github` now name `runtime` as the owner of Workshop execution simulation and keep only a game-world simulator out of scope.
