@@ -22,9 +22,11 @@ Details: [capture-convention.md](capture-convention.md), [procedure.zh-CN.md](pr
 
 ## Scope
 
-In: tick length, Wait rounding and Wait Until, Ongoing edge triggering, same-tick rule ordering, Wait Behavior, and the value-refresh behavior needed to interpret them.
+In: tick length, Wait rounding and Wait Until, Ongoing edge triggering, same-tick rule ordering, Wait Behavior, the value-refresh behavior needed to interpret them, a player state table (hero, team, health pools, ability cooldowns, ultimate charge), mocked events supplied by the user, and the effect of custom game settings on those values. The simulator exposes this as headless HUD state (hero and health, ability set and cooldowns); `wright` renders it.
 
-Out: physics, hit detection, hero or ability simulation, a player world. Any load figure the model produces is a relative count of evaluations, never real server cost.
+Out: physics, geometry, hit detection, and what an ability does in the world. Abilities and combat reach the simulator as mocked events with explicit values. Results hold under the supplied inputs; inputs the user did not supply are reported as missing, not defaulted silently.
+
+Hero base values (health, cooldowns, ability parameters) come from a balance-versioned catalog owned by `workshop-rs`, and the simulator reads it by version; rolling back selects an earlier version's data only, never earlier scheduler behavior. Any load figure the model produces is a relative count of evaluations, never real server cost.
 
 ## Relation to WrightKit
 
