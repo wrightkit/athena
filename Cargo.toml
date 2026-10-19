@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/runtime-sim"]
+members = ["crates/athena-sim"]
 resolver = "3"
 
 [workspace.package]

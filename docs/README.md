@@ -1,6 +1,6 @@
-# runtime documentation
+# athena documentation
 
-Index for the `runtime` repository. The root [`README.md`](../README.md) is the entry point; [`AGENTS.md`](../AGENTS.md) holds the agent constraints.
+Index for the `athena` repository. The root [`README.md`](../README.md) is the entry point; [`AGENTS.md`](../AGENTS.md) holds the agent constraints.
 
 | Document | Responsibility |
 | --- | --- |

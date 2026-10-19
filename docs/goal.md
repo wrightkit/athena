@@ -30,6 +30,6 @@ Hero base values (health, cooldowns, ability parameters) come from a balance-ver
 
 ## Relation to WrightKit
 
-This supports the tooling goals in the organization goal (`docs/goal.md` in `wrightkit/.github`), mainly principle 9 (verified technical facts about the Workshop environment) and server-load evaluation under principle 5. The workspace goal keeps a game-world simulator out of scope and names `runtime` as the owner of Workshop execution modelling.
+This supports the tooling goals in the organization goal (`docs/goal.md` in `wrightkit/.github`), mainly principle 9 (verified technical facts about the Workshop environment) and server-load evaluation under principle 5. The workspace goal keeps a game-world simulator out of scope and names `athena` as the owner of Workshop execution modelling.
 
 Workshop semantics belong to `workshop-rs`. A confirmed behavior may later inform catalog metadata there; this repository does not add it.
