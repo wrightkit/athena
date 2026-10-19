@@ -75,6 +75,21 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, SimError> {
             let [a, b] = arguments::<2>(name, args)?;
             Ok(Val::Bool(number(&eval(a, env)?)? < number(&eval(b, env)?)?))
         }
+        "==" => {
+            let [a, b] = arguments::<2>(name, args)?;
+            let (a, b) = (eval(a, env)?, eval(b, env)?);
+            Ok(Val::Bool(match (&a, &b) {
+                (Val::Number(_) | Val::Null, Val::Number(_) | Val::Null) => {
+                    number(&a)? == number(&b)?
+                }
+                (Val::Bool(a), Val::Bool(b)) => a == b,
+                (Val::Text(a), Val::Text(b)) => a == b,
+                (Val::Array(_), _) | (_, Val::Array(_)) => {
+                    return unsupported("== on an array");
+                }
+                _ => false,
+            }))
+        }
         "array" => args
             .iter()
             .map(|item| eval(item, env))

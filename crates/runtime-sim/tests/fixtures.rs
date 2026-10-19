@@ -151,7 +151,7 @@ fn compare_logs(trace: &Trace, captured: &Capture) -> Result<(), String> {
     Ok(())
 }
 
-const RUN_SECONDS: f64 = 8.0;
+const RUN_SECONDS: f64 = 10.0;
 
 fn check_probe(id: &str) {
     let options = Options {
@@ -186,19 +186,16 @@ fn p1_wait_rounding() {
 }
 
 #[test]
-#[ignore = "needs rule conditions and edge triggering (layer 2)"]
 fn p2_edge_trigger_and_wait_block() {
     check_probe("p2-edge-trigger-and-wait-block");
 }
 
 #[test]
-#[ignore = "needs rule conditions and edge triggering (layer 2)"]
 fn p3_same_tick_rule_order() {
     check_probe("p3-same-tick-rule-order");
 }
 
 #[test]
-#[ignore = "needs rule conditions and edge triggering (layer 2)"]
 fn p3_same_tick_rule_order_driver_last() {
     check_probe("p3-same-tick-rule-order-driver-last");
 }
@@ -210,7 +207,7 @@ fn p4_wait_until_zero_tick() {
 }
 
 #[test]
-#[ignore = "needs rule conditions, Wait Until and Wait Behavior (layers 2 and 3)"]
+#[ignore = "needs Wait Until and Wait Behavior (layer 3)"]
 fn p6_wait_behavior() {
     check_probe("p6-wait-behavior");
 }

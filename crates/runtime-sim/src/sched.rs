@@ -28,13 +28,10 @@ struct Instance<'a> {
     /// For each `While` its `End`, and the other way round.
     pairs: Vec<Option<usize>>,
     pc: usize,
-    started: bool,
+    /// The tick a suspended run resumes on; `None` while idle.
     wake: Option<u64>,
-}
-
-enum Flow {
-    Suspended,
-    Finished,
+    /// Condition result on the previous tick. A rule starts on a false-to-true edge.
+    prev: bool,
 }
 
 struct World {
@@ -67,18 +64,28 @@ fn load(program: &Program) -> Result<Vec<Instance<'_>>, SimError> {
         if rule.event != Event::Global {
             return unsupported(format!("rule `{}`: event {:?}", rule.name, rule.event));
         }
-        if rule.conditions.iter().any(|condition| !condition.disabled) {
-            return unsupported(format!("rule `{}`: conditions", rule.name));
-        }
         instances.push(Instance {
             rule,
             pairs: pair_blocks(&rule.actions)?,
             pc: 0,
-            started: false,
             wake: None,
+            prev: false,
         });
     }
     Ok(instances)
+}
+
+fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, SimError> {
+    for condition in rule
+        .conditions
+        .iter()
+        .filter(|condition| !condition.disabled)
+    {
+        if !flag(eval(&condition.value, env)?)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn flag(value: Val) -> Result<bool, SimError> {
@@ -93,11 +100,11 @@ fn run_instance(
     world: &mut World,
     tick: u64,
     now: f64,
-) -> Result<Flow, SimError> {
+) -> Result<(), SimError> {
     let actions = &instance.rule.actions;
     for _ in 0..STEP_LIMIT {
         let Some(action) = actions.get(instance.pc) else {
-            return Ok(Flow::Finished);
+            return Ok(());
         };
         let env = Env {
             globals: &world.globals,
@@ -156,7 +163,7 @@ fn run_instance(
                     let ticks = wait_ticks(number(&eval(seconds, &env)?)?);
                     instance.wake = Some(tick + ticks);
                     instance.pc += 1;
-                    return Ok(Flow::Suspended);
+                    return Ok(());
                 }
                 other => return unsupported(format!("action {other}")),
             },
@@ -183,18 +190,30 @@ pub(crate) fn run(program: &Program, options: Options) -> Result<Trace, SimError
     for tick in 0..ticks {
         let now = START_OFFSET_S + tick as f64 * TICK_S;
         for instance in &mut instances {
-            let due = match instance.wake {
-                Some(wake) => wake <= tick,
-                None => !instance.started,
+            // The condition is tracked every tick, also during a Wait: an edge
+            // while a run is suspended is dropped, not queued (P2).
+            let holds = conditions_hold(
+                instance.rule,
+                &Env {
+                    globals: &world.globals,
+                    now,
+                },
+            )?;
+            let edge = holds && !instance.prev;
+            instance.prev = holds;
+            let start = match instance.wake {
+                Some(wake) if wake <= tick => true,
+                Some(_) => false,
+                None => {
+                    instance.pc = 0;
+                    edge
+                }
             };
-            if !due {
+            if !start {
                 continue;
             }
-            instance.started = true;
             instance.wake = None;
-            if let Flow::Finished = run_instance(instance, &mut world, tick, now)? {
-                instance.wake = Some(u64::MAX);
-            }
+            run_instance(instance, &mut world, tick, now)?;
         }
     }
     Ok(Trace {
