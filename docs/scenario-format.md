@@ -152,7 +152,7 @@ Two more valid files in [scenario-examples/valid/](scenario-examples/valid/) sho
 - `practice-range-default-variable.json` leaves out `state`. `streak` starts as `null`, which reads as 0, so the intended result is `streak` 1, `delta` 1 and `score` 1.
 - `practice-range-missing-event-player.json` leaves out `eventPlayer`. The `kill` rule reads the event player, so the intended result is `outcome.status` `missing_input` and one `missingInputs` entry of kind `eventPlayer`.
 
-**These results are the design, not what the simulator gives today.** `practice-range` has an `init` rule that creates HUD text. The simulator does not model that action, nor player variables, nor an event player. A run of `practice-range` today stops at tick 0 with `outcome.status` `not_modeled`, and the `kill` rule is never reached. The results above hold once the simulator models these three things (athena#9 for HUD text, athena#10 for events and player state). Until then, only the schema is checked by a test.
+**These results are the design, not what the simulator gives today.** `practice-range` has an `init` rule that creates HUD text. The simulator does not model that action, nor player variables, nor an event player. A run of `practice-range` today stops at tick 0 with `outcome.status` `not_modeled`, and the `kill` rule is never reached. The results above hold once the simulator models these three things (athena#10 for HUD text, athena#9 for event injection and player state). Until then, only the schema is checked by a test.
 
 ## Invalid examples
 
