@@ -19,7 +19,7 @@ Decision (2026-10-19, project owner): `athena` is a **standalone project** that 
 ## Still open
 
 1. WIR versus `Program` as simulator input; start with `Program`.
-2. A remote and CI that runs `wright check` on probes and compares `probe_sha256`; none exists, and no script does it today.
+2. Running `wright check` on probes in CI; the `probe_sha256` comparison already runs in `cargo test` (`crates/athena-sim/tests/probe_hashes.rs`).
 3. Whether `opy-rs` and `deltin-rs` want to consume the simulator.
 4. Whether the Chinese procedure is translated to English.
 

@@ -54,5 +54,7 @@ result; the user pastes into the client and copies the Inspector back.
 - A probe change is verified by `wright check --kind workshop` on both files plus the
   element-count comparison in `docs/capture-convention.md`. A result is verified by the
   capture itself; there is no other oracle.
+- `cargo test` also verifies every `capture.json`'s `probe_sha256` against
+  `probe.zh-CN.ow` (`crates/athena-sim/tests/probe_hashes.rs`); CI runs it on PRs and `main`.
 - Commit only verified, task-owned files. Keep `.wright/` and `.DS_Store` out.
-- This repository has no remote yet. Do not add one or push without being asked.
+- Do not push without being asked.
