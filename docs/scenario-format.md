@@ -1,6 +1,6 @@
 # Scenario format
 
-Status: **design proposal for [athena#8](https://github.com/wrightkit/athena/issues/8)**. The owner has not accepted it yet. Nothing here is implemented.
+Status: **accepted design, implemented in `athena-sim`** ([athena#8](https://github.com/wrightkit/athena/issues/8), merged as #16). The simulator reads a scenario file as described here; where the run reaches a construct the simulator does not model, the trace says so (`outcome.status` `not_modeled`).
 
 A scenario is a JSON file. It tells the simulator who is in the match, which events happen and when, and what the author expects to see. Agents and `wright ui` write it. `wright` passes it to `athena` unchanged ([ADR-0033](https://github.com/wrightkit/wright/blob/main/docs/adr/0033-simulate-operation.md), decisions 2 and 5). The machine-readable definition is [scenario.schema.json](scenario.schema.json). The entry point and trace are in [simulator-interface.md](simulator-interface.md).
 
@@ -68,7 +68,7 @@ JSON Schema cannot express some rules. The `athena` loader must check them and r
 
 - Player `id` values are unique.
 - Every `eventPlayer` and every expectation `player` is the `id` of a player in the file.
-- Every `hero` is a hero name known to `workshop-rs` (decision 3).
+- Every `hero` is a hero name known to `workshop-rs` (decision 3): the canonical `Hero` member id of the catalog (for example `JUNKER_QUEEN`) or its en-US spelling (`Junker Queen`), matched case-insensitively.
 - `scenarioVersion` is checked first (see Version).
 
 ## Defaults and missing inputs
@@ -90,6 +90,8 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 - An event value, when the program reads it and the event has no such entry in `values`.
 
 An input of group 2 is **missing** when the program reads it during the run and the scenario does not supply it. The simulator never fills it in. It stops the run at that read, and the trace names the input.
+
+Modeled reads in version 1: the event player (`Event Player`), a player's hero (`Hero Of`) and team (`Team Of`), a player variable, and the scalar event values `eventDamage`, `eventHealing`, `eventWasCriticalHit`, `eventWasEnvironment` and `eventWasHealthPack` — each looked up in `values` by its catalog name. Other event-scoped values (`attacker`, `victim`, `hostPlayer`, `eventAbility`, `eventDirection`) are not modeled and stop the run as `not_modeled`. An injected event fires every rule whose event kind matches `kind`; team and player filters other than `All` are not modeled, and a rule that declares them stops the load as `not_modeled`.
 
 A malformed scenario is a different case. It is refused and nothing runs ([ADR-0033](https://github.com/wrightkit/wright/blob/main/docs/adr/0033-simulate-operation.md), decision 4). The schema and the loader checks (below) define "malformed". A well-formed scenario that lacks a group 2 input gives a trace.
 
@@ -152,7 +154,7 @@ Two more valid files in [scenario-examples/valid/](scenario-examples/valid/) sho
 - `practice-range-default-variable.json` leaves out `state`. `streak` starts as `null`, which reads as 0, so the intended result is `streak` 1, `delta` 1 and `score` 1.
 - `practice-range-missing-event-player.json` leaves out `eventPlayer`. The `kill` rule reads the event player, so the intended result is `outcome.status` `missing_input` and one `missingInputs` entry of kind `eventPlayer`.
 
-**These results are the design, not what the simulator gives today.** `practice-range` has an `init` rule that creates HUD text. The simulator does not model that action, nor player variables, nor an event player. A run of `practice-range` today stops at tick 0 with `outcome.status` `not_modeled`, and the `kill` rule is never reached. The results above hold once the simulator models these three things (athena#10 for HUD text, athena#9 for event injection and player state). Until then, only the schema is checked by a test.
+The `init` rule's `Create HUD Text` is not modeled (athena#10), so the full `practice-range` program still stops at tick 0 with `outcome.status` `not_modeled` and every expectation reports `not_evaluated`. On the `kill`-rule path — event injection, `Event Player`, player variables, `If`/`Else`, `Call Subroutine` — the simulator models the constructs, and `practice-range.json` yields `streak` 3, `delta` 2 and `score` 2 with both expectations `pass`. `practice-range-default-variable.json` yields `streak` 1, `delta` 1 and `score` 1, and `practice-range-missing-event-player.json` yields `outcome.status` `missing_input` with one `eventPlayer` entry. These are exercised by `crates/athena-sim/tests/scenario.rs`.
 
 ## Invalid examples
 
