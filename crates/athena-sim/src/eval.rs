@@ -4,18 +4,18 @@ use std::collections::BTreeMap;
 
 use workshop_rs::Value;
 
-use crate::{SimError, Val};
+use crate::{NotModeled, Val};
 
 pub(crate) struct Env<'a> {
     pub globals: &'a BTreeMap<String, Val>,
     pub now: f64,
 }
 
-fn unsupported<T>(what: impl Into<String>) -> Result<T, SimError> {
-    Err(SimError::Unsupported(what.into()))
+fn unsupported<T>(what: impl Into<String>) -> Result<T, NotModeled> {
+    Err(NotModeled::new(what))
 }
 
-pub(crate) fn number(value: &Val) -> Result<f64, SimError> {
+pub(crate) fn number(value: &Val) -> Result<f64, NotModeled> {
     match value {
         Val::Number(n) => Ok(*n),
         Val::Null => Ok(0.0),
@@ -23,7 +23,7 @@ pub(crate) fn number(value: &Val) -> Result<f64, SimError> {
     }
 }
 
-fn render(value: &Val) -> Result<String, SimError> {
+fn render(value: &Val) -> Result<String, NotModeled> {
     match value {
         Val::Number(n) => Ok(format!("{n:.2}")),
         Val::Null => Ok("0".into()),
@@ -36,12 +36,12 @@ fn render(value: &Val) -> Result<String, SimError> {
 fn arguments<'a, const N: usize>(
     name: &str,
     args: &'a [Value],
-) -> Result<&'a [Value; N], SimError> {
+) -> Result<&'a [Value; N], NotModeled> {
     args.try_into()
         .or_else(|_| unsupported(format!("{name} with {} arguments", args.len())))
 }
 
-pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, SimError> {
+pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, NotModeled> {
     match value {
         Value::Number(n) => Ok(Val::Number(*n)),
         Value::Bool(b) => Ok(Val::Bool(*b)),
@@ -58,8 +58,8 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, SimError> {
     }
 }
 
-fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, SimError> {
-    let binary = |op: fn(f64, f64) -> f64| -> Result<Val, SimError> {
+fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, NotModeled> {
+    let binary = |op: fn(f64, f64) -> f64| -> Result<Val, NotModeled> {
         let [a, b] = arguments::<2>(name, args)?;
         Ok(Val::Number(op(
             number(&eval(a, env)?)?,

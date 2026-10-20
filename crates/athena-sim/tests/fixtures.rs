@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use athena_sim::{Options, SimError, Trace, Val, run_text};
+use athena_sim::{Options, Outcome, Trace, Val, run_text};
 
 const LOG_TOLERANCE: f64 = 0.0051;
 const VARIABLE_TOLERANCE: f64 = 0.0006;
@@ -157,10 +157,14 @@ fn check_probe(id: &str) {
     let options = Options {
         seconds: RUN_SECONDS,
     };
-    let english = run_text(&read(id, "probe.workshop"), options)
-        .unwrap_or_else(|error| panic!("{id} probe.workshop: {error}"));
-    let chinese = run_text(&read(id, "probe.zh-CN.ow"), options)
-        .unwrap_or_else(|error| panic!("{id} probe.zh-CN.ow: {error}"));
+    let simulate = |file: &str| {
+        let trace = run_text(&read(id, file), options)
+            .unwrap_or_else(|error| panic!("{id} {file}: {error}"));
+        assert_eq!(trace.outcome, Outcome::Complete, "{id} {file}");
+        trace
+    };
+    let english = simulate("probe.workshop");
+    let chinese = simulate("probe.zh-CN.ow");
     assert_eq!(
         english, chinese,
         "{id}: the two probe spellings must simulate identically"
@@ -213,14 +217,34 @@ fn p6_wait_behavior() {
 }
 
 #[test]
-fn p5_needs_a_player_world_and_is_reported_unsupported() {
+fn p5_needs_a_player_world_and_is_reported_not_modeled() {
     let text = read("p5-value-refresh-rate", "probe.workshop");
-    let error = run_text(
+    let trace = run_text(
         &text,
         Options {
             seconds: RUN_SECONDS,
         },
     )
-    .unwrap_err();
-    assert!(matches!(error, SimError::Unsupported(_)), "{error}");
+    .unwrap();
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert!(!not_modeled.construct.is_empty());
+}
+
+#[test]
+fn trace_json_is_the_documented_shape() {
+    let text = read("p5-value-refresh-rate", "probe.workshop");
+    let trace = run_text(
+        &text,
+        Options {
+            seconds: RUN_SECONDS,
+        },
+    )
+    .unwrap();
+    let json = serde_json::to_value(&trace).unwrap();
+    assert_eq!(json["outcome"]["status"], "not_modeled");
+    assert!(json["outcome"]["construct"].is_string());
+    assert!(json["logs"].is_array());
+    assert!(json["globals"].is_object());
 }

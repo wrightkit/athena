@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use workshop_rs::{Action, Event, ModifyOp, Program, Rule, Value};
 
 use crate::eval::{Env, eval, number};
-use crate::{LogEntry, Options, SimError, Trace, Val};
+use crate::{LogEntry, NotModeled, Options, Outcome, Trace, Val};
 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
@@ -14,8 +14,8 @@ const TICK_S: f64 = 0.016;
 const START_OFFSET_S: f64 = 0.015;
 const STEP_LIMIT: usize = 1_000_000;
 
-fn unsupported<T>(what: impl Into<String>) -> Result<T, SimError> {
-    Err(SimError::Unsupported(what.into()))
+fn unsupported<T>(what: impl Into<String>) -> Result<T, NotModeled> {
+    Err(NotModeled::new(what))
 }
 
 /// Ticks a `Wait(seconds)` lasts: rounded up, never less than one (P1, P4).
@@ -39,7 +39,7 @@ struct World {
     logs: Vec<LogEntry>,
 }
 
-fn pair_blocks(actions: &[Action]) -> Result<Vec<Option<usize>>, SimError> {
+fn pair_blocks(actions: &[Action]) -> Result<Vec<Option<usize>>, NotModeled> {
     let mut pairs = vec![None; actions.len()];
     let mut open = Vec::new();
     for (index, action) in actions.iter().enumerate() {
@@ -58,7 +58,7 @@ fn pair_blocks(actions: &[Action]) -> Result<Vec<Option<usize>>, SimError> {
     Ok(pairs)
 }
 
-fn load(program: &Program) -> Result<Vec<Instance<'_>>, SimError> {
+fn load(program: &Program) -> Result<Vec<Instance<'_>>, NotModeled> {
     let mut instances = Vec::new();
     for rule in program.rules.iter().filter(|rule| !rule.disabled) {
         if rule.event != Event::Global {
@@ -75,7 +75,7 @@ fn load(program: &Program) -> Result<Vec<Instance<'_>>, SimError> {
     Ok(instances)
 }
 
-fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, SimError> {
+fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, NotModeled> {
     for condition in rule
         .conditions
         .iter()
@@ -88,7 +88,7 @@ fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, SimError> {
     Ok(true)
 }
 
-fn flag(value: Val) -> Result<bool, SimError> {
+fn flag(value: Val) -> Result<bool, NotModeled> {
     match value {
         Val::Bool(b) => Ok(b),
         other => unsupported(format!("condition value {other:?}")),
@@ -100,7 +100,7 @@ fn run_instance(
     world: &mut World,
     tick: u64,
     now: f64,
-) -> Result<(), SimError> {
+) -> Result<(), NotModeled> {
     let actions = &instance.rule.actions;
     for _ in 0..STEP_LIMIT {
         let Some(action) = actions.get(instance.pc) else {
@@ -176,8 +176,7 @@ fn run_instance(
     ))
 }
 
-pub(crate) fn run(program: &Program, options: Options) -> Result<Trace, SimError> {
-    let mut instances = load(program)?;
+pub(crate) fn run(program: &Program, options: Options) -> Trace {
     let mut world = World {
         globals: program
             .global_variables
@@ -186,6 +185,23 @@ pub(crate) fn run(program: &Program, options: Options) -> Result<Trace, SimError
             .collect(),
         logs: Vec::new(),
     };
+    let outcome =
+        match load(program).and_then(|instances| tick_loop(instances, &mut world, options)) {
+            Ok(()) => Outcome::Complete,
+            Err(not_modeled) => Outcome::NotModeled(not_modeled),
+        };
+    Trace {
+        outcome,
+        logs: world.logs,
+        globals: world.globals,
+    }
+}
+
+fn tick_loop(
+    mut instances: Vec<Instance<'_>>,
+    world: &mut World,
+    options: Options,
+) -> Result<(), NotModeled> {
     let ticks = (options.seconds / TICK_S).floor() as u64 + 1;
     for tick in 0..ticks {
         let now = START_OFFSET_S + tick as f64 * TICK_S;
@@ -198,7 +214,8 @@ pub(crate) fn run(program: &Program, options: Options) -> Result<Trace, SimError
                     globals: &world.globals,
                     now,
                 },
-            )?;
+            )
+            .map_err(|e| e.at(tick))?;
             let edge = holds && !instance.prev;
             instance.prev = holds;
             let start = match instance.wake {
@@ -213,11 +230,8 @@ pub(crate) fn run(program: &Program, options: Options) -> Result<Trace, SimError
                 continue;
             }
             instance.wake = None;
-            run_instance(instance, &mut world, tick, now)?;
+            run_instance(instance, world, tick, now).map_err(|e| e.at(tick))?;
         }
     }
-    Ok(Trace {
-        logs: world.logs,
-        globals: world.globals,
-    })
+    Ok(())
 }
