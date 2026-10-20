@@ -1,4 +1,4 @@
-//! `docs/scenario.schema.json` accepts the valid example and rejects every
+//! `docs/scenario.schema.json` accepts every valid example and rejects every
 //! invalid example.
 
 use std::fs;
@@ -18,12 +18,14 @@ fn schema_accepts_valid_and_rejects_invalid_examples() {
     let schema = jsonschema::draft202012::new(&read(docs().join("scenario.schema.json")))
         .expect("schema is valid draft 2020-12");
 
-    let valid = docs().join("scenario-examples/practice-range.json");
-    let errors: Vec<_> = schema
-        .iter_errors(&read(valid))
-        .map(|e| e.to_string())
-        .collect();
-    assert!(errors.is_empty(), "valid example rejected: {errors:?}");
+    for entry in fs::read_dir(docs().join("scenario-examples/valid")).unwrap() {
+        let path = entry.unwrap().path();
+        let errors: Vec<_> = schema
+            .iter_errors(&read(path.clone()))
+            .map(|e| e.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{} rejected: {errors:?}", path.display());
+    }
 
     let mut invalid = 0;
     for entry in fs::read_dir(docs().join("scenario-examples/invalid")).unwrap() {
