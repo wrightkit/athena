@@ -1,0 +1,16 @@
+[workspace]
+changelog_update = false
+dependencies_update = false
+git_release_enable = false
+git_tag_enable = false
+pr_labels = ["release"]
+semver_check = false
+
+# athena-sim is publish = false: the release creates the canonical
+# `v{{ version }}` tag and a GitHub release only, nothing reaches crates.io.
+[[package]]
+name = "athena-sim"
+publish = false
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
+git_release_enable = true
