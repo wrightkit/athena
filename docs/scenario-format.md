@@ -36,7 +36,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `id` | yes | Text that names the player in this file. It must be unique. |
+| `id` | yes | Text that names the player in this file. It must be unique; the loader checks this (see Loader checks). |
 | `hero` | no | Hero name, for example `ana`. |
 | `team` | no | `team1` or `team2`. |
 | `state` | no | Map from player-variable name to start value. A variable not listed starts as `null`. |
@@ -62,6 +62,15 @@ An expectation has a `kind`:
 - `playerVariable`: fields `player` (an `id`), `name` and `value`.
 - `log`: fields `tick` and `text`. The trace has a log line with this text on this tick.
 
+## Loader checks
+
+JSON Schema cannot express some rules. The `athena` loader must check them and refuse the scenario when one fails. The schema and its test do not cover them.
+
+- Player `id` values are unique.
+- Every `eventPlayer` and every expectation `player` is the `id` of a player in the file.
+- Every `hero` is a hero name known to `workshop-rs` (decision 3).
+- `scenarioVersion` is checked first (see Version).
+
 ## Defaults and missing inputs
 
 A scenario is a mock. Every fact it does not declare is handled by one of two rules. Which rule applies depends on the kind of fact.
@@ -82,14 +91,14 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 
 An input of group 2 is **missing** when the program reads it during the run and the scenario does not supply it. The simulator never fills it in. It stops the run at that read, and the trace names the input.
 
-A scenario that breaks the schema is a different case. It is refused and nothing runs ([ADR-0033](https://github.com/wrightkit/wright/blob/main/docs/adr/0033-simulate-operation.md), decision 4). This includes an `eventPlayer` or `player` id that no player in the file has. A well-formed scenario that lacks a group 2 input gives a trace.
+A malformed scenario is a different case. It is refused and nothing runs ([ADR-0033](https://github.com/wrightkit/wright/blob/main/docs/adr/0033-simulate-operation.md), decision 4). The schema and the loader checks (below) define "malformed". A well-formed scenario that lacks a group 2 input gives a trace.
 
 ### Trace additions
 
 The trace gains two fields. Adding a field is compatible ([simulator-interface.md](simulator-interface.md)).
 
 - `outcome.status` can be `missing_input`. The run stopped at the first missing input.
-- `missingInputs`: a list that is empty unless the status is `missing_input`. Each entry has these fields:
+- `missingInputs`: a list that is empty unless the status is `missing_input`. The run stops at the first missing input, so the list has at most one entry in version 1. Each entry has these fields:
 
 | Field | Meaning |
 | --- | --- |
@@ -140,8 +149,10 @@ Adding an optional field does not change the version. Removing or renaming a fie
 
 Two more valid files in [scenario-examples/valid/](scenario-examples/valid/) show the two rules:
 
-- `practice-range-default-variable.json` leaves out `state`. `streak` starts as `null`, which reads as 0. The run ends with `streak` 1, `delta` 1 and `score` 1.
-- `practice-range-missing-event-player.json` leaves out `eventPlayer`. The `kill` rule reads the event player, so the trace has `outcome.status` `missing_input` and one `missingInputs` entry of kind `eventPlayer`.
+- `practice-range-default-variable.json` leaves out `state`. `streak` starts as `null`, which reads as 0, so the intended result is `streak` 1, `delta` 1 and `score` 1.
+- `practice-range-missing-event-player.json` leaves out `eventPlayer`. The `kill` rule reads the event player, so the intended result is `outcome.status` `missing_input` and one `missingInputs` entry of kind `eventPlayer`.
+
+**These results are the design, not what the simulator gives today.** `practice-range` has an `init` rule that creates HUD text. The simulator does not model that action, nor player variables, nor an event player. A run of `practice-range` today stops at tick 0 with `outcome.status` `not_modeled`, and the `kill` rule is never reached. The results above hold once the simulator models these three things (athena#9 for HUD text, athena#10 for events and player state). Until then, only the schema is checked by a test.
 
 ## Invalid examples
 
