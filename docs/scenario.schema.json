@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wrightkit/athena/blob/main/docs/scenario.schema.json",
+  "title": "athena scenario, version 1",
+  "type": "object",
+  "required": ["scenarioVersion", "seconds", "players"],
+  "additionalProperties": false,
+  "properties": {
+    "scenarioVersion": { "const": 1 },
+    "seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "players": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/player" }
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/event" }
+    },
+    "expect": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/expectation" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "time": { "type": "number", "minimum": 0 },
+    "value": {
+      "type": ["null", "boolean", "number", "string", "array"],
+      "items": { "$ref": "#/$defs/value" }
+    },
+    "values": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/value" }
+    },
+    "player": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "hero": { "type": "string", "minLength": 1 },
+        "team": { "enum": ["team1", "team2"] },
+        "state": { "$ref": "#/$defs/values" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["kind", "time"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "time": { "$ref": "#/$defs/time" },
+        "eventPlayer": { "$ref": "#/$defs/id" },
+        "values": { "$ref": "#/$defs/values" }
+      }
+    },
+    "expectation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "name", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "global" },
+            "name": { "$ref": "#/$defs/id" },
+            "value": { "$ref": "#/$defs/value" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "player", "name", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "playerVariable" },
+            "player": { "$ref": "#/$defs/id" },
+            "name": { "$ref": "#/$defs/id" },
+            "value": { "$ref": "#/$defs/value" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "tick", "text"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "log" },
+            "tick": { "type": "integer", "minimum": 0 },
+            "text": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}
