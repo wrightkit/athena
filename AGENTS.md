@@ -14,6 +14,7 @@ Start at [`docs/README.md`](docs/README.md). Load only the document the task nee
 
 - goal and scope: `docs/goal.md`
 - ownership, dependency direction, simulator scope: `docs/architecture.md`
+- simulator entry point and trace format (the contract `wright` consumes): `docs/simulator-interface.md`
 - why this is a standalone project, and what is still open: `docs/placement.md`
 - capture layout, `capture.json` shape, result rules, editing a probe: `docs/capture-convention.md`
 - running a probe, expected values, verdict conditions: `docs/procedure.zh-CN.md`
@@ -28,7 +29,7 @@ This repository owns the probe programs, the captures, and the capture conventio
 verdict rules in `docs/`. It does **not** own Workshop semantics, the catalog, parsing
 or emission (`workshop-rs`), or Wright orchestration (`wright`). The scheduler
 simulator is the crate `crates/athena-sim`, depending on `workshop-rs` (`docs/placement.md`).
-It is built in layers; behavior without a passing capture fixture must return `Unsupported`.
+It is built in layers; behavior without a passing capture fixture must end the run as `NotModeled` in the trace.
 Do not add confirmed behavior to `workshop-rs` from here, and do not promote a result
 with fewer than three agreeing runs.
 

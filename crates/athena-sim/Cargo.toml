@@ -7,6 +7,7 @@ publish = false
 description = "Scheduler simulator for Overwatch Workshop rules, checked against real-client captures."
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
 workshop-rs = "1.17"
 
 [dev-dependencies]

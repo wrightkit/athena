@@ -45,7 +45,7 @@ Only what P0 to P4 fixtures need:
 - global variables and arrays;
 - output: a tick-ordered rule-firing trace and `Log To Inspector` output.
 
-Not included: player world, damage, hit detection, values that depend on the world such as `Position Of`. An unimplemented action or value is reported as unsupported, never skipped.
+Not included: player world, damage, hit detection, values that depend on the world such as `Position Of`. An unimplemented action or value is reported as not modeled in the trace, never skipped ([simulator-interface.md](simulator-interface.md)).
 
 Acceptance: for every probe with result `match`, `sim(probe.workshop)` equals the capture's `observed`. For `mismatch`, the capture wins and the simulator follows it. For `inconclusive`, the test is an explicit unasserted case.
 
