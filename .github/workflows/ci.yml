@@ -23,3 +23,23 @@ jobs:
     with:
       toolchain: 1.85.0
       cache-shared-key: linux-ci
+
+  # The simulator core is host-agnostic: a native-only dependency (filesystem,
+  # threads, system clock) fails this build for wasm32-unknown-unknown.
+  wasm-check:
+    name: Core builds for WebAssembly
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Rust
+        uses: wrightkit/.github/.github/actions/setup-rust@main
+        with:
+          toolchain: 1.85.0
+          targets: wasm32-unknown-unknown
+          cache-shared-key: linux-ci
+          cache-save: "false"
+      - name: Check athena-sim for wasm32
+        run: cargo check --locked --target wasm32-unknown-unknown -p athena-sim
