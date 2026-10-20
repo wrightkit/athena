@@ -57,5 +57,5 @@ The simulator makes these choices only to stay deterministic; each needs a probe
 
 - A rule's condition is tracked every tick, also while its run is suspended; an edge during a Wait is dropped (P2). A rising edge on the exact tick a Wait ends is treated as dropped too.
 - Rules run in file order within a tick; several runs waking on the same tick resume in file order.
-- A variable that is not set reads as `Null`, including a scenario variable the scenario does not declare ([scenario-format.md](scenario-format.md)).
+- A variable that is not set reads as `Null`, including a variable that a scenario does not declare ([scenario-format.md](scenario-format.md)).
 - Comparing values of different types with `==` gives false; `Null` equals `0`.
