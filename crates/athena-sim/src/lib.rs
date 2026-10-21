@@ -3,6 +3,7 @@
 mod eval;
 mod scenario;
 mod sched;
+mod state;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -140,6 +141,53 @@ pub struct ExpectationResult {
     pub actual: Val,
 }
 
+/// One health pool: `current` points out of `max`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PoolState {
+    pub current: f64,
+    pub max: f64,
+}
+
+/// Ultimate charge: `charge` points toward `cost`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct UltimateState {
+    pub charge: f64,
+    pub cost: f64,
+}
+
+/// A player's catalog-derived world state: health pools, ability cooldowns
+/// and ultimate charge. Start values come from `workshop_rs::hero_values` at
+/// `CURRENT_VERSION`; `Damage` and `Heal` move `current` inside a pool and
+/// nothing else changes it (no ability use is simulated).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PlayerWorld {
+    /// The `health` pool; a hero always has one.
+    pub health: PoolState,
+    /// The `shield` pool, `None` when the catalog records none.
+    pub shield: Option<PoolState>,
+    /// The `armor` pool, `None` when the catalog records none.
+    pub armor: Option<PoolState>,
+    /// Cooldown seconds per ability slot the catalog records a value for;
+    /// keys are `slot` or `slot/variant`.
+    pub cooldowns: BTreeMap<String, f64>,
+    /// Ultimate charge toward the catalog's cost.
+    pub ultimate: UltimateState,
+}
+
+/// A player's row in the state table the trace reports.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PlayerState {
+    /// The scenario's `hero` text, `None` when undeclared.
+    pub hero: Option<String>,
+    /// `team1` or `team2`, `None` when undeclared.
+    pub team: Option<String>,
+    /// The catalog-derived world state, `None` when the run could not
+    /// resolve it (a player without a `hero`, or a hero value the catalog
+    /// lacks). Touching an unresolved player's world state ends the run as
+    /// `not_modeled`.
+    pub world: Option<PlayerWorld>,
+}
+
 /// What a run produced. `logs` and `globals` describe the state when the run
 /// ended: after the last tick for `Complete`, at the stop for `NotModeled`
 /// and `MissingInput`. Consumers must check `outcome` before using either.
@@ -148,6 +196,9 @@ pub struct Trace {
     pub outcome: Outcome,
     pub logs: Vec<LogEntry>,
     pub globals: BTreeMap<String, Val>,
+    /// The player state table: one row per scenario player. Empty when the
+    /// run had no scenario.
+    pub players: BTreeMap<String, PlayerState>,
     /// The live inputs the program read but the scenario did not supply.
     /// Empty unless `outcome` is `missing_input`; at most one entry in
     /// version 1.
@@ -213,6 +264,9 @@ pub enum RunError {
     Parse(ParseError),
     /// The scenario is malformed or fails a loader check.
     Scenario(ScenarioError),
+    /// The pinned hero-values file failed to load; neither the program nor
+    /// the scenario is the cause.
+    HeroValues(workshop_rs::hero_values::HeroValuesError),
 }
 
 impl fmt::Display for RunError {
@@ -220,6 +274,7 @@ impl fmt::Display for RunError {
         match self {
             Self::Parse(error) => write!(f, "{error}"),
             Self::Scenario(error) => write!(f, "{error}"),
+            Self::HeroValues(error) => write!(f, "hero values: {error}"),
         }
     }
 }
@@ -265,7 +320,14 @@ pub fn run_text(text: &str, options: Options) -> Result<Trace, ParseError> {
     let parse = |error: &dyn fmt::Display| ParseError(error.to_string());
     let catalog = workshop_rs::catalog::Catalog::builtin_ref().map_err(|e| parse(&e))?;
     let program = parse_program(text, catalog)?;
-    Ok(sched::run(&program, options, None))
+    let values = hero_values().map_err(|e| parse(&e))?;
+    Ok(sched::run(&program, options, None, values))
+}
+
+fn hero_values()
+-> Result<&'static workshop_rs::hero_values::HeroValues, workshop_rs::hero_values::HeroValuesError>
+{
+    workshop_rs::hero_values::builtin(workshop_rs::hero_values::CURRENT_VERSION)
 }
 
 /// Parse Workshop text and run it with a scenario: the players, injected
@@ -273,8 +335,21 @@ pub fn run_text(text: &str, options: Options) -> Result<Trace, ParseError> {
 ///
 /// A malformed scenario is refused; a well-formed one always yields a
 /// [`Trace`]. A live input the program reads but the scenario omits stops the
-/// run with `outcome.status` `missing_input`.
+/// run with `outcome.status` `missing_input`. Player start values come from
+/// the hero-values file pinned at [`workshop_rs::hero_values::CURRENT_VERSION`].
 pub fn run_scenario(text: &str, scenario_json: &str) -> Result<Trace, RunError> {
+    let values = hero_values().map_err(RunError::HeroValues)?;
+    run_scenario_with_hero_values(text, scenario_json, values)
+}
+
+/// [`run_scenario`] against an explicit hero-values set instead of the
+/// pinned file. Tests use it with values loaded through
+/// `workshop_rs::hero_values::load`; production callers use `run_scenario`.
+pub fn run_scenario_with_hero_values(
+    text: &str,
+    scenario_json: &str,
+    hero_values: &workshop_rs::hero_values::HeroValues,
+) -> Result<Trace, RunError> {
     let catalog = workshop_rs::catalog::Catalog::builtin_ref()
         .map_err(|e| RunError::Parse(ParseError(e.to_string())))?;
     let program = parse_program(text, catalog).map_err(RunError::Parse)?;
@@ -282,5 +357,5 @@ pub fn run_scenario(text: &str, scenario_json: &str) -> Result<Trace, RunError> 
     let options = Options {
         seconds: scenario.seconds,
     };
-    Ok(sched::run(&program, options, Some(scenario)))
+    Ok(sched::run(&program, options, Some(scenario), hero_values))
 }

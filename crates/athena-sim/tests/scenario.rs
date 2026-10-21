@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use athena_sim::{
     ExpectationStatus, MissingInputKind, Options, Outcome, RunError, ScenarioError, Val,
-    run_scenario, run_text,
+    run_scenario, run_scenario_with_hero_values, run_text,
 };
 
 /// The Workshop output of `wrightkit/practice-range`'s `src/main.opy` at
@@ -562,4 +562,237 @@ rule ("filtered") {
     };
     assert!(not_modeled.construct.contains("filter"));
     assert_eq!(not_modeled.tick, None);
+}
+
+// ----- Player state table: hero values, Damage and Heal (athena#9) -----
+
+/// A test-only hero-values set, loaded through `workshop_rs::hero_values::load`.
+/// `ana` has all three pools, both ability cooldowns and an ultimate cost;
+/// `ashe` has health and an ultimate cost only; `dva` has health but no
+/// ultimate cost; every other hero (for example `baptiste`) is absent, so all
+/// of its values are `None`.
+fn test_values() -> workshop_rs::hero_values::HeroValues {
+    workshop_rs::hero_values::load(
+        r#"{
+            "format": "workshop-rs/hero-values-v1",
+            "balanceVersion": "test-only",
+            "heroes": [
+                { "id": "ana", "values": [
+                    { "kind": "health", "pool": "health", "amount": 200 },
+                    { "kind": "health", "pool": "shield", "amount": 100 },
+                    { "kind": "health", "pool": "armor", "amount": 50 },
+                    { "kind": "cooldown", "slot": "ability1", "seconds": 10 },
+                    { "kind": "cooldown", "slot": "ability2", "seconds": 12 },
+                    { "kind": "ultimateCost", "points": 2100 }
+                ] },
+                { "id": "ashe", "values": [
+                    { "kind": "health", "pool": "health", "amount": 200 },
+                    { "kind": "ultimateCost", "points": 2400 }
+                ] },
+                { "id": "dva", "values": [
+                    { "kind": "health", "pool": "health", "amount": 650 }
+                ] }
+            ]
+        }"#,
+    )
+    .expect("the test hero values load")
+}
+
+/// `Damage`/`Heal` on the event player.
+const DAMAGE_HEAL: &str = r#"
+rule ("hit") {
+    event {
+        Player Dealt Damage;
+        All;
+        All;
+    }
+    actions {
+        Damage(Event Player, Event Player, 120);
+        Damage(Event Player, Event Player, 100);
+        Heal(Event Player, Event Player, 50);
+        Heal(Event Player, Event Player, 10);
+    }
+}
+"#;
+
+#[test]
+fn damage_consumes_pools_in_shield_armor_health_order_and_heal_caps() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [
+            { "id": "p1", "hero": "Ana", "team": "team1" },
+            { "id": "p2", "hero": "Ashe", "team": "team2" }
+        ],
+        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    let values = test_values();
+    let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+
+    let p1 = &trace.players["p1"];
+    assert_eq!(p1.hero.as_deref(), Some("Ana"));
+    assert_eq!(p1.team.as_deref(), Some("team1"));
+    let world = p1.world.as_ref().expect("p1 has world state");
+    // 120 damage drains the 100 shield and 20 of the armor; the next 100
+    // finishes the 30 armor left and takes 70 health, leaving 130. The
+    // heals of 50 and 10 raise it to 190.
+    let shield = world.shield.as_ref().expect("ana has a shield pool");
+    assert_eq!((shield.current, shield.max), (0.0, 100.0));
+    let armor = world.armor.as_ref().expect("ana has an armor pool");
+    assert_eq!((armor.current, armor.max), (0.0, 50.0));
+    assert_eq!((world.health.current, world.health.max), (190.0, 200.0));
+    // Cooldowns and ultimate are read-only catalog values.
+    assert_eq!(world.cooldowns["ability1"], 10.0);
+    assert_eq!(world.cooldowns["ability2"], 12.0);
+    assert_eq!((world.ultimate.charge, world.ultimate.cost), (0.0, 2100.0));
+
+    // `p2` was not the event player: its pools are untouched, and the
+    // catalog records no shield or armor for it.
+    let p2 = &trace.players["p2"];
+    assert_eq!(p2.hero.as_deref(), Some("Ashe"));
+    assert_eq!(p2.team.as_deref(), Some("team2"));
+    let world = p2.world.as_ref().expect("p2 has world state");
+    assert_eq!((world.health.current, world.health.max), (200.0, 200.0));
+    assert_eq!(world.shield, None);
+    assert_eq!(world.armor, None);
+    assert_eq!((world.ultimate.charge, world.ultimate.cost), (0.0, 2400.0));
+}
+
+#[test]
+fn heal_does_not_exceed_the_pool_maximum() {
+    let text = r#"
+rule ("heal") {
+    event {
+        Player Dealt Healing;
+        All;
+        All;
+    }
+    actions {
+        Damage(Event Player, Event Player, 200);
+        Heal(Event Player, Event Player, 500);
+        Heal(Event Player, Event Player, 10);
+    }
+}
+"#;
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "hero": "ana" }],
+        "events": [{ "kind": "playerDealtHealing", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    let values = test_values();
+    let trace = run_scenario_with_hero_values(text, scenario, &values)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+    let world = trace.players["p1"].world.as_ref().expect("world state");
+    // 200 damage leaves 150 health (through the 100 shield and 50 armor).
+    // The heal of 500 stops at the 200 maximum; the next heal has no effect.
+    // Neither heal restores the shield or armor pools.
+    assert_eq!((world.health.current, world.health.max), (200.0, 200.0));
+    assert_eq!(world.shield.as_ref().unwrap().current, 0.0);
+    assert_eq!(world.armor.as_ref().unwrap().current, 0.0);
+}
+
+#[test]
+fn a_hero_without_catalog_values_is_not_modeled() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "hero": "baptiste" }],
+        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    let values = test_values();
+    let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    // `baptiste` is absent from the test file: every value is `None`.
+    assert!(
+        not_modeled.construct.contains("health"),
+        "{}",
+        not_modeled.construct
+    );
+    assert!(not_modeled.construct.contains("p1"));
+    // The row still says what the scenario declared; the world state is null.
+    let p1 = &trace.players["p1"];
+    assert_eq!(p1.hero.as_deref(), Some("baptiste"));
+    assert_eq!(p1.world, None);
+}
+
+#[test]
+fn a_hero_without_an_ultimate_cost_is_not_modeled() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "hero": "D.Va" }],
+        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    let values = test_values();
+    let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    // `dva` has `health` but no `ultimateCost` in the test file.
+    assert!(
+        not_modeled.construct.contains("ultimateCost"),
+        "{}",
+        not_modeled.construct
+    );
+}
+
+#[test]
+fn damage_on_a_player_without_a_hero_is_not_modeled() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "team": "team1" }],
+        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    let values = test_values();
+    let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert!(not_modeled.construct.contains("p1"));
+    assert!(not_modeled.construct.contains("hero"));
+    assert_eq!(trace.players["p1"].world, None);
+}
+
+#[test]
+fn the_trace_json_carries_the_player_table() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [
+            { "id": "p1", "hero": "Ana", "team": "team1" },
+            { "id": "p2" }
+        ],
+        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    let values = test_values();
+    let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
+        .unwrap_or_else(|error| panic!("{error}"));
+    let json = serde_json::to_value(&trace).unwrap();
+    assert_eq!(json["players"]["p1"]["hero"], "Ana");
+    assert_eq!(json["players"]["p1"]["team"], "team1");
+    assert_eq!(
+        json["players"]["p1"]["world"]["health"],
+        serde_json::json!({ "current": 190.0, "max": 200.0 })
+    );
+    assert_eq!(
+        json["players"]["p1"]["world"]["cooldowns"],
+        serde_json::json!({ "ability1": 10.0, "ability2": 12.0 })
+    );
+    assert_eq!(
+        json["players"]["p1"]["world"]["ultimate"],
+        serde_json::json!({ "charge": 0.0, "cost": 2100.0 })
+    );
+    // A player without a hero reports its declared fields and a null world.
+    assert_eq!(json["players"]["p2"]["hero"], serde_json::Value::Null);
+    assert_eq!(json["players"]["p2"]["world"], serde_json::Value::Null);
 }

@@ -49,6 +49,22 @@ pub(crate) fn player_id(value: &Value, env: &Env) -> Result<String, Stop> {
     }
 }
 
+/// Resolve a `Player|Array` argument, as `Damage` and `Heal` take, to the
+/// `id`s of the players it names.
+pub(crate) fn player_ids(value: &Value, env: &Env) -> Result<Vec<String>, Stop> {
+    match eval(value, env)? {
+        Val::Player(id) => Ok(vec![id]),
+        Val::Array(items) => items
+            .iter()
+            .map(|item| match item {
+                Val::Player(id) => Ok(id.clone()),
+                other => unsupported(format!("{other:?} where a player is needed")),
+            })
+            .collect(),
+        other => unsupported(format!("{other:?} where a player is needed")),
+    }
+}
+
 pub(crate) fn number(value: &Val) -> Result<f64, Stop> {
     match value {
         Val::Number(n) => Ok(*n),

@@ -4,7 +4,7 @@
 //! `docs/scenario.schema.json`. This module refuses malformed scenarios;
 //! a well-formed scenario always runs.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use serde::Deserialize;
 use workshop_rs::catalog::{Catalog, Locale};
@@ -36,11 +36,18 @@ pub(crate) struct Player {
     /// Hero name; the program may read it, and a missing one is a missing
     /// input.
     pub hero: Option<String>,
+    /// The en-US spellings of the catalog member `hero` names, used to find
+    /// the hero in the gameplay dataset for the hero values catalog. Empty
+    /// when `hero` is absent.
+    pub hero_spellings: Vec<String>,
     /// Team; likewise a live input.
     pub team: Option<Team>,
     /// Player variables from `state`. A variable not listed starts as
     /// `null`.
     pub vars: BTreeMap<String, Val>,
+    /// The player's catalog-derived world state, resolved when the run
+    /// starts.
+    pub world: crate::state::WorldSlot,
 }
 
 /// The runtime context of an injected event while a rule it triggered runs.
@@ -236,16 +243,18 @@ fn expectation(index: usize, value: &serde_json::Value) -> Result<Expectation, S
 }
 
 /// Every hero name a scenario may give, from the `workshop-rs` catalog: the
-/// canonical `Hero` member id (such as `JUNKER_QUEEN`) or the en-US spelling
-/// (such as `Junker Queen`), matched case-insensitively.
-fn hero_names(catalog: &Catalog) -> BTreeSet<String> {
+/// canonical `Hero` member id (such as `JUNKER_QUEEN`) or an en-US spelling
+/// (such as `Junker Queen`), matched case-insensitively. Each accepted name
+/// maps to the member's en-US spellings, which the gameplay dataset shares.
+fn hero_names(catalog: &Catalog) -> BTreeMap<String, Vec<String>> {
     let en_us = Locale::new("en-US");
-    let mut names = BTreeSet::new();
+    let mut names = BTreeMap::new();
     if let Some(domain) = catalog.enum_domain("Hero") {
         for member in &domain.members {
-            names.insert(member.member.to_lowercase());
-            if let Some(spelling) = member.spelling(&en_us) {
-                names.insert(spelling.to_lowercase());
+            let spellings = member.spellings(&en_us).to_vec();
+            names.insert(member.member.to_lowercase(), spellings.clone());
+            for spelling in &spellings {
+                names.insert(spelling.to_lowercase(), spellings.clone());
             }
         }
     }
@@ -280,12 +289,16 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         if player.id.is_empty() {
             return format_error("a player `id` must not be empty");
         }
+        let mut hero_spellings = Vec::new();
         if let Some(hero) = &player.hero {
             if hero.is_empty() {
                 return format_error(format!("player `{}` has an empty hero", player.id));
             }
-            if !heroes.contains(&hero.to_lowercase()) {
-                return load_error(format!("player `{}` has unknown hero `{hero}`", player.id));
+            match heroes.get(&hero.to_lowercase()) {
+                Some(spellings) => hero_spellings = spellings.clone(),
+                None => {
+                    return load_error(format!("player `{}` has unknown hero `{hero}`", player.id));
+                }
             }
         }
         let mut vars = BTreeMap::new();
@@ -294,11 +307,13 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         }
         let loaded = Player {
             hero: player.hero,
+            hero_spellings,
             team: player.team.map(|team| match team {
                 TeamDoc::Team1 => Team::Team1,
                 TeamDoc::Team2 => Team::Team2,
             }),
             vars,
+            world: crate::state::WorldSlot::Unresolved,
         };
         if players.insert(player.id.clone(), loaded).is_some() {
             return load_error(format!("player `id` `{}` is declared twice", player.id));
@@ -313,13 +328,13 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         if event.time < 0.0 {
             return format_error(format!("event `{}` has a negative `time`", event.kind));
         }
-        if let Some(id) = &event.event_player {
-            if !players.contains_key(id) {
-                return load_error(format!(
-                    "event `{}` names unknown player `{id}`",
-                    event.kind
-                ));
-            }
+        if let Some(id) = &event.event_player
+            && !players.contains_key(id)
+        {
+            return load_error(format!(
+                "event `{}` names unknown player `{id}`",
+                event.kind
+            ));
         }
         let mut values = BTreeMap::new();
         for (name, value) in &event.values {
@@ -336,10 +351,10 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
     let mut expect = Vec::new();
     for (index, value) in doc.expect.iter().enumerate() {
         let expectation = expectation(index, value)?;
-        if let Expectation::PlayerVariable { player, .. } = &expectation {
-            if !players.contains_key(player) {
-                return load_error(format!("expect[{index}] names unknown player `{player}`"));
-            }
+        if let Expectation::PlayerVariable { player, .. } = &expectation
+            && !players.contains_key(player)
+        {
+            return load_error(format!("expect[{index}] names unknown player `{player}`"));
         }
         expect.push(expectation);
     }
