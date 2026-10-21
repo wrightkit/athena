@@ -1,7 +1,3 @@
-//! Every `probes/<id>/capture.json` records the SHA-256 of the pasted
-//! `probe.zh-CN.ow`. A probe edit makes its captures stale
-//! (docs/capture-convention.md), so a mismatch fails the build.
-
 use std::fs;
 use std::path::PathBuf;
 

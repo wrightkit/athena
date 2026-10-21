@@ -1,5 +1,3 @@
-//! The tick loop and rule instances.
-
 use std::collections::{BTreeMap, VecDeque};
 
 use workshop_rs::hero_values::HeroValues;
@@ -55,10 +53,7 @@ struct Instance<'a> {
     rule: &'a Rule,
     rule_idx: usize,
     frames: Vec<Frame>,
-    /// The tick a suspended run resumes on; `None` while idle.
     wake: Option<u64>,
-    /// Condition result on the previous tick. A rule starts on a false-to-true
-    /// edge.
     prev: bool,
     /// Injected events that triggered this rule and wait for it to be idle.
     pending: VecDeque<EventCtx>,

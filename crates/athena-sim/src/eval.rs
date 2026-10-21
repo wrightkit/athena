@@ -1,5 +1,3 @@
-//! Value expressions.
-
 use std::collections::BTreeMap;
 
 use workshop_rs::Value;
