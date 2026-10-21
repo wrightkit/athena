@@ -154,7 +154,9 @@ Two more valid files in [scenario-examples/valid/](scenario-examples/valid/) sho
 - `practice-range-default-variable.json` leaves out `state`. `streak` starts as `null`, which reads as 0, so the intended result is `streak` 1, `delta` 1 and `score` 1.
 - `practice-range-missing-event-player.json` leaves out `eventPlayer`. The `kill` rule reads the event player, so the intended result is `outcome.status` `missing_input` and one `missingInputs` entry of kind `eventPlayer`.
 
-The `init` rule's `Create HUD Text` is not modeled (athena#10), so the full `practice-range` program still stops at tick 0 with `outcome.status` `not_modeled` and every expectation reports `not_evaluated`. On the `kill`-rule path — event injection, `Event Player`, player variables, `If`/`Else`, `Call Subroutine` — the simulator models the constructs, and `practice-range.json` yields `streak` 3, `delta` 2 and `score` 2 with both expectations `pass`. `practice-range-default-variable.json` yields `streak` 1, `delta` 1 and `score` 1, and `practice-range-missing-event-player.json` yields `outcome.status` `missing_input` with one `eventPlayer` entry. These are exercised by `crates/athena-sim/tests/scenario.rs`.
+On the `kill`-rule path — event injection, `Event Player`, player variables, `If`/`Else`, `Call Subroutine` — the simulator models the constructs, and `practice-range.json` yields `streak` 3, `delta` 2 and `score` 2 with both expectations `pass`. `practice-range-default-variable.json` yields `streak` 1, `delta` 1 and `score` 1, and `practice-range-missing-event-player.json` yields `outcome.status` `missing_input` with one `eventPlayer` entry. These are exercised by `crates/athena-sim/tests/scenario.rs`.
+
+The `init` rule's `Create HUD Text` is modeled (athena#10): the full `practice-range` program now completes, and its `hud` trace lists one `hudText` element with recipient `p1` and the header evaluated at creation. The shape of the `hud` field is defined in [simulator-interface.md](simulator-interface.md#hud-elements).
 
 ## Invalid examples
 

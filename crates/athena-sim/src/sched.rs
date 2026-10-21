@@ -6,6 +6,7 @@ use workshop_rs::hero_values::HeroValues;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, Program, Rule, Value};
 
 use crate::eval::{Env, eval, number, player_id, player_ids};
+use crate::hud::Hud;
 use crate::scenario::{EventCtx, Expectation, Player, Scenario};
 use crate::state::{self, WorldSlot};
 use crate::{
@@ -72,6 +73,7 @@ struct World {
     globals: BTreeMap<String, Val>,
     players: BTreeMap<String, Player>,
     logs: Vec<LogEntry>,
+    hud: Hud,
 }
 
 /// The resolved world state of a scenario player. A player the scenario did
@@ -255,6 +257,7 @@ fn run_instance(
             globals: &world.globals,
             players: &world.players,
             event: inst.event.as_ref(),
+            last_text_id: world.hud.last_text_id,
             now,
         };
         match action {
@@ -428,7 +431,13 @@ fn run_instance(
                     }
                     advance(inst);
                 }
-                other => return unsupported(format!("action {other}")),
+                other => match crate::hud::action(other, args, &env, &mut world.hud, tick) {
+                    Some(result) => {
+                        result?;
+                        advance(inst);
+                    }
+                    None => return unsupported(format!("action {other}")),
+                },
             },
             other => return unsupported(format!("action {other:?}")),
         }
@@ -484,6 +493,7 @@ pub(crate) fn run(
             .collect(),
         players,
         logs: Vec::new(),
+        hud: Hud::default(),
     };
     let events = events_by_tick(&events);
     let mut missing_inputs = Vec::new();
@@ -516,6 +526,7 @@ pub(crate) fn run(
                 (id.clone(), state)
             })
             .collect(),
+        hud: world.hud.elements,
         missing_inputs,
     }
 }
@@ -616,6 +627,7 @@ fn tick_loop(
                             globals: &world.globals,
                             players: &world.players,
                             event: None,
+                            last_text_id: world.hud.last_text_id,
                             now,
                         },
                     )
@@ -673,6 +685,7 @@ fn tick_loop(
                             globals: &world.globals,
                             players: &world.players,
                             event: instance.event.as_ref(),
+                            last_text_id: world.hud.last_text_id,
                             now,
                         };
                         if conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))? {
