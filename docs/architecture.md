@@ -45,7 +45,9 @@ Only what P0 to P4 fixtures need:
 - global variables and arrays;
 - output: a tick-ordered rule-firing trace and `Log To Inspector` output.
 
-Not included: player world, damage, hit detection, values that depend on the world such as `Position Of`. An unimplemented action or value is reported as not modeled in the trace, never skipped ([simulator-interface.md](simulator-interface.md)).
+Also included since athena#9: the player state table and the `Damage`/`Heal` actions (modeled, see below).
+
+Not included: hit detection, positions, values that depend on the world such as `Position Of`, ability effects, custom game settings modifiers. An unimplemented action or value is reported as not modeled in the trace, never skipped ([simulator-interface.md](simulator-interface.md)).
 
 Acceptance: for every probe with result `match`, `sim(probe.workshop)` equals the capture's `observed`. For `mismatch`, the capture wins and the simulator follows it. For `inconclusive`, the test is an explicit unasserted case.
 
@@ -62,3 +64,6 @@ The simulator makes these choices only to stay deterministic; each needs a probe
 - Comparing values of different types with `==` gives false; `Null` equals `0`. Two mocked players compare by scenario `id`.
 - A mocked player is a scenario `id`; `Event Player` yields `{"type":"player"}`. `Hero Of` and `Team Of` yield the declared `hero`/`team` as text.
 - An event rule fires when the injected event's `kind` matches the rule event's catalog id; a team or player filter other than `All` is not modeled.
+- **Modeled, not measured** — no client capture backs the player state table or the `Damage`/`Heal` rules:
+  - Each scenario player has a state-table row built at run start from the `workshop-rs` hero-values file pinned at `CURRENT_VERSION`: a `health` pool, `shield` and `armor` pools where the catalog records them (a hero without the pool has no entry, never a zero), the cooldown seconds of the ability slots the catalog records (`slot` or `slot/variant` keys), and an ultimate charge of `0` toward the catalog's `ultimateCost`. Pools start at their maximum. A hero the file does not supply, or a player with no `hero`, leaves the row's `world` null; an action that touches that world state (`Damage`, `Heal`) stops the run as `not_modeled`.
+  - `Damage(player, damager, amount)` takes `amount` off the pools in shield, armor, health order: each pool absorbs up to its `current` and the rest spills into the next; health floors at zero and a negative amount does nothing. `Heal(player, healer, amount)` raises the `health` pool by `amount`, capped at `max` — it never exceeds the maximum, never refills shield or armor, and a negative amount does nothing. Both accept a `Player` or an array of players; the `damager`/`healer` argument is evaluated but otherwise has no model.

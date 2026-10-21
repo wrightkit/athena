@@ -2,12 +2,15 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
+use workshop_rs::hero_values::HeroValues;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, Program, Rule, Value};
 
-use crate::eval::{Env, eval, number, player_id};
+use crate::eval::{Env, eval, number, player_id, player_ids};
 use crate::scenario::{EventCtx, Expectation, Player, Scenario};
+use crate::state::{self, WorldSlot};
 use crate::{
-    ExpectationResult, ExpectationStatus, LogEntry, NotModeled, Options, Outcome, Stop, Trace, Val,
+    ExpectationResult, ExpectationStatus, LogEntry, NotModeled, Options, Outcome, PlayerState,
+    PlayerWorld, Stop, Trace, Val,
 };
 
 /// One server tick (P0, P1).
@@ -69,6 +72,21 @@ struct World {
     globals: BTreeMap<String, Val>,
     players: BTreeMap<String, Player>,
     logs: Vec<LogEntry>,
+}
+
+/// The resolved world state of a scenario player. A player the scenario did
+/// not declare, or whose catalog state failed to resolve at run start, is
+/// reported, never defaulted: `Damage`/`Heal` on such a player stops the
+/// run as `not_modeled`.
+fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut PlayerWorld, Stop> {
+    let Some(player) = world.players.get_mut(id) else {
+        return unsupported(format!("`{id}` is not a scenario player"));
+    };
+    match &mut player.world {
+        WorldSlot::Resolved(state) => Ok(state),
+        WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
+        WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
+    }
 }
 
 /// A block that stays open until its `End` line.
@@ -382,6 +400,34 @@ fn run_instance(
                     advance(inst);
                     return Ok(());
                 }
+                "damage" => {
+                    let [player, damager, amount] = args.as_slice() else {
+                        return unsupported("damage arguments");
+                    };
+                    // Arguments evaluate left to right; the `damager` value
+                    // is checked but otherwise has no model.
+                    let ids = player_ids(player, &env)?;
+                    eval(damager, &env)?;
+                    let amount = number(&eval(amount, &env)?)?;
+                    for id in ids {
+                        state::damage(world_state(world, &id)?, amount);
+                    }
+                    advance(inst);
+                }
+                "heal" => {
+                    let [player, healer, amount] = args.as_slice() else {
+                        return unsupported("heal arguments");
+                    };
+                    // Same shape as `damage`; the `healer` value is checked
+                    // but otherwise has no model.
+                    let ids = player_ids(player, &env)?;
+                    eval(healer, &env)?;
+                    let amount = number(&eval(amount, &env)?)?;
+                    for id in ids {
+                        state::heal(world_state(world, &id)?, amount);
+                    }
+                    advance(inst);
+                }
                 other => return unsupported(format!("action {other}")),
             },
             other => return unsupported(format!("action {other:?}")),
@@ -409,10 +455,27 @@ fn events_by_tick(events: &[crate::scenario::InjectedEvent]) -> BTreeMap<u64, Ve
     by_tick
 }
 
-pub(crate) fn run(program: &Program, options: Options, scenario: Option<Scenario>) -> Trace {
-    let (players, events, expect) = scenario
+pub(crate) fn run(
+    program: &Program,
+    options: Options,
+    scenario: Option<Scenario>,
+    hero_values: &HeroValues,
+) -> Trace {
+    let (mut players, events, expect) = scenario
         .map(|scenario| (scenario.players, scenario.events, scenario.expect))
         .unwrap_or_default();
+    // Resolve every player's world state before the first tick. A failure is
+    // stored, not reported yet: the trace row still says what the scenario
+    // declared, and the run stops only if `Damage`/`Heal` touches the player.
+    for (id, player) in &mut players {
+        player.world = match &player.hero {
+            Some(hero) => match state::resolve(id, hero, &player.hero_spellings, hero_values) {
+                Ok(resolved) => WorldSlot::Resolved(resolved),
+                Err(error) => WorldSlot::Failed(error),
+            },
+            None => WorldSlot::Failed(NotModeled::new(format!("player `{id}` has no hero"))),
+        };
+    }
     let mut world = World {
         globals: program
             .global_variables
@@ -438,6 +501,21 @@ pub(crate) fn run(program: &Program, options: Options, scenario: Option<Scenario
         outcome,
         logs: world.logs,
         globals: world.globals,
+        players: world
+            .players
+            .iter()
+            .map(|(id, player)| {
+                let state = PlayerState {
+                    hero: player.hero.clone(),
+                    team: player.team.map(|team| team.as_str().to_string()),
+                    world: match &player.world {
+                        WorldSlot::Resolved(state) => Some(state.clone()),
+                        WorldSlot::Unresolved | WorldSlot::Failed(_) => None,
+                    },
+                };
+                (id.clone(), state)
+            })
+            .collect(),
         missing_inputs,
     }
 }
@@ -518,10 +596,10 @@ fn tick_loop(
         if let Some(due) = events.get(&tick) {
             for injected in due {
                 for instance in &mut loaded.instances {
-                    if let Event::Player { kind, .. } = instance.rule.event {
-                        if kind.catalog_id() == injected.kind {
-                            instance.pending.push_back(injected.clone());
-                        }
+                    if let Event::Player { kind, .. } = instance.rule.event
+                        && kind.catalog_id() == injected.kind
+                    {
+                        instance.pending.push_back(injected.clone());
                     }
                 }
             }

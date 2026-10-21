@@ -12,7 +12,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 2. **Players are a list with a text `id`.** Events and expectations point to a player by `id`. The alternative is to number players.
 3. **`hero` is free text in the schema.** `athena` checks it against the hero names of `workshop-rs` when it loads the scenario. The schema stays small and does not need updating with each game patch.
 4. **`team` is `team1` or `team2` only.** There is no "all" team, because a player is always on one team.
-5. **Player `state` means player variables.** It is a map from the variable name in the program to its start value. A variable not listed starts as `null` (decision 13). Other game state (health, position) is not in version 1, because the simulator does not model it yet.
+5. **Player `state` means player variables.** It is a map from the variable name in the program to its start value. A variable not listed starts as `null` (decision 13). World state (health pools, cooldowns, ultimate charge) is not settable: the simulator takes those start values from the `workshop-rs` hero-values catalog (athena#9). Position is not modeled.
 6. **Event `kind` is the Workshop event name** (for example `playerDealtFinalBlow`). The schema does not list the names.
 7. **Times are seconds from the first tick.** Events at the same time run in file order.
 8. **Observations are checked by `athena`.** The trace carries one result per expectation. The alternative is that each consumer compares the trace itself. Checking in one place keeps `wright` free of Workshop logic.
