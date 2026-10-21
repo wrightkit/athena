@@ -1,0 +1,10 @@
+{
+  "prefix": "P4",
+  "end": "P4d ",
+  "lines": [
+    "P4a Wait Until(True, 0) elapsed_ms=0",
+    "P4b Wait(0) elapsed_ms=16",
+    "P4c Wait Until(False, 0.03) elapsed_ms=32",
+    "P4d Wait Until(False, 0.1) elapsed_ms=112"
+  ]
+}

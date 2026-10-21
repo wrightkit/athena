@@ -1,6 +1,6 @@
 # 探针操作与判定
 
-本文是各探针预期值（假设）和判定条件的唯一出处。结果状态（`runs`、`result`）以各探针目录下的 `capture.json` 为准，这里不记录。运行流程见 workspace skill `wrightkit-run-workshop-probe`；`capture.json` 的格式见 [capture-convention.md](capture-convention.md)。
+本文是各探针判定条件和操作步骤的出处。有 `probes/<id>/expect.json` 的探针（P0 到 P4），其预期日志行以该文件为唯一出处，下文表中的预期列只作说明；`athena ingest` 按它判定（见 [capture-convention.md](capture-convention.md#ingesting-a-log)）。结果状态（`runs`、`result`）以各探针目录下的 `capture.json` 为准，这里不记录。运行流程见 workspace skill `wrightkit-run-workshop-probe`；`capture.json` 的格式见 [capture-convention.md](capture-convention.md)。
 
 ## 探针清单
 

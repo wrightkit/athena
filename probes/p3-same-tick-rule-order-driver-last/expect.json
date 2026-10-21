@@ -1,0 +1,13 @@
+{
+  "prefix": "P3",
+  "end": "P3 done",
+  "lines": [
+    "P3 first batch rule=A t_ms=16",
+    "P3 first batch rule=B t_ms=16",
+    "P3 first batch rule=C t_ms=16",
+    "P3 second batch rule=D1(no wait) t_ms=1024",
+    "P3 second batch rule=D3(wait 0.016) t_ms=1040",
+    "P3 second batch rule=D2(wait 0.032) t_ms=1056",
+    "P3 done"
+  ]
+}
