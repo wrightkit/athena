@@ -1,6 +1,7 @@
 # Releases and consuming `athena-sim`
 
-`athena` releases through release-plz, following the workspace convention in
+`athena` releases through release-please, the same way `wright` does,
+following the workspace convention in
 [`wrightkit/.github` `docs/release-engineering.md`](https://github.com/wrightkit/.github/blob/main/docs/release-engineering.md):
 pushes to `main` keep a release PR open, and merging it (an owner action)
 creates the canonical `v{{ version }}` tag and a GitHub release. One owner
