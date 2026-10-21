@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use workshop_rs::Value;
 
-use crate::scenario::{EventCtx, Player};
+use crate::scenario::{EventCtx, Player, Team};
 use crate::{MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
 pub(crate) struct Env<'a> {
@@ -12,6 +12,9 @@ pub(crate) struct Env<'a> {
     pub players: &'a BTreeMap<String, Player>,
     /// The injected event the running rule was triggered by, if any.
     pub event: Option<&'a EventCtx>,
+    /// The `id` of the newest `hudText`/`progressBarHud` element; what
+    /// `Last Text ID` reads. `None` before the first one is created.
+    pub last_text_id: Option<u64>,
     pub now: f64,
 }
 
@@ -62,6 +65,24 @@ pub(crate) fn player_ids(value: &Value, env: &Env) -> Result<Vec<String>, Stop> 
             })
             .collect(),
         other => unsupported(format!("{other:?} where a player is needed")),
+    }
+}
+
+/// Resolve a Workshop "players" expression — the `Visible To`/`player`
+/// argument of a HUD action — to scenario player `id`s. A single player,
+/// an array of players (what `allPlayers` produces), or `Null` (nobody).
+pub(crate) fn viewers(value: &Value, env: &Env) -> Result<Vec<String>, Stop> {
+    match eval(value, env)? {
+        Val::Player(id) => Ok(vec![id]),
+        Val::Array(items) => items
+            .iter()
+            .map(|item| match item {
+                Val::Player(id) => Ok(id.clone()),
+                other => unsupported(format!("{other:?} where a player is needed")),
+            })
+            .collect(),
+        Val::Null => Ok(Vec::new()),
+        other => unsupported(format!("{other:?} where players are needed")),
     }
 }
 
@@ -134,6 +155,46 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
     };
     match name {
         "getTotalTimeElapsed" => Ok(Val::Number(env.now)),
+        "lastTextId" => {
+            let [] = arguments::<0>(name, args)?;
+            Ok(env
+                .last_text_id
+                .map_or(Val::Null, |id| Val::Number(id as f64)))
+        }
+        "allPlayers" => {
+            let [team] = arguments::<1>(name, args)?;
+            // The `Team` argument is an enum literal in practice; an
+            // evaluated `team1`/`team2` text (as `Team Of` yields) resolves
+            // the same group.
+            let filter = match team {
+                Value::Enum { value, .. } => value.clone(),
+                other => match eval(other, env)? {
+                    Val::Text(text) => match text.as_str() {
+                        "team1" => "TEAM_1".to_string(),
+                        "team2" => "TEAM_2".to_string(),
+                        _ => return unsupported(format!("allPlayers on {text}")),
+                    },
+                    other => return unsupported(format!("allPlayers on {other:?}")),
+                },
+            };
+            let members = |team: Team| {
+                env.players
+                    .iter()
+                    .filter(|(_, player)| player.team == Some(team))
+                    .map(|(id, _)| Val::Player(id.clone()))
+                    .collect()
+            };
+            Ok(Val::Array(match filter.as_str() {
+                "ALL" => env
+                    .players
+                    .keys()
+                    .map(|id| Val::Player(id.clone()))
+                    .collect(),
+                "TEAM_1" => members(Team::Team1),
+                "TEAM_2" => members(Team::Team2),
+                other => return unsupported(format!("allPlayers on {other}")),
+            }))
+        }
         "add" => binary(|a, b| a + b),
         "subtract" => binary(|a, b| a - b),
         "multiply" => binary(|a, b| a * b),

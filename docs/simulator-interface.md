@@ -32,10 +32,11 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `logs` | `Log To Inspector` lines in order, each with the `tick` it was written on. |
 | `globals` | Global variables at the end of the run. A declared variable that was never set is `null`. |
 | `players` | The player state table: one entry per scenario player, keyed by its `id`. Empty when the run had no scenario. See below. |
+| `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`), `player` (the player `id` the input belongs to, `null` for `eventPlayer` and `eventValue`), `name` (the event-value name, `null` for the others), `tick`, `construct`. |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
-`logs`, `globals` and `players` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`.
+`logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`.
 
 ### `players` rows
 
@@ -59,6 +60,43 @@ Each row repeats what the scenario declared — `hero` (the scenario text, `null
 
 The simulator never skips an unmodeled construct and never replaces it with a default value. A consumer must treat a trace with `outcome` other than `complete` as partial. The text of `construct` is for people; do not match on it.
 
+### HUD elements
+
+The first HUD layer models `createHudText`, `progressBarHud`, `bigMessage`, `smallMessage`, `setObjectiveDescription`, the destroy actions `destroyHudText`, `destroyAllHudText`, `destroyProgressBarHud` and `destroyAllProgressBarHudText`, and `enableMessages`/`disableMessages`. Any other HUD-related action or value stops the run as `not_modeled`, like any unmodeled construct.
+
+`hud` holds one entry per element the run created, in creation order — including elements destroyed since, so a destroy never removes an entry:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Stable id in creation order, starting at 0. The `lastTextId` value resolves to the `id` of the newest `hudText` or `progressBarHud` element — the kinds a destroy action can target — or `null` before the first one. |
+| `kind` | `hudText`, `progressBarHud`, `bigMessage`, `smallMessage` or `objectiveDescription`. |
+| `createdTick` | The tick the element was created on. |
+| `destroyedTick` | The tick a destroy action removed the element, `null` while it is present. An element counts as present exactly when `destroyedTick` is `null`. |
+| `recipients` | The scenario `id`s of the players the element is presented to: the evaluated `Visible To` argument. A recipient group (for example `All Players(Team 1)`) resolves from the declared `team`s. |
+| `construct` | A short description of the creating statement, for people, as in `outcome`. Do not match on it. |
+
+The other fields are the evaluated arguments of the creating action; only the arguments the action takes are present. Text and other value arguments serialize as the `Val` form; enum arguments serialize as the catalog member id:
+
+| Field | Kinds | Argument |
+| --- | --- | --- |
+| `header` | `hudText`, `bigMessage`, `smallMessage` | the header text |
+| `subheader` | `hudText` | the subheader text |
+| `text` | `hudText`, `progressBarHud`, `objectiveDescription` | the text |
+| `value` | `progressBarHud` | the bar value |
+| `location` | `hudText`, `progressBarHud` | the `HudPosition` member id |
+| `sortOrder` | `hudText`, `progressBarHud` | the sort order |
+| `headerColor`, `subheaderColor`, `textColor` | `hudText` | the `Color` member ids |
+| `progressBarColor`, `textColor` | `progressBarHud` | the `Color` member ids |
+| `reevaluation` | `hudText`, `progressBarHud`, `objectiveDescription` | the reevaluation member id |
+| `specVisibility` | `hudText`, `progressBarHud` | the `SpecVisibility` member id |
+
+HUD behavior is **modeled** with these limits:
+
+- Arguments are evaluated once, at creation. The `reevaluation` field is recorded but nothing is re-evaluated over time.
+- Message display duration and stacking are client display behavior; there is no capture for them. `enableMessages`/`disableMessages` resolve their player argument but produce no element and no other trace state.
+- The objective description is a singleton per player: a new `objectiveDescription` removes its recipients from every present `objectiveDescription` element, which is destroyed (`destroyedTick` set) when no recipient remains.
+- A destroy action affects only elements of its own kind. An unknown, already-destroyed or `null` text id destroys nothing.
+
 ### JSON form
 
 `Trace` implements `serde::Serialize`. The JSON shape is part of the contract:
@@ -81,6 +119,26 @@ The simulator never skips an unmodeled construct and never replaces it with a de
       }
     }
   },
+  "hud": [
+    {
+      "id": 0,
+      "kind": "hudText",
+      "createdTick": 0,
+      "destroyedTick": null,
+      "recipients": ["p1"],
+      "construct": "action createHudText",
+      "header": { "type": "text", "value": "Score: 0" },
+      "subheader": { "type": "null" },
+      "text": { "type": "null" },
+      "location": "LEFT",
+      "sortOrder": { "type": "number", "value": 0.0 },
+      "headerColor": "WHITE",
+      "subheaderColor": "WHITE",
+      "textColor": "WHITE",
+      "reevaluation": "VISIBILITY_AND_STRING",
+      "specVisibility": "DEFAULT"
+    }
+  ],
   "missingInputs": [],
   "expectations": []
 }

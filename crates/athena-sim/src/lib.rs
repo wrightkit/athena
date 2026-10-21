@@ -1,6 +1,7 @@
 //! Scheduler simulator for Workshop rules.
 
 mod eval;
+mod hud;
 mod scenario;
 mod sched;
 mod state;
@@ -188,9 +189,85 @@ pub struct PlayerState {
     pub world: Option<PlayerWorld>,
 }
 
-/// What a run produced. `logs` and `globals` describe the state when the run
-/// ended: after the last tick for `Complete`, at the stop for `NotModeled`
-/// and `MissingInput`. Consumers must check `outcome` before using either.
+/// Which create action produced a HUD element.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HudKind {
+    /// `createHudText`.
+    HudText,
+    /// `progressBarHud`.
+    ProgressBarHud,
+    /// `bigMessage`.
+    BigMessage,
+    /// `smallMessage`.
+    SmallMessage,
+    /// `setObjectiveDescription`.
+    ObjectiveDescription,
+}
+
+/// The evaluated arguments a HUD element records. A field is present only
+/// when the creating action takes that argument. Value arguments serialize
+/// as [`Val`]; enum arguments (location, colors, reevaluation, spectator
+/// visibility) serialize as the catalog member id.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HudArgs {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<Val>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subheader: Option<Val>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<Val>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<Val>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<Val>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subheader_color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_bar_color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reevaluation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spec_visibility: Option<String>,
+}
+
+/// A HUD element the run created. The `hud` trace field lists every element
+/// in creation order; `destroyedTick` is `null` while the element is
+/// present.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HudElement {
+    /// Stable id in creation order, starting at 0. `lastTextId` resolves to
+    /// the `id` of the newest `hudText` or `progressBarHud` element.
+    pub id: u64,
+    pub kind: HudKind,
+    /// The tick the element was created on.
+    #[serde(rename = "createdTick")]
+    pub created_tick: u64,
+    /// The tick a destroy action removed it; `null` while present.
+    #[serde(rename = "destroyedTick")]
+    pub destroyed_tick: Option<u64>,
+    /// The scenario `id`s of the players the element is presented to: the
+    /// evaluated `Visible To` argument.
+    pub recipients: Vec<String>,
+    /// A short description of the creating statement, for people, as in
+    /// `outcome`. Do not match on it.
+    pub construct: String,
+    /// The evaluated arguments of the creating action.
+    #[serde(flatten)]
+    pub args: HudArgs,
+}
+
+/// What a run produced. `logs`, `globals`, `players` and `hud` describe the
+/// state when the run ended: after the last tick for `Complete`, at the stop
+/// for `NotModeled` and `MissingInput`. Consumers must check `outcome`
+/// before using any of them.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Trace {
     pub outcome: Outcome,
@@ -199,6 +276,8 @@ pub struct Trace {
     /// The player state table: one row per scenario player. Empty when the
     /// run had no scenario.
     pub players: BTreeMap<String, PlayerState>,
+    /// The HUD elements the run created, in creation order.
+    pub hud: Vec<HudElement>,
     /// The live inputs the program read but the scenario did not supply.
     /// Empty unless `outcome` is `missing_input`; at most one entry in
     /// version 1.
