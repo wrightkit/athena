@@ -1,5 +1,3 @@
-//! Scheduler simulator for Workshop rules.
-
 mod eval;
 mod hud;
 mod scenario;
@@ -11,7 +9,6 @@ use std::fmt;
 
 use serde::Serialize;
 
-/// A Workshop value as the simulator sees it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum Val {
@@ -24,7 +21,6 @@ pub enum Val {
     Player(String),
 }
 
-/// One `Log To Inspector` line, with the tick it was written on.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LogEntry {
     pub tick: u64,
@@ -115,7 +111,6 @@ impl MissingInput {
 pub enum Outcome {
     /// The whole requested time was simulated.
     Complete,
-    /// The run stopped at a construct the simulator does not model.
     NotModeled(NotModeled),
     /// The run stopped at a live input the scenario did not supply; see
     /// `missingInputs`.

@@ -1,6 +1,3 @@
-//! Replays every probe whose capture matched the hypothesis and compares the
-//! simulator with the verbatim Inspector text saved from the client.
-
 use std::fs;
 use std::path::PathBuf;
 
@@ -27,7 +24,6 @@ struct Capture {
     logs: Vec<String>,
 }
 
-/// Split a verbatim Inspector export into its variable block and log lines.
 fn parse_capture(text: &str) -> Capture {
     let mut variables = Vec::new();
     let mut logs = Vec::new();
