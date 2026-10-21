@@ -1,0 +1,14 @@
+{
+  "prefix": "P0",
+  "end": "P0 i=7 ",
+  "lines": [
+    "P0 i=0 t_ms=16",
+    "P0 i=1 t_ms=32",
+    "P0 i=2 t_ms=48",
+    "P0 i=3 t_ms=64",
+    "P0 i=4 t_ms=80",
+    "P0 i=5 t_ms=96",
+    "P0 i=6 t_ms=112",
+    "P0 i=7 t_ms=128"
+  ]
+}

@@ -38,8 +38,9 @@ with fewer than three agreeing runs.
 The capture rules (verbatim captures, three result values, a mismatch wins, stale
 `probe_sha256`, milliseconds) are in `docs/capture-convention.md`. In addition:
 
-- Expected values are hypotheses until a capture agrees; they live only in
-  `docs/procedure.zh-CN.md`. Do not copy them elsewhere.
+- Expected values are hypotheses until a capture agrees. A probe's expected log
+  lines live only in its `probes/<id>/expect.json`; a probe without one has them
+  in `docs/procedure.zh-CN.md`. Do not copy them elsewhere.
 - Run one probe at a time. Probes share global variable names.
 - The tick is 16 ms; P0 and P1 check it.
 - Do not claim a probe was run unless a capture exists.

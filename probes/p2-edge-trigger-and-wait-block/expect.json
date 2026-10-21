@@ -1,0 +1,11 @@
+{
+  "prefix": "P2",
+  "end": "P2 total runs=",
+  "lines": [
+    "P2 run#1 start t_ms=0",
+    "P2 run#1 end t_ms=1008",
+    "P2 run#2 start t_ms=2624",
+    "P2 run#2 end t_ms=3632",
+    "P2 total runs=2"
+  ]
+}

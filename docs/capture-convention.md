@@ -10,6 +10,7 @@ probes/<id>/
   capture-2.txt        optional, run 2
   capture-3.txt        optional, run 3
   capture.json         client, hypothesis, observed, runs, result, notes
+  expect.json          optional, the expected log lines; lets `athena ingest` judge
 ```
 
 Probe ids are `p<n>-<slug>`. Probes share global variable names, so run one at a time.
@@ -51,3 +52,19 @@ Probe ids are `p<n>-<slug>`. Probes share global variable names, so run one at a
 2. `wright check --kind workshop` on both files; both must pass.
 3. `wright inspect cost --kind workshop probes/<id>/probe.workshop` and the same with `--locale zh-CN` on the `.zh-CN.ow` must report equal element counts.
 4. Update the expected values in [procedure.zh-CN.md](procedure.zh-CN.md) if the probe's behavior changed, and treat its existing captures as stale.
+
+## Ingesting a log
+
+`athena ingest <probe-dir> <log-file>` saves a run from a Workshop Inspector log as the next capture and updates `runs` and `result` in `capture.json`. The live log has log lines only, no variable block, so a probe that `ingest` handles must print every value its verdict needs as a log line.
+
+`expect.json` is the only home of such a probe's expected values:
+
+```json
+{ "prefix": "P1", "end": "P1 requested_ms=500 ", "lines": ["P1 requested_ms=1 elapsed_ms=16", "..."] }
+```
+
+- `prefix`: every line of the probe starts with it. `end`: the last line of a finished run starts with it. `lines`: the expected message of each line after `[hh:mm:ss] `, in order. Numbers match within 0.0051 (`Custom String` shows two decimals).
+- `ingest` rejects the log, and writes nothing, if it has no line starting with `end`, has several, or if `probe_sha256` is stale or `runs` differs from the saved files. Give it one run; a re-used log file counts as a new run.
+- It saves the probe's log lines verbatim as `capture.txt`, `capture-2.txt`, and so on. The run is `match` or `mismatch` against `lines`.
+- `result` follows the rules above: final only with three agreeing runs, otherwise `inconclusive`. `ingest` prints the verdict of each run. It does not edit `client`, `hypothesis`, `observed`, or `notes`; record the client version and any differences there.
+- A probe whose verdict is statistical (P5) or needs the variable block (P6) has no `expect.json` yet and is judged by hand.
