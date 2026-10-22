@@ -19,6 +19,8 @@ pub enum Error {
     Format { path: String, message: String },
     #[error("the log has no complete run: no line starting with {0:?} ends it")]
     Incomplete(String),
+    #[error("the run's end line is not last: {extra} probe lines follow it")]
+    EndNotLast { extra: usize },
     #[error("the log holds {0} runs; give it one run")]
     SeveralRuns(usize),
     #[error(

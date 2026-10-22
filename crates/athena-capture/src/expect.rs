@@ -37,6 +37,17 @@ impl Expect {
         match ends {
             0 => Err(Error::Incomplete(self.end.clone())),
             1 if run.last().is_some_and(|l| l.message.starts_with(&self.end)) => Ok(run),
+            // A single end line that is not last means extra probe lines
+            // followed the finished run — not several runs.
+            1 => {
+                let end_at = run
+                    .iter()
+                    .position(|line| line.message.starts_with(&self.end))
+                    .expect("one end line");
+                Err(Error::EndNotLast {
+                    extra: run.len() - end_at - 1,
+                })
+            }
             n => Err(Error::SeveralRuns(n)),
         }
     }
@@ -74,6 +85,10 @@ fn tokens(text: &str) -> Vec<Token<'_>> {
         while i < bytes.len() && bytes[i].is_ascii_digit() {
             i += 1;
         }
+        // A number is read starting at its first digit, so the dot belongs
+        // to it only when a digit follows (`12.5`), not before (`.5` and
+        // `.50` tokenize differently though numerically equal — the client
+        // prints two decimals, so this edge is convention-unreachable).
         if i + 1 < bytes.len() && bytes[i] == b'.' && bytes[i + 1].is_ascii_digit() {
             i += 1;
             while i < bytes.len() && bytes[i].is_ascii_digit() {

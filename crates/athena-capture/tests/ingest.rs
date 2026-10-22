@@ -190,3 +190,34 @@ fn ingest_edits_only_runs_and_result_in_capture_json() {
     assert_eq!(kept(&before), kept(&after));
     assert!(after.contains("  \"runs\": 1,"));
 }
+
+#[test]
+fn an_end_line_followed_by_more_probe_lines_is_end_not_last() {
+    let id = "p1-wait-rounding";
+    let dir = fresh_probe(id);
+    let full = recorded_capture(id, "capture.txt");
+    // One end line, then a stray probe line after it: not several runs.
+    let extra = format!("{full}[00:00:09] P1 stray");
+    assert!(matches!(
+        ingest(&dir, &extra),
+        Err(Error::EndNotLast { extra: 1 })
+    ));
+    assert!(!dir.join("capture.txt").exists());
+}
+
+#[test]
+fn a_stray_next_slot_file_is_overwritten_not_counted_as_a_run() {
+    // A crash between the capture write and the capture.json write leaves
+    // a stray file the record does not count; the next ingest overwrites
+    // it instead of failing `RunCount`.
+    let id = "p1-wait-rounding";
+    let dir = fresh_probe(id);
+    fs::write(dir.join("capture.txt"), "stray\n").unwrap();
+    ingest(&dir, &recorded_capture(id, "capture.txt")).unwrap();
+    assert_eq!(recorded(&dir)["runs"], 1);
+    assert!(
+        fs::read_to_string(dir.join("capture.txt"))
+            .unwrap()
+            .starts_with("[00:00:03] P1 requested_ms=1 ")
+    );
+}
