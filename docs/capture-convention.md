@@ -42,7 +42,7 @@ Probe ids are `p<n>-<slug>`. Probes share global variable names, so run one at a
 - **Final needs three.** A result with fewer than three agreeing runs is provisional and says so in `notes`. Runs that disagree give `inconclusive` with the differences listed.
 - **A mismatch wins.** Record the client's behavior; do not edit the probe until it agrees.
 - **A changed probe invalidates its captures.** If `probe_sha256` no longer matches `probe.zh-CN.ow`, the capture is stale: re-run it or mark it stale in `notes`.
-- **Milliseconds.** Inspector lines are prefixed `[mm:ss]` and `Custom String` shows two decimals, so probes print `(Total Time Elapsed - t0) * 1000`.
+- **Milliseconds.** Inspector lines are prefixed `[hh:mm:ss]` and `Custom String` shows two decimals, so probes print `(Total Time Elapsed - t0) * 1000`.
 - **Unsupported is explicit.** A probe that cannot express its hypothesis is reported, not silently weakened.
 - **Inconclusive means unasserted.** The simulator test for an `inconclusive` probe is an explicit unasserted case with a note, never a confirmed behavior.
 
