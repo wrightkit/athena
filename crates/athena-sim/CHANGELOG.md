@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/wrightkit/athena/compare/v0.2.0...v0.3.0) (2026-10-24)
+
+
+### Features
+
+* **sim:** apply hero settings to the player state table ([981f006](https://github.com/wrightkit/athena/commit/981f006eae1e11f5fde376c0e9fa7213b12b5e05)), closes [#29](https://github.com/wrightkit/athena/issues/29)
+* **sim:** probe p7 hero settings and read reported player state ([#33](https://github.com/wrightkit/athena/issues/33)) ([3142b65](https://github.com/wrightkit/athena/commit/3142b65e85c822e3c70f536c4bc572ee4352db56))
+
 ## [0.2.0](https://github.com/wrightkit/athena/compare/v0.1.0...v0.2.0) (2026-10-21)
 
 
