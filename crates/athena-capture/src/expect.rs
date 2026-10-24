@@ -13,8 +13,33 @@ pub struct Expect {
     pub prefix: String,
     /// The last line of a finished run starts with this.
     pub end: String,
-    /// The expected message of each line, in order.
+    /// The expected message of each line, in order. Empty when `verdict`
+    /// judges the run instead.
+    #[serde(default)]
     pub lines: Vec<String>,
+    /// A verdict computed from the run rather than compared line by line.
+    #[serde(default)]
+    pub verdict: Option<VerdictSpec>,
+}
+
+/// A statistical verdict over the run's lines, for a probe whose expected
+/// values cannot be spelled out line by line.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind")]
+pub enum VerdictSpec {
+    /// P5: a start line, then a fixed count of sample lines; the verdict is
+    /// how many distinct `pos=` values the samples hold.
+    #[serde(rename = "distinct-samples", rename_all = "camelCase")]
+    DistinctSamples {
+        /// The first line of the run starts with this.
+        start_prefix: String,
+        /// Every sample line starts with this.
+        sample_prefix: String,
+        /// The exact number of sample lines a valid run holds.
+        expected_samples: usize,
+        /// This many distinct `pos=` values or fewer is a `Match`.
+        match_if_distinct_at_most: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,18 +77,119 @@ impl Expect {
         }
     }
 
-    pub fn judge(&self, run: &[Line]) -> Verdict {
+    /// The verdict of a finished run. A `verdict` spec replaces the
+    /// line-by-line comparison; a run that fails its validity rules is
+    /// rejected rather than judged.
+    pub fn judge(&self, run: &[Line]) -> Result<Verdict, Error> {
+        if let Some(verdict) = &self.verdict {
+            return verdict.judge(run);
+        }
         let same = run.len() == self.lines.len()
             && run
                 .iter()
                 .zip(&self.lines)
                 .all(|(line, expected)| same_message(line.message, expected));
-        if same {
+        Ok(if same {
             Verdict::Match
         } else {
             Verdict::Mismatch
+        })
+    }
+}
+
+impl VerdictSpec {
+    fn judge(&self, run: &[Line]) -> Result<Verdict, Error> {
+        match self {
+            VerdictSpec::DistinctSamples {
+                start_prefix,
+                sample_prefix,
+                expected_samples,
+                match_if_distinct_at_most,
+            } => distinct_samples(
+                run,
+                start_prefix,
+                sample_prefix,
+                *expected_samples,
+                *match_if_distinct_at_most,
+            ),
         }
     }
+}
+
+/// The `distinct-samples` verdict: a valid run is the start line plus
+/// exactly `expected` sample lines, the start must report a spawned
+/// player at a nonzero position, and the sampled positions must change.
+fn distinct_samples(
+    run: &[Line],
+    start_prefix: &str,
+    sample_prefix: &str,
+    expected: usize,
+    at_most: usize,
+) -> Result<Verdict, Error> {
+    let invalid = |message: String| Error::Invalid(message);
+    if run.len() != expected + 1 {
+        return Err(invalid(format!(
+            "the run holds {} lines, not a start line plus {expected} samples",
+            run.len()
+        )));
+    }
+    let start = run[0].message;
+    if !start.starts_with(start_prefix) {
+        return Err(invalid(format!(
+            "the first line {start:?} is not the {start_prefix:?} line"
+        )));
+    }
+    if !start.contains("spawned=真") && !start.contains("spawned=True") {
+        return Err(invalid(format!(
+            "the start line {start:?} does not report a spawned player"
+        )));
+    }
+    if position(start)?.iter().all(|value| *value == 0.0) {
+        return Err(invalid(
+            "the start line reports a zero position; the player had not spawned".to_string(),
+        ));
+    }
+
+    // Positions are distinct when any coordinate differs past the printed
+    // tolerance; a stuck counter would mean the player never moved.
+    let mut distinct: Vec<Vec<f64>> = Vec::new();
+    for line in &run[1..] {
+        if !line.message.starts_with(sample_prefix) {
+            return Err(invalid(format!(
+                "the line {:?} is not a {sample_prefix:?} sample",
+                line.message
+            )));
+        }
+        let pos = position(line.message)?;
+        if !distinct.iter().any(|seen| {
+            seen.iter()
+                .zip(&pos)
+                .all(|(a, b)| (a - b).abs() <= NUMBER_TOLERANCE)
+        }) {
+            distinct.push(pos);
+        }
+    }
+    if distinct.len() <= 1 {
+        return Err(invalid(
+            "the sampled position never changes; the player had not spawned".to_string(),
+        ));
+    }
+    Ok(if distinct.len() <= at_most {
+        Verdict::Match
+    } else {
+        Verdict::Mismatch
+    })
+}
+
+/// The `pos=(x, y, z)` tuple of a log line, as numbers.
+fn position(line: &str) -> Result<Vec<f64>, Error> {
+    let invalid = || Error::Invalid(format!("the line {line:?} has no pos=(x, y, z)"));
+    let at = line.find("pos=(").ok_or_else(invalid)? + "pos=(".len();
+    let end = line[at..].find(')').ok_or_else(invalid)?;
+    line[at..at + end]
+        .split(',')
+        .map(|part| part.trim().parse::<f64>().map_err(|_| invalid()))
+        .collect()
 }
 
 #[derive(PartialEq)]

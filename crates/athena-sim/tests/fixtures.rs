@@ -91,6 +91,13 @@ fn same_log(simulated: &str, captured: &str) -> bool {
         })
 }
 
+/// A pasted Inspector export carries the 变量/动作 blocks; a capture saved
+/// by `athena ingest` holds log lines only.
+fn has_variable_block(text: &str) -> bool {
+    text.lines()
+        .any(|line| matches!(line.trim(), "变量" | "动作" | "全局:"))
+}
+
 fn is_zero_like(value: &Val) -> bool {
     matches!(value, Val::Null | Val::Bool(false)) || matches!(value, Val::Number(n) if *n == 0.0)
 }
@@ -183,10 +190,18 @@ fn check_probe(id: &str) {
         if !probe_file(id, file).exists() {
             continue;
         }
-        let captured = parse_capture(&read(id, file));
-        if let Err(message) =
-            compare_logs(&english, &captured).and(compare_variables(&english, &captured))
-        {
+        let text = read(id, file);
+        let captured = parse_capture(&text);
+        let result = compare_logs(&english, &captured).and_then(|()| {
+            // A capture saved by `athena ingest` holds log lines only — no
+            // variable block — so there are no variables to verify against.
+            if has_variable_block(&text) {
+                compare_variables(&english, &captured)
+            } else {
+                Ok(())
+            }
+        });
+        if let Err(message) = result {
             panic!("{id} vs {file}: {message}");
         }
     }

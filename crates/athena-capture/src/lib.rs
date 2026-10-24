@@ -4,9 +4,11 @@
 mod expect;
 mod ingest;
 mod log;
+mod watch;
 
-pub use expect::{Expect, Verdict};
-pub use ingest::{Report, ingest, judge_captures};
+pub use expect::{Expect, Verdict, VerdictSpec};
+pub use ingest::{Outcome, Report, ingest, judge_captures, result_of};
+pub use watch::{Event, ScanState, foreign_end, load_expects, scan_once, watch};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -23,6 +25,8 @@ pub enum Error {
     EndNotLast { extra: usize },
     #[error("the log holds {0} runs; give it one run")]
     SeveralRuns(usize),
+    #[error("the run is invalid: {0}")]
+    Invalid(String),
     #[error(
         "capture.json records probe_sha256 {recorded}, but probe.zh-CN.ow is {actual}; the saved captures are stale"
     )]

@@ -27,5 +27,6 @@
     }
   ],
   "result": "match",
-  "notes": "Three agreeing valid captures; final match. Final t0=3.071 in all captures. Client version visually verified in options during the repeat session; the original run version was not recorded."
+  "notes": "Three agreeing valid captures; final match. Final t0=3.071 in all captures. Client version visually verified in options during the repeat session; the original run version was not recorded.",
+  "sources": []
 }

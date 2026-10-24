@@ -24,5 +24,6 @@
     }
   ],
   "result": "match",
-  "notes": "Three saved captures agree for the recorded probe hash; result is final under the capture convention. Client version 2.25.0.0 - 154461.1 was read from the client for runs 2 and 3; run 1 version was not recorded. All captures have five log lines and final variables f=true, runs=2, t0=3.023."
+  "notes": "Three saved captures agree for the recorded probe hash; result is final under the capture convention. Client version 2.25.0.0 - 154461.1 was read from the client for runs 2 and 3; run 1 version was not recorded. All captures have five log lines and final variables f=true, runs=2, t0=3.023.",
+  "sources": []
 }

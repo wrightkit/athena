@@ -131,6 +131,6 @@ rule("P3 driver")
 		Wait(1, Ignore Condition);
 		Global.go2 = True;
 		Wait(1, Ignore Condition);
-		Log To Inspector(Custom String("P3 done", Null, Null, Null));
+		Log To Inspector(Custom String("P3b done", Null, Null, Null));
 	}
 }

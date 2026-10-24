@@ -1,6 +1,6 @@
 # 探针操作与判定
 
-本文是各探针判定条件和操作步骤的出处。有 `probes/<id>/expect.json` 的探针（P0 到 P4），其预期日志行以该文件为唯一出处，下文表中的预期列只作说明；`athena ingest` 按它判定（见 [capture-convention.md](capture-convention.md#ingesting-a-log)）。结果状态（`runs`、`result`）以各探针目录下的 `capture.json` 为准，这里不记录。运行流程见 workspace skill `wrightkit-run-workshop-probe`；`capture.json` 的格式见 [capture-convention.md](capture-convention.md)。
+本文是各探针判定条件和操作步骤的出处。有 `probes/<id>/expect.json` 的探针（P0 到 P4、P6、P7），其预期日志行以该文件为唯一出处；P5 的统计判定在其 `expect.json` 的 `verdict` 字段。下文表中的预期列只作说明；`athena ingest` 按 `expect.json` 判定（见 [capture-convention.md](capture-convention.md#ingesting-a-log)）。结果状态（`runs`、`result`）以各探针目录下的 `capture.json` 为准，这里不记录。运行流程见 workspace skill `wrightkit-run-workshop-probe`；`capture.json` 的格式见 [capture-convention.md](capture-convention.md)。
 
 ## 探针清单
 
@@ -39,7 +39,7 @@ P7 把英雄池限制为 Ana（`enabledHeroes`），开局后正常选英雄出�
 | P0 | `P0 i=7 ...` | 8 行，`t_ms` 依次为 16, 32, 48, 64, 80, 96, 112, 128；变量块 `i=8` | 步长恒为 16.00 → match；步长约 16.67（60 Hz，依次 16.67, 33.33, 50.00, 66.67）或不恒定 → mismatch，其他探针的读数要换算 |
 | P1 | `P1 requested_ms=500 ...` | requested_ms→elapsed_ms：1→16，16→16，17→32，30→32，100→112，500→512 | 全部一致 → 向上取整到 tick；100→96 说明是四舍五入；17→16 说明是向下取整；逐项记录 |
 | P2 | `P2 total runs=N` | 看总数 N 和各次 start 的 `t_ms` | N=2，start 约 0 与 2624，end 约 1008 与 3632 → 边沿触发且 Wait 期间丢弃边沿，match；N=3，start 约 0、1008、2624 → Wait 期间的边沿被排队，mismatch；N≥4，相邻 start 约间隔 1008 → 电平触发，mismatch |
-| P3 | `P3 done` | 第一批 A、B、C 三行，`t_ms` 相同（约 0）；第二批 D1 → D3 → D2，`t_ms` 约 1008、1024、1040 | A、B、C 顺序与时间戳一致 → 同 tick 按文件顺序，match；顺序不同或 `t_ms` 不同则记下实际值。D 批只验证 Wait 时长，不验证规则顺序 |
+| P3 | `P3a done` | 第一批 A、B、C 三行，`t_ms` 相同（约 0）；第二批 D1 → D3 → D2，`t_ms` 约 1008、1024、1040 | A、B、C 顺序与时间戳一致 → 同 tick 按文件顺序，match；顺序不同或 `t_ms` 不同则记下实际值。D 批只验证 Wait 时长，不验证规则顺序 |
 | P4 | `P4d ...` | P4a `elapsed_ms`=0，P4b=16，P4c=32，P4d=112 | 四项逐一比对；P4a 为 16 或 P4b 为 0 说明零 tick 假设错 |
 | P5 | `P5 i=187 ...` | 开头一行 `P5 start spawned=真 pos=(x, y, z)`（`spawned` 为假或 `pos` 为 0 说明主机玩家没有出生，本次作废）；然后 188 行。`pos` 约 38 个不同值，`everyframe` 约 188 个不同值 | pos 不同值个数接近 38 → match；pos 也接近 188 → mismatch，以实测为准；pos 恒定或为 0 → 主机玩家没出生，本次作废 |
 | P7 | `P7 done` | `max_health`=375，`health_after_damage`=275，`health_after_heal`=355，`ability1_cooldown`=20 | 四行与预期逐一比对，全部一致为 match；任一行不符记下实际值（cooldown 为 10 说明 `abilityCooldown%` 也缩放脚本写入） |
@@ -48,13 +48,13 @@ P7 把英雄池限制为 Ana（`enabledHeroes`），开局后正常选英雄出�
 
 文件在 `probes/p3-same-tick-rule-order-driver-last/`。只移动整个 driver 规则，不改动作、条件或日志；独立保存抓取，不混入原 P3 的三次计数。
 
-操作与 P3 相同，等待 `P3 done`，应有 7 条日志。假设按文件顺序扫描时，前面的接收规则要在下一 tick 才看到末尾 driver 写入的条件，因此 A、B、C 依次出现在 16 ms，D1、D3、D2 依次出现在 1024、1040、1056 ms。全部一致记 `match`；若仍为原 P3 的 0、1008、1024、1040 ms，或出现其他完整但不同的时序，也记 `mismatch` 并保留实际值；缺行或未完成记 `inconclusive`。这项假设尚未用客户端验证。
+操作与 P3 相同，等待 `P3b done`（两个 P3 探针的结束行不同：原探针是 `P3a done`），应有 7 条日志。假设按文件顺序扫描时，前面的接收规则要在下一 tick 才看到末尾 driver 写入的条件，因此 A、B、C 依次出现在 16 ms，D1、D3、D2 依次出现在 1024、1040、1056 ms。全部一致记 `match`；若仍为原 P3 的 0、1008、1024、1040 ms，或出现其他完整但不同的时序，也记 `mismatch` 并保留实际值；缺行或未完成记 `inconclusive`。这项假设尚未用客户端验证。
 
 ### P6：Wait Behavior
 
 文件在 `probes/p6-wait-behavior/`。只粘贴这个探针，重启自定义游戏后不操作角色，等待 `P6 done`（起始等待 3 秒，随后约 2624 ms）。同时导出全部日志和全部全局变量；不需要观察期间手动改变条件。
 
-driver 把 `f` 依次设为真、假、真、假，计划时刻为 0、208、416、624 ms，并打印每次切换。三个目标规则均以 `f == True` 为条件、等待 1 秒，分别使用 Ignore Condition、Abort When False、Restart When True。每次进入动作列表增加 `nIgnore`、`nAbort` 或 `nRestart`，完成等待才增加相应的 `end*` 并打印完成时间。
+driver 把 `f` 依次设为真、假、真、假，计划时刻为 0、208、416、624 ms，并打印每次切换。三个目标规则均以 `f == True` 为条件、等待 1 秒，分别使用 Ignore Condition、Abort When False、Restart When True。每次进入动作列表增加 `nIgnore`、`nAbort` 或 `nRestart`，完成等待才增加相应的 `end*` 并打印完成时间。driver 在 `P6 done` 前另打印一行 `P6 counts`，依次列出 `nIgnore`、`nAbort`、`nRestart`、`endIgnore`、`endRestart`；`endAbort` 不在其中，仍要靠变量导出核对它保持为 0。
 
 以下均为待验证假设：
 
@@ -64,7 +64,7 @@ driver 把 `f` 依次设为真、假、真、假，计划时刻为 0、208、416
 | Abort When False | `nAbort=2, endAbort=0` | 无 Abort end；两次都在等待期间遇到假 |
 | Restart When True | `nRestart=2, endRestart=1` | `P6 Restart end t_ms=1424`，在 416 ms 的真边沿重新执行动作列表 |
 
-预期共 7 条日志：4 次 flag、Ignore end、Restart end、done。完整抓取中三项均一致记 `match`；计数、完成时间或完成次数不同记 `mismatch` 并逐项记录；尚未见到 done、缺变量块或导出截断记 `inconclusive`。如果 Restart 在条件连续为真时反复开始，启动次数会大于 2，完成时间也会不同，这正是本探针要区分的行为，不能删改这些观测。没有任何抓取时 `runs=0`、`result=inconclusive`。
+预期共 8 条日志：4 次 flag、Ignore end、Restart end、`P6 counts nIgnore=1 nAbort=2 nRestart=2 endIgnore=1 endRestart=1`、done；`athena ingest` 按 `expect.json` 逐行判定。计数、完成时间或完成次数不同记 `mismatch` 并逐项记录；尚未见到 done 记 `inconclusive`。如果 Restart 在条件连续为真时反复开始，启动次数会大于 2，完成时间也会不同，这正是本探针要区分的行为，不能删改这些观测。没有任何抓取时 `runs=0`、`result=inconclusive`。
 
 P2 的边沿时刻是 `Wait(0.2)` 取整后的值：0、208、416、2416、2624 ms，不是 200 的整数倍。
 

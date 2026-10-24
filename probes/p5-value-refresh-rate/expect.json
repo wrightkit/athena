@@ -1,0 +1,11 @@
+{
+  "prefix": "P5",
+  "end": "P5 i=187 ",
+  "verdict": {
+    "kind": "distinct-samples",
+    "startPrefix": "P5 start",
+    "samplePrefix": "P5 i=",
+    "expectedSamples": 188,
+    "matchIfDistinctAtMost": 112
+  }
+}

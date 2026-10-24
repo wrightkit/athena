@@ -17,6 +17,17 @@ pub struct Report {
     pub result: &'static str,
 }
 
+/// What `ingest` did with a log.
+#[derive(Debug)]
+pub enum Outcome {
+    /// The log's source name is already in `sources`; nothing was written
+    /// and `runs` was not touched. Distinct runs can share byte-identical
+    /// log text, so dedup keys on the source name, not the content.
+    Skipped,
+    /// The run was judged and written as the probe's next capture.
+    Saved(Report),
+}
+
 fn capture_path(dir: &Path, n: usize) -> PathBuf {
     match n {
         1 => dir.join("capture.txt"),
@@ -43,7 +54,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, Error> {
 }
 
 /// A result is final only when at least three runs agree.
-fn result_of(verdicts: &[Verdict]) -> &'static str {
+pub fn result_of(verdicts: &[Verdict]) -> &'static str {
     match verdicts {
         [first, _, _, ..] if verdicts.iter().all(|v| v == first) => match first {
             Verdict::Match => "match",
@@ -67,7 +78,7 @@ fn judge_all(dir: &Path, expect: &Expect, count: usize) -> Result<Vec<Verdict>, 
                 path: path.display().to_string(),
                 message: error.to_string(),
             })?;
-            Ok(expect.judge(&run))
+            expect.judge(&run)
         })
         .collect()
 }
@@ -81,12 +92,16 @@ pub fn judge_captures(dir: &Path) -> Result<(Vec<Verdict>, &'static str), Error>
 }
 
 /// Save the single finished run in `log` as the probe's next capture and
-/// update `runs` and `result` in `capture.json`. Nothing is written unless
-/// the whole ingest is accepted. A crash between the two writes leaves a
-/// stray file in the next slot while `runs` still counts the earlier
-/// captures; that stray is overwritten on the next ingest rather than
-/// counted as a run.
-pub fn ingest(dir: &Path, log: &str) -> Result<Report, Error> {
+/// update `runs`, `result`, `notes` and `sources` in `capture.json`.
+/// Nothing is written unless the whole ingest is accepted. A crash between
+/// the two writes leaves a stray file in the next slot while `runs` still
+/// counts the earlier captures; that stray is overwritten on the next
+/// ingest rather than counted as a run.
+///
+/// `source` names the log this run came from — the watched or given file
+/// name. A source already recorded in `sources` is skipped; a `capture.json`
+/// written before `sources` existed has an empty list.
+pub fn ingest(dir: &Path, log: &str, source: &str) -> Result<Outcome, Error> {
     let expect: Expect = read_json(&dir.join("expect.json"))?;
     let record_path = dir.join("capture.json");
     let record_text = read(&record_path)?;
@@ -94,6 +109,18 @@ pub fn ingest(dir: &Path, log: &str) -> Result<Report, Error> {
         path: record_path.display().to_string(),
         message: error.to_string(),
     })?;
+
+    let mut sources: Vec<String> = record["sources"]
+        .as_array()
+        .map(|list| {
+            list.iter()
+                .filter_map(|name| name.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    if sources.iter().any(|name| name == source) {
+        return Ok(Outcome::Skipped);
+    }
 
     let program = fs::read(dir.join("probe.zh-CN.ow")).map_err(io(&dir.join("probe.zh-CN.ow")))?;
     let actual = format!("{:x}", Sha256::digest(&program));
@@ -120,32 +147,73 @@ pub fn ingest(dir: &Path, log: &str) -> Result<Report, Error> {
     // Only the recorded captures are judged; the possible stray is never
     // read as a run.
     let mut verdicts = judge_all(dir, &expect, runs as usize)?;
-    verdicts.push(expect.judge(&run));
+    verdicts.push(expect.judge(&run)?);
     let result = result_of(&verdicts);
+    sources.push(source.to_string());
 
     let capture = capture_path(dir, runs as usize + 1);
     let text: String = run.iter().map(|line| format!("{}\n", line.raw)).collect();
+    let notes = updated_notes(&record, result, &verdicts);
     let updated = set_top_level(&record_text, "runs", &verdicts.len().to_string())
         .and_then(|text| set_top_level(&text, "result", &format!("\"{result}\"")))
+        .and_then(|text| set_top_level(&text, "notes", &json_string(&notes)))
+        .and_then(|text| upsert_top_level(&text, "sources", &json_string(&sources)))
         .ok_or_else(|| Error::Format {
             path: record_path.display().to_string(),
-            message: "expected one top-level \"runs\" and one \"result\" line".to_string(),
+            message: "expected the two-space capture.json shape with \"runs\", \"result\", \"notes\" and \"sources\""
+                .to_string(),
         })?;
     fs::write(&capture, text).map_err(io(&capture))?;
     fs::write(&record_path, updated).map_err(io(&record_path))?;
 
-    Ok(Report {
+    Ok(Outcome::Saved(Report {
         capture,
         verdicts,
         result,
-    })
+    }))
+}
+
+fn json_string(value: &impl serde::Serialize) -> String {
+    serde_json::to_string(value).expect("strings serialize")
+}
+
+/// `notes` keeps its human text; `ingest` manages only a trailing
+/// `[ingest: …]` marker so a provisional result says so until three runs
+/// agree.
+fn updated_notes(record: &Value, result: &str, verdicts: &[Verdict]) -> String {
+    let human = strip_marker(record["notes"].as_str().unwrap_or_default());
+    if result != "inconclusive" {
+        return human.to_string();
+    }
+    let matching = verdicts.iter().filter(|v| **v == Verdict::Match).count();
+    let agreeing = matching.max(verdicts.len() - matching);
+    let marker = format!("[ingest: provisional, {agreeing}/3 runs agree]");
+    if human.is_empty() {
+        marker
+    } else {
+        format!("{human} {marker}")
+    }
+}
+
+/// The note without its trailing `[ingest: …]` marker, if it has one.
+fn strip_marker(notes: &str) -> &str {
+    let end = notes.trim_end();
+    let Some(at) = end.rfind("[ingest: ") else {
+        return notes;
+    };
+    let tail = &end[at..];
+    if tail.ends_with(']') && !tail[..tail.len() - 1].contains(']') {
+        end[..at].trim_end()
+    } else {
+        notes
+    }
 }
 
 /// Replace the value of the one two-space-indented `"key": value` line,
 /// keeping the rest of the file, its key order and its formatting. The
 /// convention's `capture.json` keeps that exact two-space shape; a file
-/// that drifts (other indentation, two keys at that indent, CRLF) fails
-/// instead of being normalized silently.
+/// that drifts (other indentation, two keys at that indent) fails instead
+/// of being normalized silently.
 fn set_top_level(text: &str, key: &str, value: &str) -> Option<String> {
     let prefix = format!("  \"{key}\": ");
     let mut found = 0;
@@ -162,4 +230,23 @@ fn set_top_level(text: &str, key: &str, value: &str) -> Option<String> {
         })
         .collect();
     (found == 1).then(|| lines.join("\n") + "\n")
+}
+
+/// Like `set_top_level`, but a key the file does not have yet is added as
+/// the last field instead of failing. A duplicated key still fails.
+fn upsert_top_level(text: &str, key: &str, value: &str) -> Option<String> {
+    if text
+        .lines()
+        .any(|line| line.starts_with(&format!("  \"{key}\": ")))
+    {
+        return set_top_level(text, key, value);
+    }
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let close = lines.iter().rposition(|line| line.trim() == "}")?;
+    let prev = close.checked_sub(1)?;
+    if !lines[prev].ends_with(',') {
+        lines[prev].push(',');
+    }
+    lines.insert(close, format!("  \"{key}\": {value}"));
+    Some(lines.join("\n") + "\n")
 }

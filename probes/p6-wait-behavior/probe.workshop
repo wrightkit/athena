@@ -34,6 +34,7 @@ rule("P6 driver")
 		Global.f = False;
 		Log To Inspector(Custom String("P6 flag=false t_ms={0}", (Total Time Elapsed - Global.t0) * 1000, Null, Null));
 		Wait(2, Ignore Condition);
+		Log To Inspector(Custom String("P6 counts {0} {1}", Custom String("nIgnore={0} nAbort={1} nRestart={2}", Global.nIgnore, Global.nAbort, Global.nRestart), Custom String("endIgnore={0} endRestart={1}", Global.endIgnore, Global.endRestart), Null));
 		Log To Inspector(Custom String("P6 done t_ms={0}", (Total Time Elapsed - Global.t0) * 1000, Null, Null));
 	}
 }
