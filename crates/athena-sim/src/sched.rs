@@ -9,7 +9,7 @@ use crate::scenario::{EventCtx, Expectation, Player, Scenario};
 use crate::state::{self, WorldSlot};
 use crate::{
     ExpectationResult, ExpectationStatus, LogEntry, NotModeled, Options, Outcome, PlayerState,
-    PlayerWorld, Stop, Trace, Val,
+    Stop, Trace, Val,
 };
 
 /// One server tick (P0, P1).
@@ -71,11 +71,11 @@ struct World {
     hud: Hud,
 }
 
-/// The resolved world state of a scenario player. A player the scenario did
-/// not declare, or whose catalog state failed to resolve at run start, is
-/// reported, never defaulted: `Damage`/`Heal` on such a player stops the
-/// run as `not_modeled`.
-fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut PlayerWorld, Stop> {
+/// The resolved state of a scenario player. A player the scenario did
+/// not declare, or whose state failed to resolve at run start, is
+/// reported, never defaulted: `Damage`/`Heal` on such a player — dealt or
+/// received — stops the run as `not_modeled`.
+fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Resolved, Stop> {
     let Some(player) = world.players.get_mut(id) else {
         return unsupported(format!("`{id}` is not a scenario player"));
     };
@@ -402,13 +402,21 @@ fn run_instance(
                     let [player, damager, amount] = args.as_slice() else {
                         return unsupported("damage arguments");
                     };
-                    // Arguments evaluate left to right; the `damager` value
-                    // is checked but otherwise has no model.
+                    // Arguments evaluate left to right. `Null` has no
+                    // dealer scale; a player deals with its `damageDealt%`.
                     let ids = player_ids(player, &env)?;
-                    eval(damager, &env)?;
+                    let damager = eval(damager, &env)?;
                     let amount = number(&eval(amount, &env)?)?;
+                    let dealt = match damager {
+                        Val::Null => 1.0,
+                        Val::Player(id) => world_state(world, &id)?.damage_dealt,
+                        other => {
+                            return unsupported(format!("{other:?} where a player is needed"));
+                        }
+                    };
                     for id in ids {
-                        state::damage(world_state(world, &id)?, amount);
+                        let target = world_state(world, &id)?;
+                        state::damage(&mut target.world, amount * dealt * target.damage_received);
                     }
                     advance(inst);
                 }
@@ -416,13 +424,21 @@ fn run_instance(
                     let [player, healer, amount] = args.as_slice() else {
                         return unsupported("heal arguments");
                     };
-                    // Same shape as `damage`; the `healer` value is checked
-                    // but otherwise has no model.
+                    // Same shape as `damage`, with `healingDealt%` and
+                    // `healingReceived%` scales.
                     let ids = player_ids(player, &env)?;
-                    eval(healer, &env)?;
+                    let healer = eval(healer, &env)?;
                     let amount = number(&eval(amount, &env)?)?;
+                    let dealt = match healer {
+                        Val::Null => 1.0,
+                        Val::Player(id) => world_state(world, &id)?.healing_dealt,
+                        other => {
+                            return unsupported(format!("{other:?} where a player is needed"));
+                        }
+                    };
                     for id in ids {
-                        state::heal(world_state(world, &id)?, amount);
+                        let target = world_state(world, &id)?;
+                        state::heal(&mut target.world, amount * dealt * target.healing_received);
                     }
                     advance(inst);
                 }
@@ -473,7 +489,14 @@ pub(crate) fn run(
     // declared, and the run stops only if `Damage`/`Heal` touches the player.
     for (id, player) in &mut players {
         player.world = match &player.hero {
-            Some(hero) => match state::resolve(id, hero, &player.hero_spellings, hero_values) {
+            Some(hero) => match state::resolve(
+                id,
+                hero,
+                &player.hero_spellings,
+                player.team,
+                program.settings.as_ref(),
+                hero_values,
+            ) {
                 Ok(resolved) => WorldSlot::Resolved(resolved),
                 Err(error) => WorldSlot::Failed(error),
             },
@@ -514,7 +537,7 @@ pub(crate) fn run(
                     hero: player.hero.clone(),
                     team: player.team.map(|team| team.as_str().to_string()),
                     world: match &player.world {
-                        WorldSlot::Resolved(state) => Some(state.clone()),
+                        WorldSlot::Resolved(state) => Some(state.world.clone()),
                         WorldSlot::Unresolved | WorldSlot::Failed(_) => None,
                     },
                 };
