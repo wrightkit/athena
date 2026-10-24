@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, VecDeque};
 use workshop_rs::hero_values::HeroValues;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, Program, Rule, Value};
 
-use crate::eval::{Env, eval, number, player_id, player_ids};
+use crate::eval::{Env, button_slot, eval, number, player_id, player_ids};
 use crate::hud::Hud;
 use crate::scenario::{EventCtx, Expectation, Player, Scenario};
 use crate::state::{self, WorldSlot};
@@ -73,8 +73,9 @@ struct World {
 
 /// The resolved state of a scenario player. A player the scenario did
 /// not declare, or whose state failed to resolve at run start, is
-/// reported, never defaulted: `Damage`/`Heal` on such a player — dealt or
-/// received — stops the run as `not_modeled`.
+/// reported, never defaulted: touching that player's world state —
+/// `Damage`/`Heal` dealt or received, `Set Ability Cooldown` — stops the
+/// run as `not_modeled`.
 fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Resolved, Stop> {
     let Some(player) = world.players.get_mut(id) else {
         return unsupported(format!("`{id}` is not a scenario player"));
@@ -442,6 +443,22 @@ fn run_instance(
                     }
                     advance(inst);
                 }
+                "setAbilityCooldown" => {
+                    let [player, button, cooldown] = args.as_slice() else {
+                        return unsupported("setAbilityCooldown arguments");
+                    };
+                    // `Set Ability Cooldown` writes the reported cooldown for
+                    // the slot literally; whether `abilityCooldown%` also
+                    // scales it is what P7 is for.
+                    let ids = player_ids(player, &env)?;
+                    let slot = button_slot(button)?;
+                    let seconds = number(&eval(cooldown, &env)?)?;
+                    for id in ids {
+                        let target = world_state(world, &id)?;
+                        target.world.cooldowns.insert(slot.to_string(), seconds);
+                    }
+                    advance(inst);
+                }
                 other => match crate::hud::action(other, args, &env, &mut world.hud, tick) {
                     Some(result) => {
                         result?;
@@ -486,7 +503,8 @@ pub(crate) fn run(
         .unwrap_or_default();
     // Resolve every player's world state before the first tick. A failure is
     // stored, not reported yet: the trace row still says what the scenario
-    // declared, and the run stops only if `Damage`/`Heal` touches the player.
+    // declared, and the run stops only if a `Damage`/`Heal`/`Set Ability
+    // Cooldown` action or a world-state read touches the player.
     for (id, player) in &mut players {
         player.world = match &player.hero {
             Some(hero) => match state::resolve(

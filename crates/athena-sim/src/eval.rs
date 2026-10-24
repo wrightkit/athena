@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use workshop_rs::Value;
 
 use crate::scenario::{EventCtx, Player, Team};
-use crate::{MissingInput, MissingInputKind, NotModeled, Stop, Val};
+use crate::state::WorldSlot;
+use crate::{MissingInput, MissingInputKind, NotModeled, PlayerWorld, PoolState, Stop, Val};
 
 pub(crate) struct Env<'a> {
     pub globals: &'a BTreeMap<String, Val>,
@@ -82,6 +83,46 @@ pub(crate) fn viewers(value: &Value, env: &Env) -> Result<Vec<String>, Stop> {
         Val::Null => Ok(Vec::new()),
         other => unsupported(format!("{other:?} where players are needed")),
     }
+}
+
+/// The resolved world state of a scenario player, as the player-state
+/// reading values (`Health`, `Max Health`, `Ability Cooldown`) see it. A
+/// player the scenario did not declare, or whose state failed to resolve at
+/// run start, is reported, never defaulted — reading world state is a touch,
+/// like `Damage`/`Heal`.
+fn player_world<'a>(
+    players: &'a BTreeMap<String, Player>,
+    id: &str,
+) -> Result<&'a PlayerWorld, Stop> {
+    let Some(player) = players.get(id) else {
+        return unsupported(format!("`{id}` is not a scenario player"));
+    };
+    match &player.world {
+        WorldSlot::Resolved(state) => Ok(&state.world),
+        WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
+        WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
+    }
+}
+
+/// The `Button` enum member to the cooldown slot name the player-state
+/// table reports it under.
+pub(crate) fn button_slot(button: &Value) -> Result<&'static str, Stop> {
+    let Value::Enum { value, .. } = button else {
+        return unsupported(format!("{button:?} where a button is needed"));
+    };
+    Ok(match value.as_str() {
+        "ABILITY_1" => "ability1",
+        "ABILITY_2" => "ability2",
+        "SECONDARY_FIRE" => "secondaryFire",
+        "PRIMARY_FIRE" => "primaryFire",
+        "ULTIMATE" => "ultimate",
+        "CROUCH" => "crouch",
+        "INTERACT" => "interact",
+        "JUMP" => "jump",
+        "MELEE" => "melee",
+        "RELOAD" => "reload",
+        other => return unsupported(format!("button {other}")),
+    })
 }
 
 pub(crate) fn number(value: &Val) -> Result<f64, Stop> {
@@ -265,6 +306,42 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     format!("value {name}"),
                 ),
             }
+        }
+        "getHealth" | "getMaxHealth" => {
+            let [player] = arguments::<1>(name, args)?;
+            let id = player_id(player, env)?;
+            let world = player_world(env.players, &id)?;
+            let pools = [
+                Some(&world.health),
+                world.shield.as_ref(),
+                world.armor.as_ref(),
+            ];
+            let pick = if name == "getHealth" {
+                |pool: &PoolState| pool.current
+            } else {
+                |pool: &PoolState| pool.max
+            };
+            Ok(Val::Number(pools.into_iter().flatten().map(pick).sum()))
+        }
+        "getAbilityCooldown" => {
+            let [player, button] = arguments::<2>(name, args)?;
+            let id = player_id(player, env)?;
+            let slot = button_slot(button)?;
+            let world = player_world(env.players, &id)?;
+            if let Some(seconds) = world.cooldowns.get(slot) {
+                return Ok(Val::Number(*seconds));
+            }
+            // A slot recorded only under a variant (`slot/variant`) has no
+            // honest answer for the bare button; a slot with no recorded
+            // cooldown at all reports 0 — the ability is never on cooldown.
+            if world
+                .cooldowns
+                .keys()
+                .any(|key| key.starts_with(&format!("{slot}/")))
+            {
+                return unsupported(format!("ability cooldown on variant-keyed slot {slot}"));
+            }
+            Ok(Val::Number(0.0))
         }
         "customString" => {
             let [template, rest @ ..] = args else {

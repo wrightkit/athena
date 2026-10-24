@@ -14,8 +14,11 @@
 | P4 | `Wait Until(True, 0)` 经过 0 tick，`Wait(0)` 经过 1 tick，`Wait Until(False, 0.03)` 超时取整到 0.032 | 四个 elapsed 的值 |
 | P5 | `Position Of` 约 12.5Hz 更新，`Update Every Frame` 版本约 62.5Hz | 188 条日志里 pos 和 everyframe 各有多少个不同的值：pos 远少于 188 个 = match；pos 也接近 188 个 = mismatch（两列相同也如此，`Update Every Frame` 可能只对持续重算的元素生效，本探针测不到）；pos 恒定或无效 = inconclusive |
 | P6 | 三种 Wait Behavior 在条件变假、再变真时的处理 | 用各规则启动次数、完成次数及完成时间区分忽略、中止、重新开始 |
+| P7 | heroes 设置作用于上报的玩家状态：health% 放大 Max Health，damageReceived%/healingReceived% 缩放脚本 Damage/Heal，abilityCooldown% 作用于技能冷却 | 四行读数与预期是否一致；`ability1_cooldown` 为 20 说明 `Set Ability Cooldown` 是绝对写入，为 10 说明它也被 50% 缩放 |
 
 P5 用 `Start Forcing Throttle` 强制主机玩家向前移动，无需手动操作。脚本会一直等到主机玩家选好英雄并出生（最长 10 分钟），所以开局后正常选英雄即可；不要在观战状态下跑。前方要有约 3 秒的跑道。
+
+P7 把英雄池限制为 Ana（`enabledHeroes`），开局后正常选英雄出生即可，无需其他操作；读数在 `Wait(3)` 后记录，玩家是哪队、第几个槽位都一样。若 `max_health` 等行显示 0 或缺行，说明读取时玩家未出生，重跑一次。
 
 ## 操作与判定
 
@@ -39,6 +42,7 @@ P5 用 `Start Forcing Throttle` 强制主机玩家向前移动，无需手动操
 | P3 | `P3 done` | 第一批 A、B、C 三行，`t_ms` 相同（约 0）；第二批 D1 → D3 → D2，`t_ms` 约 1008、1024、1040 | A、B、C 顺序与时间戳一致 → 同 tick 按文件顺序，match；顺序不同或 `t_ms` 不同则记下实际值。D 批只验证 Wait 时长，不验证规则顺序 |
 | P4 | `P4d ...` | P4a `elapsed_ms`=0，P4b=16，P4c=32，P4d=112 | 四项逐一比对；P4a 为 16 或 P4b 为 0 说明零 tick 假设错 |
 | P5 | `P5 i=187 ...` | 开头一行 `P5 start spawned=真 pos=(x, y, z)`（`spawned` 为假或 `pos` 为 0 说明主机玩家没有出生，本次作废）；然后 188 行。`pos` 约 38 个不同值，`everyframe` 约 188 个不同值 | pos 不同值个数接近 38 → match；pos 也接近 188 → mismatch，以实测为准；pos 恒定或为 0 → 主机玩家没出生，本次作废 |
+| P7 | `P7 done` | `max_health`=375，`health_after_damage`=275，`health_after_heal`=355，`ability1_cooldown`=20 | 四行与预期逐一比对，全部一致为 match；任一行不符记下实际值（cooldown 为 10 说明 `abilityCooldown%` 也缩放脚本写入） |
 
 ### P3 的 driver 末尾变体
 

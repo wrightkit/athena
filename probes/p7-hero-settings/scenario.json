@@ -1,0 +1,11 @@
+{
+  "scenarioVersion": 1,
+  "seconds": 10,
+  "players": [
+    {
+      "id": "p1",
+      "hero": "ana",
+      "team": "team1"
+    }
+  ]
+}
