@@ -1,4 +1,5 @@
 mod eval;
+mod hero_settings;
 mod hud;
 mod scenario;
 mod sched;
