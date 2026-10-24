@@ -47,5 +47,6 @@
     }
   ],
   "result": "mismatch",
-  "notes": "Final: three independent restarts have complete saved captures, each with a valid spawned=true nonzero start, 188 samples and final i=188. Both columns have 188 distinct values and are identical on every sample. This action-read access pattern does not support the 12.5 Hz Position Of hypothesis. This does not test Update Every Frame inside continuously re-evaluated elements such as HUD text or effects. Client version was read from the options menu. An earlier unsaved observation (188 distinct values in both columns) is not counted; an earlier unspawned zero-position run was invalid. Captures were copied through the Inspector into TextEdit, then exported as plain text without changing their content."
+  "notes": "Final: three independent restarts have complete saved captures, each with a valid spawned=true nonzero start, 188 samples and final i=188. Both columns have 188 distinct values and are identical on every sample. This action-read access pattern does not support the 12.5 Hz Position Of hypothesis. This does not test Update Every Frame inside continuously re-evaluated elements such as HUD text or effects. Client version was read from the options menu. An earlier unsaved observation (188 distinct values in both columns) is not counted; an earlier unspawned zero-position run was invalid. Captures were copied through the Inspector into TextEdit, then exported as plain text without changing their content.",
+  "sources": []
 }

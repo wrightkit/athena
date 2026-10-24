@@ -12,7 +12,7 @@ Probes P0 to P6 exist; measured results and run counts are in `probes/<id>/captu
 
 Use the workspace skill `wrightkit-run-workshop-probe` (`.agents/skills/wrightkit-run-workshop-probe/SKILL.md`). The agent prepares the probe and judges the result; you paste into the client and copy the Inspector text back. The steps and expected values (Chinese) are in [docs/procedure.zh-CN.md](docs/procedure.zh-CN.md).
 
-To record a run from the Workshop Inspector log, run `cargo run -p athena-capture -- ingest probes/<id> <log-file>` ([capture convention](docs/capture-convention.md#ingesting-a-log)).
+To record a run from the Workshop Inspector log, run `cargo run -p athena-capture -- ingest probes/<id> <log-file>`, or point `cargo run -p athena-capture -- watch <log-dir>` at a directory of Inspector logs to ingest each finished run as it lands ([capture convention](docs/capture-convention.md#ingesting-a-log)).
 
 ## Documentation
 

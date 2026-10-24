@@ -15,5 +15,6 @@
     { "i": 7, "t_ms": 128.0 }
   ],
   "result": "match",
-  "notes": "Three saved captures agree: 16 ms steps through 128 ms; final i=8, t0=3.023 in all three. Client version 2.25.0.0 - 154461.1 was read during runs 2 and 3; run 1 version was not recorded."
+  "notes": "Three saved captures agree: 16 ms steps through 128 ms; final i=8, t0=3.023 in all three. Client version 2.25.0.0 - 154461.1 was read during runs 2 and 3; run 1 version was not recorded.",
+  "sources": []
 }
