@@ -81,7 +81,7 @@ pub(crate) fn resolve(
         .map_err(|error| unmodeled(format!("gameplay dataset unavailable: {error}")))?;
     let hero_id = hero_id(spellings, gameplay)
         .ok_or_else(|| unmodeled(format!("hero `{hero}` is not in the gameplay dataset")))?;
-    let mods = hero_settings::modifiers(player, settings, team, &hero_id).map_err(unmodeled)?;
+    let mods = hero_settings::modifiers(settings, team, &hero_id).map_err(unmodeled)?;
 
     // Every hero has a `health` pool and an ultimate cost; `shield` and
     // `armor` exist only where the catalog records them (a hero without the

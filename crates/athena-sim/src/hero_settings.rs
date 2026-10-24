@@ -116,7 +116,6 @@ fn catalogued(key: &str, scope: Scope) -> bool {
 /// Read the hero settings a player's scope authors into its modifiers.
 /// The error names the setting key that is authored but cannot be applied.
 pub(crate) fn modifiers(
-    player: &str,
     settings: Option<&Settings>,
     team: Option<Team>,
     hero_id: &str,
@@ -158,8 +157,7 @@ pub(crate) fn modifiers(
         if !applies_to_team(team_name, team) {
             continue;
         }
-        let unapplied =
-            |key: String| format!("player `{player}`: hero setting `{key}` is not applied");
+        let unapplied = |key: String| format!("hero setting `{key}` is not applied");
         for member in members {
             match member {
                 SettingsNode::Group { name, children, .. } if name == hero_id => {

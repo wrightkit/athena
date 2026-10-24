@@ -179,9 +179,10 @@ pub struct PlayerState {
     /// `team1` or `team2`, `None` when undeclared.
     pub team: Option<String>,
     /// The catalog-derived world state, `None` when the run could not
-    /// resolve it (a player without a `hero`, or a hero value the catalog
-    /// lacks). Touching an unresolved player's world state ends the run as
-    /// `not_modeled`.
+    /// resolve it (a player without a `hero`, a hero value the catalog
+    /// lacks, or a hero setting the program authors that the simulator
+    /// does not apply). Touching an unresolved player's world state —
+    /// dealt or received — ends the run as `not_modeled`.
     pub world: Option<PlayerWorld>,
 }
 
