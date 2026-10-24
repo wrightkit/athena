@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
-use athena_sim::{Options, Outcome, Trace, Val, run_text};
+use athena_sim::{
+    Options, Outcome, Trace, Val, run_scenario, run_scenario_with_hero_values, run_text,
+};
 
 const LOG_TOLERANCE: f64 = 0.0051;
 const VARIABLE_TOLERANCE: f64 = 0.0006;
@@ -153,9 +155,19 @@ fn check_probe(id: &str) {
     let options = Options {
         seconds: RUN_SECONDS,
     };
+    // A probe that needs a real player carries a `scenario.json`; without
+    // one `run_text` runs the bare program.
+    let scenario = probe_file(id, "scenario.json")
+        .exists()
+        .then(|| read(id, "scenario.json"));
     let simulate = |file: &str| {
-        let trace = run_text(&read(id, file), options)
-            .unwrap_or_else(|error| panic!("{id} {file}: {error}"));
+        let text = read(id, file);
+        let trace = match &scenario {
+            Some(scenario) => {
+                run_scenario(&text, scenario).unwrap_or_else(|error| panic!("{id} {file}: {error}"))
+            }
+            None => run_text(&text, options).unwrap_or_else(|error| panic!("{id} {file}: {error}")),
+        };
         assert_eq!(trace.outcome, Outcome::Complete, "{id} {file}");
         trace
     };
@@ -210,6 +222,69 @@ fn p4_wait_until_zero_tick() {
 #[ignore = "needs Wait Until and Wait Behavior (layer 3)"]
 fn p6_wait_behavior() {
     check_probe("p6-wait-behavior");
+}
+
+#[test]
+#[ignore = "no captures yet (`runs` is 0), and the builtin hero values need a workshop-rs release with the pinned file"]
+fn p7_hero_settings() {
+    check_probe("p7-hero-settings");
+}
+
+/// P7 is `inconclusive`: it has no captures. This test does not assert
+/// client behavior; it checks the simulator's modeled player state produces
+/// the hypothesis lines in `expect.json`, and that a bare `run_text` — no
+/// scenario, so no player — reports the probe `not_modeled`. The values are
+/// test-loaded so the check does not wait on a workshop-rs release.
+#[test]
+fn p7_hero_settings_models_the_expected_lines() {
+    // `ana` as the pinned file records her: a 250 health pool, a 14-second
+    // `ability1` cooldown and a 2300-point ultimate.
+    let values = workshop_rs::hero_values::load(
+        r#"{
+            "format": "workshop-rs/hero-values-v1",
+            "balanceVersion": "test-only",
+            "heroes": [
+                { "id": "ana", "values": [
+                    { "kind": "health", "pool": "health", "amount": 250 },
+                    { "kind": "cooldown", "slot": "ability1", "seconds": 14 },
+                    { "kind": "ultimateCost", "points": 2300 }
+                ] }
+            ]
+        }"#,
+    )
+    .expect("the test hero values load");
+    let expected: serde_json::Value =
+        serde_json::from_str(&read("p7-hero-settings", "expect.json")).unwrap();
+    let scenario = read("p7-hero-settings", "scenario.json");
+    let trace = run_scenario_with_hero_values(
+        &read("p7-hero-settings", "probe.workshop"),
+        &scenario,
+        &values,
+    )
+    .unwrap_or_else(|error| panic!("p7-hero-settings: {error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+    for (log, line) in trace.logs.iter().zip(expected["lines"].as_array().unwrap()) {
+        assert!(
+            same_log(&log.text, line.as_str().unwrap()),
+            "simulated {:?}, expected {line}",
+            log.text,
+        );
+    }
+    assert_eq!(
+        trace.logs.len(),
+        expected["lines"].as_array().unwrap().len()
+    );
+
+    let trace = run_text(
+        &read("p7-hero-settings", "probe.workshop"),
+        Options {
+            seconds: RUN_SECONDS,
+        },
+    )
+    .unwrap();
+    let Outcome::NotModeled(_) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
 }
 
 #[test]

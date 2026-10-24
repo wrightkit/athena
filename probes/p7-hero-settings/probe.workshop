@@ -1,0 +1,38 @@
+settings
+{
+	heroes
+	{
+		General
+		{
+			enabledHeroes
+			{
+				Ana
+			}
+			health%: 150
+			damageReceived%: 50
+			healingReceived%: 200
+			abilityCooldown%: 50
+		}
+	}
+}
+
+rule("P7 hero settings: reported state under scaled pools, damage, heal and cooldown")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Wait(3, Ignore Condition);
+		Log To Inspector(Custom String("P7 max_health={0}", Max Health(Value In Array(All Players(All Teams), 0)), Null, Null));
+		Damage(Value In Array(All Players(All Teams), 0), Null, 200);
+		Log To Inspector(Custom String("P7 health_after_damage={0}", Health(Value In Array(All Players(All Teams), 0)), Null, Null));
+		Heal(Value In Array(All Players(All Teams), 0), Null, 40);
+		Log To Inspector(Custom String("P7 health_after_heal={0}", Health(Value In Array(All Players(All Teams), 0)), Null, Null));
+		Set Ability Cooldown(Value In Array(All Players(All Teams), 0), Ability 1, 20);
+		Log To Inspector(Custom String("P7 ability1_cooldown={0}", Ability Cooldown(Value In Array(All Players(All Teams), 0), Ability 1), Null, Null));
+		Log To Inspector(Custom String("P7 done", Null, Null, Null));
+	}
+}

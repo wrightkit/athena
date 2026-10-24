@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, VecDeque};
 use workshop_rs::hero_values::HeroValues;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, Program, Rule, Value};
 
-use crate::eval::{Env, eval, number, player_id, player_ids};
+use crate::eval::{Env, button_slot, eval, number, player_id, player_ids};
 use crate::hud::Hud;
 use crate::scenario::{EventCtx, Expectation, Player, Scenario};
 use crate::state::{self, WorldSlot};
@@ -439,6 +439,22 @@ fn run_instance(
                     for id in ids {
                         let target = world_state(world, &id)?;
                         state::heal(&mut target.world, amount * dealt * target.healing_received);
+                    }
+                    advance(inst);
+                }
+                "setAbilityCooldown" => {
+                    let [player, button, cooldown] = args.as_slice() else {
+                        return unsupported("setAbilityCooldown arguments");
+                    };
+                    // `Set Ability Cooldown` writes the reported cooldown for
+                    // the slot literally; whether `abilityCooldown%` also
+                    // scales it is what P7 is for.
+                    let ids = player_ids(player, &env)?;
+                    let slot = button_slot(button)?;
+                    let seconds = number(&eval(cooldown, &env)?)?;
+                    for id in ids {
+                        let target = world_state(world, &id)?;
+                        target.world.cooldowns.insert(slot.to_string(), seconds);
                     }
                     advance(inst);
                 }

@@ -1,0 +1,11 @@
+{
+  "prefix": "P7",
+  "end": "P7 done",
+  "lines": [
+    "P7 max_health=375",
+    "P7 health_after_damage=275",
+    "P7 health_after_heal=355",
+    "P7 ability1_cooldown=20",
+    "P7 done"
+  ]
+}

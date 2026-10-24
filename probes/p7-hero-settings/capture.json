@@ -1,0 +1,14 @@
+{
+  "probe": "p7-hero-settings",
+  "client": {
+    "version": "",
+    "date": "",
+    "locale": "zh-CN"
+  },
+  "runs": 0,
+  "probe_sha256": "948c7ec6925597dafaef788ec44106ca78b3cce603abf9511d77f46ebb93092c",
+  "hypothesis": "hero settings move the reported player state: health% 150 on Ana (health pool 250) reports Max Health 375; damageReceived% 50 lands a scripted Damage of 200 as 100; healingReceived% 200 lands a scripted Heal of 40 as 80; abilityCooldown% 50 applies to ability cooldowns, while Set Ability Cooldown(player, Ability 1, 20) is expected to write the timer literally and report 20",
+  "observed": [],
+  "result": "inconclusive",
+  "notes": "No captures yet; running the probe in the client is an owner step. The expected lines are hypotheses in expect.json. A cooldown reading of 10 instead of 20 would mean abilityCooldown% scales Set Ability Cooldown as well; either observation is a real result. The settings restrict the lobby to Ana (enabledHeroes), so any player produces the same numbers."
+}
