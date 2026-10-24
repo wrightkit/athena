@@ -50,7 +50,7 @@ Each row repeats what the scenario declared — `hero` (the scenario text, `null
 | `cooldowns` | Cooldown seconds per ability slot, keyed by `slot` or `slot/variant`; the catalog's recorded slots appear scaled by the program's hero settings, and a `Set Ability Cooldown` action writes a slot's reported seconds literally. |
 | `ultimate` | `{ "charge": ..., "cost": ... }`: charge points toward the catalog's cost. Read-only in version 1. |
 
-`world` is `null` when the run could not resolve the player's state — a player without a `hero`, a hero value the file does not have, or a hero setting the program authors but the simulator does not apply. `Damage` or `Heal` on such a player or dealt by such a player, or a `Health`/`Max Health`/`Ability Cooldown` read of such a player, stops the run as `not_modeled`; the row still reports the declared `hero`/`team`.
+`world` is `null` when the run could not resolve the player's state — a player without a `hero`, a hero value the file does not have, or a hero setting the program authors but the simulator does not apply. `Damage` or `Heal` on such a player or dealt by such a player, a `Set Ability Cooldown` on such a player, or a `Health`/`Max Health`/`Ability Cooldown` read of such a player, stops the run as `not_modeled`; the row still reports the declared `hero`/`team`.
 
 ### Outcome and "not modeled"
 

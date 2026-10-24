@@ -328,9 +328,20 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let id = player_id(player, env)?;
             let slot = button_slot(button)?;
             let world = player_world(env.players, &id)?;
-            Ok(Val::Number(
-                world.cooldowns.get(slot).copied().unwrap_or(0.0),
-            ))
+            if let Some(seconds) = world.cooldowns.get(slot) {
+                return Ok(Val::Number(*seconds));
+            }
+            // A slot recorded only under a variant (`slot/variant`) has no
+            // honest answer for the bare button; a slot with no recorded
+            // cooldown at all reports 0 — the ability is never on cooldown.
+            if world
+                .cooldowns
+                .keys()
+                .any(|key| key.starts_with(&format!("{slot}/")))
+            {
+                return unsupported(format!("ability cooldown on variant-keyed slot {slot}"));
+            }
+            Ok(Val::Number(0.0))
         }
         "customString" => {
             let [template, rest @ ..] = args else {

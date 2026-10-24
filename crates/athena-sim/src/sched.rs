@@ -73,8 +73,9 @@ struct World {
 
 /// The resolved state of a scenario player. A player the scenario did
 /// not declare, or whose state failed to resolve at run start, is
-/// reported, never defaulted: `Damage`/`Heal` on such a player — dealt or
-/// received — stops the run as `not_modeled`.
+/// reported, never defaulted: touching that player's world state —
+/// `Damage`/`Heal` dealt or received, `Set Ability Cooldown` — stops the
+/// run as `not_modeled`.
 fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Resolved, Stop> {
     let Some(player) = world.players.get_mut(id) else {
         return unsupported(format!("`{id}` is not a scenario player"));
@@ -502,7 +503,8 @@ pub(crate) fn run(
         .unwrap_or_default();
     // Resolve every player's world state before the first tick. A failure is
     // stored, not reported yet: the trace row still says what the scenario
-    // declared, and the run stops only if `Damage`/`Heal` touches the player.
+    // declared, and the run stops only if a `Damage`/`Heal`/`Set Ability
+    // Cooldown` action or a world-state read touches the player.
     for (id, player) in &mut players {
         player.world = match &player.hero {
             Some(hero) => match state::resolve(

@@ -6,7 +6,8 @@
 //! settings the program authors (`src/hero_settings.rs`); a hero the
 //! catalog cannot supply — or a hero setting the simulator does not apply —
 //! leaves the row unresolved, and touching that player's world state
-//! (`Damage`, `Heal`) stops the run as `not_modeled`. Pools, cooldown
+//! (`Damage`, `Heal`, `Set Ability Cooldown`, a `Health`/`Max Health`/
+//! `Ability Cooldown` read) stops the run as `not_modeled`. Pools, cooldown
 //! seconds and ultimate cost are never defaulted or invented. No capture
 //! backs the pool rules; `docs/architecture.md` marks them **modeled**.
 
@@ -27,8 +28,8 @@ pub(crate) enum WorldSlot {
     /// The player's world state.
     Resolved(Resolved),
     /// The catalog could not supply the state, or a hero setting the
-    /// simulator does not apply was authored for the player; a
-    /// `Damage`/`Heal` on the player stops the run with this error.
+    /// simulator does not apply was authored for the player; touching the
+    /// player's world state stops the run with this error.
     Failed(NotModeled),
 }
 

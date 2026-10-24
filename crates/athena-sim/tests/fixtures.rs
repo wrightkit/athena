@@ -178,6 +178,11 @@ fn check_probe(id: &str) {
         "{id}: the two probe spellings must simulate identically"
     );
     for file in CAPTURES {
+        // Compare only the captures ingested so far; a probe between its
+        // first and third run has fewer than three files.
+        if !probe_file(id, file).exists() {
+            continue;
+        }
         let captured = parse_capture(&read(id, file));
         if let Err(message) =
             compare_logs(&english, &captured).and(compare_variables(&english, &captured))
