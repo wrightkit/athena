@@ -7,8 +7,8 @@ mod log;
 mod watch;
 
 pub use expect::{Expect, Verdict, VerdictSpec};
-pub use ingest::{Outcome, Report, ingest, ingest_file, judge_captures, result_of};
-pub use watch::{Event, load_expects, scan_once, watch};
+pub use ingest::{Outcome, Report, ingest, judge_captures, result_of};
+pub use watch::{Event, ScanState, foreign_end, load_expects, scan_once, watch};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

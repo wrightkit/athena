@@ -1,5 +1,7 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -44,6 +46,18 @@ impl Event {
     }
 }
 
+/// Scan bookkeeping shared across polls.
+#[derive(Default)]
+pub struct ScanState {
+    /// (file, probe) pairs that already recorded a run; a probe gets at
+    /// most one run per file, so a later same-probe segment is left alone.
+    attempted: HashSet<(PathBuf, PathBuf)>,
+    /// (file, segment hash) already handled. Suppression keys on content:
+    /// a file that is rewritten — or grows a new segment — is processed
+    /// again, while an unchanged segment is never re-evaluated.
+    reported: HashSet<(PathBuf, u64)>,
+}
+
 fn name(path: &Path) -> String {
     path.file_name()
         .unwrap_or_default()
@@ -71,15 +85,55 @@ pub fn load_expects(probes_dir: &Path) -> Result<Vec<(PathBuf, Expect)>, Error> 
     Ok(expects)
 }
 
-/// One poll of `log_dir`: for every file that newly contains a probe's
-/// `end` line, ingest one run per probe. `attempted` remembers the
-/// (file, probe) pairs already handled so a rescan stays quiet; a file
-/// without an end line is left for the next poll in case it is still
-/// being written.
+/// The name of a probe other than `probe` whose `end` token `text` holds,
+/// if any. Probes are told apart by directory name — the convention names
+/// a probe directory after its id.
+pub fn foreign_end(text: &str, probe: &Path, expects: &[(PathBuf, Expect)]) -> Option<String> {
+    let target = name(probe);
+    let messages: Vec<&str> = lines(text).iter().map(|line| line.message).collect();
+    expects
+        .iter()
+        .filter(|(dir, _)| name(dir) != target)
+        .find(|(_, expect)| {
+            messages
+                .iter()
+                .any(|message| message.starts_with(&expect.end))
+        })
+        .map(|(dir, _)| name(dir))
+}
+
+/// The probe whose expected `lines` the segment's run matches, when
+/// several probes share the end line that closed it.
+fn owner_of<'a>(
+    expects: &'a [(PathBuf, Expect)],
+    closers: &[usize],
+    run_text: &str,
+) -> Option<&'a (PathBuf, Expect)> {
+    let matching: Vec<&(PathBuf, Expect)> = closers
+        .iter()
+        .map(|&index| &expects[index])
+        .filter(|(_, expect)| {
+            expect
+                .run(run_text)
+                .and_then(|run| expect.judge(&run))
+                .is_ok_and(|verdict| verdict == Verdict::Match)
+        })
+        .collect();
+    match matching[..] {
+        [only] => Some(only),
+        _ => None,
+    }
+}
+
+/// One poll of `log_dir`. Each file is split into segments at every known
+/// `end` line — a segment is owned by the probe whose `end` closes it —
+/// and at most one run per probe is recorded from a file. Lines after the
+/// last end line are a run still in progress and are left for the next
+/// poll. `state` keeps the scan quiet and consistent across polls.
 pub fn scan_once(
     log_dir: &Path,
     expects: &[(PathBuf, Expect)],
-    attempted: &mut HashSet<(PathBuf, PathBuf)>,
+    state: &mut ScanState,
 ) -> Vec<Event> {
     let mut events = Vec::new();
     let Ok(entries) = fs::read_dir(log_dir) else {
@@ -95,59 +149,62 @@ pub fn scan_once(
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
-        let messages: Vec<&str> = lines(&text).iter().map(|line| line.message).collect();
-        // Candidate probes are the ones whose end line the file holds;
-        // several probes can share one end line (the P3 pair).
-        let mut by_end: BTreeMap<&str, Vec<&(PathBuf, Expect)>> = BTreeMap::new();
-        for candidate in expects {
-            if messages
+        let log_lines = lines(&text);
+        // Close a segment at every line that is some probe's end. The run
+        // inside a segment is judged on its own lines only, so same-prefix
+        // probes cannot contaminate each other.
+        let mut segments = Vec::new();
+        let mut start = 0;
+        for (index, line) in log_lines.iter().enumerate() {
+            let closers: Vec<usize> = expects
                 .iter()
-                .any(|message| message.starts_with(&candidate.1.end))
-            {
-                by_end
-                    .entry(candidate.1.end.as_str())
-                    .or_default()
-                    .push(candidate);
+                .enumerate()
+                .filter(|(_, (_, expect))| line.message.starts_with(&expect.end))
+                .map(|(index, _)| index)
+                .collect();
+            if !closers.is_empty() {
+                segments.push((start, index, closers));
+                start = index + 1;
             }
         }
-        for candidates in by_end.into_values() {
-            let todo: Vec<_> = candidates
-                .into_iter()
-                .filter(|(dir, _)| !attempted.contains(&(path.clone(), dir.clone())))
-                .collect();
-            if todo.is_empty() {
-                continue;
-            }
-            let source = name(&path);
-            if let [(dir, _)] = todo[..] {
-                events.push(try_ingest(dir, &path, &text, &source));
-                attempted.insert((path.clone(), dir.clone()));
-                continue;
-            }
-            // Shared end line: only the probe whose expected lines match
-            // owns the run. Zero or several matches is ambiguous; the file
-            // is skipped rather than recorded under the wrong probe.
-            let matching: Vec<_> = todo
+        for (start, end, closers) in segments {
+            let run_text: String = log_lines[start..=end]
                 .iter()
-                .filter(|(_, expect)| {
-                    expect
-                        .run(&text)
-                        .and_then(|run| expect.judge(&run))
-                        .is_ok_and(|verdict| verdict == Verdict::Match)
-                })
+                .map(|line| format!("{}\n", line.raw))
                 .collect();
-            for (dir, _) in &todo {
-                attempted.insert((path.clone(), (*dir).clone()));
+            // A segment already handled is not reported again; a file that
+            // is rewritten gets fresh content and is processed again.
+            let mut hash = DefaultHasher::new();
+            run_text.hash(&mut hash);
+            if !state.reported.insert((path.clone(), hash.finish())) {
+                continue;
             }
-            if let [(dir, _)] = matching[..] {
-                events.push(try_ingest(dir, &path, &text, &source));
-            } else {
-                let names: Vec<String> = todo.iter().map(|(dir, _)| name(dir)).collect();
+            let owner = match closers[..] {
+                [only] => Some(&expects[only]),
+                _ => owner_of(expects, &closers, &run_text),
+            };
+            let Some((dir, _)) = owner else {
+                let names: Vec<String> = closers
+                    .iter()
+                    .map(|&index| name(&expects[index].0))
+                    .collect();
                 events.push(Event::Skipped {
                     log: path.clone(),
                     reason: format!("no unique owner among {}", names.join(", ")),
                 });
+                continue;
+            };
+            if state.attempted.contains(&(path.clone(), dir.clone())) {
+                continue;
             }
+            let event = try_ingest(dir, &path, &run_text, &name(&path));
+            // Only a recorded run spends the file's one slot for this
+            // probe; a skipped segment can still be followed by a valid
+            // later segment.
+            if !matches!(event, Event::Skipped { .. }) {
+                state.attempted.insert((path.clone(), dir.clone()));
+            }
+            events.push(event);
         }
     }
     events
@@ -175,7 +232,10 @@ fn try_ingest(dir: &Path, path: &Path, text: &str, source: &str) -> Event {
 /// probes under `probes_dir`. Stops on stdin EOF (Ctrl-D) or Ctrl-C.
 pub fn watch(log_dir: &Path, probes_dir: &Path) -> Result<(), Error> {
     let expects = load_expects(probes_dir)?;
-    let mut attempted = HashSet::new();
+    // Fail fast on a missing or unreadable log dir instead of polling it
+    // forever.
+    fs::read_dir(log_dir).map_err(io(log_dir))?;
+    let mut state = ScanState::default();
     // stdin reaching EOF stops the loop; a channel carries the signal so
     // the poll interval can be a timed wait.
     let (tx, rx) = mpsc::channel();
@@ -185,7 +245,7 @@ pub fn watch(log_dir: &Path, probes_dir: &Path) -> Result<(), Error> {
     });
     println!("watching {} — Ctrl-C or stdin EOF stops", log_dir.display());
     loop {
-        for event in scan_once(log_dir, &expects, &mut attempted) {
+        for event in scan_once(log_dir, &expects, &mut state) {
             println!("{}", event.line());
         }
         match rx.recv_timeout(POLL) {

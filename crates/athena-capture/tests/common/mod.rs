@@ -62,3 +62,18 @@ pub fn recorded(dir: &Path) -> serde_json::Value {
 pub fn recorded_capture(id: &str, file: &str) -> String {
     fs::read_to_string(probes().join(id).join(file)).unwrap()
 }
+
+/// A P5 log: the `start` line plus `samples` `P5 i=` lines cycling through
+/// `distinct` positions (`distinct` of 1 is a stuck position).
+pub fn p5_log(start: &str, samples: usize, distinct: usize) -> String {
+    let mut log = format!("[00:00:33] {start}\n");
+    for i in 0..samples {
+        let pos = i % distinct.max(1);
+        log += &format!(
+            "[00:00:33] P5 i={i} pos=({pos}.00, 0.00, 0.00) everyframe=(0.00, 0.00, 0.00)\n"
+        );
+    }
+    log
+}
+
+pub const P5_START: &str = "P5 start spawned=真 pos=(1.00, 2.00, 3.00)";

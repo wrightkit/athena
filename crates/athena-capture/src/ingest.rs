@@ -91,17 +91,6 @@ pub fn judge_captures(dir: &Path) -> Result<(Vec<Verdict>, &'static str), Error>
     Ok((verdicts, result))
 }
 
-/// Read `log_path` and ingest it under its file name.
-pub fn ingest_file(dir: &Path, log_path: &Path) -> Result<Outcome, Error> {
-    let text = read(log_path)?;
-    let source = log_path
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned();
-    ingest(dir, &text, &source)
-}
-
 /// Save the single finished run in `log` as the probe's next capture and
 /// update `runs`, `result`, `notes` and `sources` in `capture.json`.
 /// Nothing is written unless the whole ingest is accepted. A crash between
@@ -171,7 +160,7 @@ pub fn ingest(dir: &Path, log: &str, source: &str) -> Result<Outcome, Error> {
         .and_then(|text| upsert_top_level(&text, "sources", &json_string(&sources)))
         .ok_or_else(|| Error::Format {
             path: record_path.display().to_string(),
-            message: "expected the two-space capture.json shape with \"runs\" and \"result\""
+            message: "expected the two-space capture.json shape with \"runs\", \"result\", \"notes\" and \"sources\""
                 .to_string(),
         })?;
     fs::write(&capture, text).map_err(io(&capture))?;
@@ -190,13 +179,9 @@ fn json_string(value: &impl serde::Serialize) -> String {
 
 /// `notes` keeps its human text; `ingest` manages only a trailing
 /// `[ingest: …]` marker so a provisional result says so until three runs
-/// agree. With no runs the note is left untouched.
+/// agree.
 fn updated_notes(record: &Value, result: &str, verdicts: &[Verdict]) -> String {
-    let recorded = record["notes"].as_str().unwrap_or_default();
-    if verdicts.is_empty() {
-        return recorded.to_string();
-    }
-    let human = strip_marker(recorded);
+    let human = strip_marker(record["notes"].as_str().unwrap_or_default());
     if result != "inconclusive" {
         return human.to_string();
     }
@@ -227,8 +212,8 @@ fn strip_marker(notes: &str) -> &str {
 /// Replace the value of the one two-space-indented `"key": value` line,
 /// keeping the rest of the file, its key order and its formatting. The
 /// convention's `capture.json` keeps that exact two-space shape; a file
-/// that drifts (other indentation, two keys at that indent, CRLF) fails
-/// instead of being normalized silently.
+/// that drifts (other indentation, two keys at that indent) fails instead
+/// of being normalized silently.
 fn set_top_level(text: &str, key: &str, value: &str) -> Option<String> {
     let prefix = format!("  \"{key}\": ");
     let mut found = 0;

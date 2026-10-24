@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use athena_capture::{Error, Expect, Outcome, Verdict, ingest, judge_captures, result_of};
-use common::{fresh_probe, probes, recorded, recorded_capture, saved};
+use common::{P5_START, fresh_probe, p5_log, probes, recorded, recorded_capture, saved};
 
 fn probes_with_expectations() -> Vec<PathBuf> {
     let mut dirs: Vec<_> = fs::read_dir(probes())
@@ -49,6 +49,7 @@ fn the_log_lines_of_each_saved_capture_reproduce_the_recorded_result() {
         "p2-edge-trigger-and-wait-block",
         "p3-same-tick-rule-order",
         "p3-same-tick-rule-order-driver-last",
+        "p4-wait-until-zero-tick",
         "p5-value-refresh-rate",
     ] {
         let dir = probes().join(id);
@@ -326,21 +327,6 @@ fn a_stray_next_slot_file_is_overwritten_not_counted_as_a_run() {
             .starts_with("[00:00:03] P1 requested_ms=1 ")
     );
 }
-
-/// A P5 log: the `start` line plus `samples` `P5 i=` lines cycling through
-/// `distinct` positions (`distinct` of 1 is a stuck position).
-fn p5_log(start: &str, samples: usize, distinct: usize) -> String {
-    let mut log = format!("[00:00:33] {start}\n");
-    for i in 0..samples {
-        let pos = i % distinct.max(1);
-        log += &format!(
-            "[00:00:33] P5 i={i} pos=({pos}.00, 0.00, 0.00) everyframe=(0.00, 0.00, 0.00)\n"
-        );
-    }
-    log
-}
-
-const P5_START: &str = "P5 start spawned=真 pos=(1.00, 2.00, 3.00)";
 
 #[test]
 fn p5_verdict_counts_the_distinct_positions() {
