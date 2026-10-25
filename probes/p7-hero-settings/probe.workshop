@@ -1,5 +1,12 @@
 settings
 {
+	modes
+	{
+		Skirmish
+		{
+		}
+	}
+
 	heroes
 	{
 		General
@@ -26,6 +33,7 @@ rule("P7 hero settings: reported state under scaled pools, damage, heal and cool
 	actions
 	{
 		Wait(3, Ignore Condition);
+		Wait Until(Has Spawned(Host Player) && Is Alive(Host Player), 600);
 		Log To Inspector(Custom String("P7 max_health={0}", Max Health(Value In Array(All Players(All Teams), 0)), Null, Null));
 		Damage(Value In Array(All Players(All Teams), 0), Null, 200);
 		Log To Inspector(Custom String("P7 health_after_damage={0}", Health(Value In Array(All Players(All Teams), 0)), Null, Null));
