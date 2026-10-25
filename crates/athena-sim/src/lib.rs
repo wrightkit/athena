@@ -303,8 +303,8 @@ pub enum RunEnd {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Change {
     /// A `Set`/`Modify Global Variable` write. `index` is the element path
-    /// of an array-element write (`null` for a whole-variable write); no
-    /// modeled action produces one yet.
+    /// of an array-element write a `* At Index` action made (`null` for a
+    /// whole-variable write).
     GlobalVariable {
         name: String,
         index: Option<Vec<u64>>,

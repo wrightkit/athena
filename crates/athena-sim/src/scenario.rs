@@ -22,10 +22,21 @@ pub(crate) enum Team {
 }
 
 impl Team {
+    /// The scenario spelling, used by the trace `team` field and hero
+    /// settings group names.
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Team1 => "team1",
             Self::Team2 => "team2",
+        }
+    }
+
+    /// The catalog `Team` member id `Team Of` yields; it compares equal to
+    /// a `Team` enum literal, which evaluates to its member id.
+    pub(crate) fn member_id(self) -> &'static str {
+        match self {
+            Self::Team1 => "TEAM_1",
+            Self::Team2 => "TEAM_2",
         }
     }
 }

@@ -37,7 +37,7 @@ fn an_each_player_rule_instantiates_once_per_matching_player() {
         ],
         "expect": [
             { "kind": "playerVariable", "player": "p1", "name": "marker", "value": null },
-            { "kind": "playerVariable", "player": "p2", "name": "marker", "value": "team2" }
+            { "kind": "playerVariable", "player": "p2", "name": "marker", "value": "TEAM_2" }
         ]
     }"#;
     let trace = run(EACH_PLAYER, scenario);

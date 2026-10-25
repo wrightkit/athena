@@ -287,7 +287,8 @@ fn hero_and_team_reads_use_the_resolved_values() {
     // `Hero Of` yields the catalog member id the declared hero resolves to,
     // so it equals a `Workshop Setting Hero` whatever the scenario spelling.
     assert_eq!(trace.globals["h"], Val::Text("ANA".into()));
-    assert_eq!(trace.globals["t"], Val::Text("team1".into()));
+    // `Team Of` likewise yields the member id, not the scenario spelling.
+    assert_eq!(trace.globals["t"], Val::Text("TEAM_1".into()));
 }
 
 #[test]
