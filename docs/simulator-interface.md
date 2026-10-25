@@ -70,7 +70,7 @@ The `team` and player (`target`) filters of a rule event resolve against the sce
 
 ### Workshop settings
 
-A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` — evaluates to its declared `default` argument: the simulator runs one lobby and no player edits settings. `min`/`max`, `options` and `sortOrder` are authoring metadata the running rules never see. A `Hero` setting yields its `Hero` literal's catalog member id as text, as `Hero Of` yields the hero name. The scenario format has no place for setting overrides, so a run always sees the authored defaults.
+A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` — evaluates to its declared `default` argument: the simulator runs one lobby and no player edits settings. `min`/`max`, `options` and `sortOrder` are authoring metadata the running rules never see. A `Hero` setting yields its `Hero` literal's catalog member id as text — the member id `Hero Of` yields, so the two compare equal whatever spelling the scenario used. The scenario format has no place for setting overrides, so a run always sees the authored defaults.
 
 ### HUD elements
 

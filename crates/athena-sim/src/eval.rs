@@ -278,7 +278,8 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             };
             match default {
                 // A hero setting's default is a `Hero` literal; it yields the
-                // catalog member id as text, as `Hero Of` yields the hero name.
+                // catalog member id as text, the same member id `Hero Of`
+                // yields, so a hero setting and a played hero compare equal.
                 Value::Enum { value, .. } => Ok(Val::Text(value.clone())),
                 _ => eval(default, env),
             }
@@ -336,11 +337,14 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "getHero" | "teamOf" => {
             let [player] = arguments::<1>(name, args)?;
             let id = player_id(player, env)?;
-            let declared = env.players.get(&id).and_then(|player| match name {
-                "getHero" => player.hero.clone(),
+            // `Hero Of` yields the catalog member id the declared `hero`
+            // resolves to — hero text compares by member id, not by the
+            // scenario's spelling; `Team Of` yields the declared `team`.
+            let resolved = env.players.get(&id).and_then(|player| match name {
+                "getHero" => player.hero_member.clone(),
                 _ => player.team.map(|team| team.as_str().to_string()),
             });
-            match declared {
+            match resolved {
                 Some(value) => Ok(Val::Text(value)),
                 None => missing(
                     if name == "getHero" {

@@ -1,6 +1,6 @@
 //! `Workshop Setting *` values evaluate to their declared default (athena#54).
 
-use athena_sim::{Options, Outcome, Val, run_text};
+use athena_sim::{Options, Outcome, Val, run_scenario, run_text};
 
 fn run(text: &str) -> athena_sim::Trace {
     run_text(text, Options { seconds: 2.0 }).unwrap_or_else(|error| panic!("{error}"))
@@ -70,4 +70,40 @@ fn a_setting_reads_inside_a_condition_and_an_action_argument() {
     assert_eq!(trace.globals["fired"], Val::Number(1.0));
     assert_eq!(trace.logs.len(), 1);
     assert_eq!(trace.logs[0].text, "bonus 25.00");
+}
+
+/// The canonical use of a hero setting: gate a rule by the lobby hero choice.
+const HERO_GATE: &str = r#"
+variables {
+    global:
+        0: same
+}
+
+rule ("gate") {
+    event {
+        Player Dealt Final Blow;
+        All;
+        All;
+    }
+    actions {
+        Set Global Variable(same, Compare(Workshop Setting Hero(Custom String("cat"), Custom String("hero"), Hero(Ana), 0), ==, Hero Of(Event Player)));
+    }
+}
+"#;
+
+#[test]
+fn a_hero_setting_compares_equal_to_the_played_hero() {
+    // The scenario spelling does not matter: `Hero Of` and the setting both
+    // yield the catalog member id.
+    for hero in ["Ana", "ana", "ANA"] {
+        let scenario = format!(
+            r#"{{ "scenarioVersion": 1, "seconds": 1,
+                 "players": [{{ "id": "p1", "hero": "{hero}" }}],
+                 "events": [{{ "kind": "playerDealtFinalBlow", "time": 0, "eventPlayer": "p1" }}] }}"#
+        );
+        let trace = run_scenario(HERO_GATE, &scenario)
+            .unwrap_or_else(|error| panic!("hero {hero}: {error}"));
+        assert_eq!(trace.outcome, Outcome::Complete, "hero {hero}");
+        assert_eq!(trace.globals["same"], Val::Bool(true), "hero {hero}");
+    }
 }
