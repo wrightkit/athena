@@ -1,5 +1,12 @@
 settings
 {
+	modes
+	{
+		Skirmish
+		{
+		}
+	}
+
 	heroes
 	{
 		General

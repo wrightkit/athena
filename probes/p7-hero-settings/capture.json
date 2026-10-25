@@ -6,7 +6,7 @@
     "locale": "zh-CN"
   },
   "runs": 0,
-  "probe_sha256": "948c7ec6925597dafaef788ec44106ca78b3cce603abf9511d77f46ebb93092c",
+  "probe_sha256": "b644f523af0ca2ee2e2819c2baaebc82d64edb54ec1792517f2b1f9c19af1027",
   "hypothesis": "hero settings move the reported player state: health% 150 on Ana (health pool 250) reports Max Health 375; damageReceived% 50 lands a scripted Damage of 200 as 100; healingReceived% 200 lands a scripted Heal of 40 as 80; abilityCooldown% 50 applies to ability cooldowns, while Set Ability Cooldown(player, Ability 1, 20) is expected to write the timer literally and report 20",
   "observed": [],
   "result": "inconclusive",
