@@ -372,3 +372,45 @@ rule ("probe") {
         trace.expectations
     );
 }
+
+/// `Team Of` yields the catalog member id too, so it compares equal to a
+/// `Team` literal — equality `Array Contains`/`Index Of Array Value`
+/// inherit through `Compare` — and feeds `All Players`.
+#[test]
+fn team_of_compares_equal_to_a_team_literal() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [
+            { "id": "p1", "team": "team1", "host": true },
+            { "id": "p2", "team": "team2" }
+        ]
+    }"#;
+    let text = r#"
+variables {
+    global:
+        0: same
+        1: other
+        2: inside
+        3: members
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Global Variable(same, Compare(Team Of(Host Player), ==, Team 1));
+        Set Global Variable(other, Compare(Team Of(Host Player), !=, Team 1));
+        Set Global Variable(inside, Array Contains(Array(Team 1), Team Of(Host Player)));
+        Set Global Variable(members, Count Of(All Players(Team Of(Host Player))));
+    }
+}
+"#;
+    let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["same"], Val::Bool(true));
+    assert_eq!(trace.globals["other"], Val::Bool(false));
+    assert_eq!(trace.globals["inside"], Val::Bool(true));
+    assert_eq!(trace.globals["members"], Val::Number(1.0));
+}

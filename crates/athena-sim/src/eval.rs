@@ -258,16 +258,12 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "allPlayers" => {
             let [team] = arguments::<1>(name, args)?;
             // The `Team` argument is an enum literal in practice; an
-            // evaluated `team1`/`team2` text (as `Team Of` yields) resolves
-            // the same group.
+            // evaluated member-id text (as `Team Of` yields) names the
+            // same member.
             let filter = match team {
                 Value::Enum { value, .. } => value.clone(),
                 other => match eval(other, env)? {
-                    Val::Text(text) => match text.as_str() {
-                        "team1" => "TEAM_1".to_string(),
-                        "team2" => "TEAM_2".to_string(),
-                        _ => return unsupported(format!("allPlayers on {text}")),
-                    },
+                    Val::Text(text) => text,
                     other => return unsupported(format!("allPlayers on {other:?}")),
                 },
             };
@@ -455,10 +451,11 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let id = player_id(player, env)?;
             // `Hero Of` yields the catalog member id the declared `hero`
             // resolves to — hero text compares by member id, not by the
-            // scenario's spelling; `Team Of` yields the declared `team`.
+            // scenario's spelling; `Team Of` likewise yields the member id
+            // of the declared `team`.
             let resolved = env.players.get(&id).and_then(|player| match name {
                 "getHero" => player.hero_member.clone(),
-                _ => player.team.map(|team| team.as_str().to_string()),
+                _ => player.team.map(|team| team.member_id().to_string()),
             });
             match resolved {
                 Some(value) => Ok(Val::Text(value)),
