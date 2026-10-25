@@ -335,6 +335,7 @@ fn run_tick(
                     event: None,
                     each_player: each_player.as_deref(),
                     last_text_id: world.hud.last_text_id,
+                    element: None,
                     now,
                 };
                 let holds = conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))?;
@@ -412,6 +413,7 @@ fn run_tick(
                         event: instance.event.as_ref(),
                         each_player: None,
                         last_text_id: world.hud.last_text_id,
+                        element: None,
                         now,
                     };
                     if conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))? {

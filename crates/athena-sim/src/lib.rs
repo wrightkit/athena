@@ -3,6 +3,7 @@ mod eval;
 mod hero_settings;
 mod hud;
 mod load;
+mod modify;
 mod scenario;
 mod sched;
 mod state;

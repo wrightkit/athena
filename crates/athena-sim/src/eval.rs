@@ -17,6 +17,10 @@ pub(crate) struct Env<'a> {
     /// The `id` of the newest `hudText`/`progressBarHud` element; what
     /// `Last Text ID` reads. `None` before the first one is created.
     pub last_text_id: Option<u64>,
+    /// The element and place `Current Array Element`/`Current Array Index`
+    /// read; an element-context array value binds it per element of its
+    /// array argument. `None` outside one.
+    pub element: Option<(&'a Val, u64)>,
     pub now: f64,
 }
 
@@ -188,6 +192,15 @@ fn render(value: &Val) -> Result<String, Stop> {
         Val::Text(text) => Ok(text.clone()),
         Val::Array(_) => unsupported("array inside a custom string"),
         Val::Player(_) => unsupported("player inside a custom string"),
+    }
+}
+
+/// The `Env` an element-context array value's per-element operand sees:
+/// the caller's `env` with `element` bound to the element and its index.
+fn element_env<'a>(env: &Env<'a>, element: &'a Val, index: usize) -> Env<'a> {
+    Env {
+        element: Some((element, index as u64)),
+        ..*env
     }
 }
 
@@ -444,6 +457,66 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 }
                 Val::Array(_) => Ok(Val::Null),
                 other => unsupported(format!("valueInArray on {other:?}")),
+            }
+        }
+        // `Evaluate Once` pins its operand against re-evaluation; the
+        // simulator never re-reads a value site, so a plain read is the
+        // whole model.
+        "evaluateOnce" => {
+            let [value] = arguments::<1>(name, args)?;
+            eval(value, env)
+        }
+        "currentArrayElement" | "currentArrayIndex" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.element {
+                Some((element, index)) => Ok(if name == "currentArrayElement" {
+                    element.clone()
+                } else {
+                    Val::Number(index as f64)
+                }),
+                None => unsupported(format!("{name} outside an element context")),
+            }
+        }
+        // The element-context array values read the array once, then the
+        // operand once per element with `Current Array Element`/`Current
+        // Array Index` bound. `Null` reads as the empty array.
+        "filteredArray" | "sortedArray" | "isTrueForAll" | "isTrueForAny" => {
+            let [array, operand] = arguments::<2>(name, args)?;
+            let items = items(eval(array, env)?, name)?;
+            match name {
+                "filteredArray" => {
+                    let mut kept = Vec::new();
+                    for (index, item) in items.iter().enumerate() {
+                        if truthy(&eval(operand, &element_env(env, item, index))?)? {
+                            kept.push(item.clone());
+                        }
+                    }
+                    Ok(Val::Array(kept))
+                }
+                "sortedArray" => {
+                    let mut keyed = Vec::with_capacity(items.len());
+                    for (index, item) in items.iter().enumerate() {
+                        let key = number(&eval(operand, &element_env(env, item, index))?)?;
+                        keyed.push((key, item));
+                    }
+                    // Ascending by the key; an equal key keeps the
+                    // element's place.
+                    keyed.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+                    Ok(Val::Array(
+                        keyed.into_iter().map(|(_, item)| item.clone()).collect(),
+                    ))
+                }
+                // `Is True For All`/`Any` stop at the element that decides
+                // them: the first false, the first true.
+                _ => {
+                    let want = name == "isTrueForAny";
+                    for (index, item) in items.iter().enumerate() {
+                        if truthy(&eval(operand, &element_env(env, item, index))?)? == want {
+                            return Ok(Val::Bool(want));
+                        }
+                    }
+                    Ok(Val::Bool(!want))
+                }
             }
         }
         "getHero" | "teamOf" => {

@@ -1,5 +1,6 @@
 //! General and array value constructs plus the `At Index` variable
-//! actions (athena#56).
+//! actions (athena#56), and the element-context array values and
+//! `Evaluate Once` (athena#60).
 
 use athena_sim::{ExpectationStatus, Options, Outcome, Val, run_scenario, run_text};
 
@@ -223,6 +224,107 @@ rule ("probe") {{
         );
         let trace = run(&text);
         assert_eq!(global(&trace), &expected, "{op}");
+    }
+}
+
+#[test]
+fn evaluate_once_evaluates_its_operand() {
+    let trace = run(&set_global("Evaluate Once(First Of(Array(5, 6)))"));
+    assert_eq!(global(&trace), &Val::Number(5.0));
+
+    let trace = run(&set_global("Evaluate Once(Null)"));
+    assert_eq!(global(&trace), &Val::Null);
+}
+
+#[test]
+fn filtered_array_keeps_the_elements_the_condition_holds_for() {
+    let trace = run(&set_global(
+        "Filtered Array(Array(1, 2, 3, 4), Compare(Current Array Element, >, 2))",
+    ));
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![Val::Number(3.0), Val::Number(4.0)])
+    );
+
+    // `Null` reads as the empty array.
+    let trace = run(&set_global("Filtered Array(Null, Current Array Element)"));
+    assert_eq!(global(&trace), &Val::Array(vec![]));
+
+    // The bound element is read inside a nested array value too.
+    let trace = run(&set_global(
+        "Filtered Array(Array(1, 2), Array Contains(Array(2, 3), Current Array Element))",
+    ));
+    assert_eq!(global(&trace), &Val::Array(vec![Val::Number(2.0)]));
+}
+
+#[test]
+fn sorted_array_orders_by_the_per_element_key() {
+    let trace = run(&set_global(
+        "Sorted Array(Array(30, 10, 20), Current Array Element)",
+    ));
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![
+            Val::Number(10.0),
+            Val::Number(20.0),
+            Val::Number(30.0)
+        ])
+    );
+
+    // `Current Array Index` binds the element's place in the source
+    // array, so a descending index key reverses it.
+    let trace = run(&set_global(
+        "Sorted Array(Array(30, 10, 20), Subtract(0, Current Array Index))",
+    ));
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![
+            Val::Number(20.0),
+            Val::Number(10.0),
+            Val::Number(30.0)
+        ])
+    );
+
+    let trace = run(&set_global("Sorted Array(Null, Current Array Element)"));
+    assert_eq!(global(&trace), &Val::Array(vec![]));
+}
+
+#[test]
+fn is_true_for_all_and_any_cover_the_whole_array() {
+    for (value, expected) in [
+        (
+            "Is True For All(Array(2, 4), Compare(Current Array Element, >, 1))",
+            true,
+        ),
+        (
+            "Is True For All(Array(2, 4), Compare(Current Array Element, >, 3))",
+            false,
+        ),
+        (
+            "Is True For Any(Array(2, 4), Compare(Current Array Element, >, 3))",
+            true,
+        ),
+        (
+            "Is True For Any(Array(2, 4), Compare(Current Array Element, >, 9))",
+            false,
+        ),
+        // The empty array: vacuously true for `All`, never for `Any`.
+        ("Is True For All(Empty Array, False)", true),
+        ("Is True For Any(Null, True)", false),
+    ] {
+        let trace = run(&set_global(value));
+        assert_eq!(global(&trace), &Val::Bool(expected), "{value}");
+    }
+}
+
+#[test]
+fn current_array_element_outside_an_element_context_is_not_modeled() {
+    for value in ["Current Array Element", "Current Array Index"] {
+        let trace = run(&set_global(value));
+        let Outcome::NotModeled(stop) = &trace.outcome else {
+            panic!("{value}: {:?}", trace.outcome);
+        };
+        assert!(stop.construct.contains("outside an element context"));
     }
 }
 
