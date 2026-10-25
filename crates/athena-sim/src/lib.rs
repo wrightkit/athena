@@ -6,6 +6,7 @@ mod load;
 mod scenario;
 mod sched;
 mod state;
+mod step;
 
 use std::collections::BTreeMap;
 use std::fmt;

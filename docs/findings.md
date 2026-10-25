@@ -32,3 +32,4 @@ The client version is recorded per capture in `capture.json` under `client.versi
 Simulator choices no capture backs yet — the detail lives in [architecture.md](architecture.md#choices-no-capture-covers-yet):
 
 - `Ongoing - Each Player` per-player instantiation (instance order, per-instance edge and wait state) and the `team`/`player` filters of rule events, including hero-name targets (athena#46).
+- `For Global Variable`/`For Player Variable` execution: bound evaluation points, the exit-check direction by step sign, and the `End` jump back to the first body action (athena#50).
