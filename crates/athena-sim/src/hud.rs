@@ -3,7 +3,7 @@
 use workshop_rs::Value;
 
 use crate::eval::{Env, eval, viewers};
-use crate::{HudArgs, HudElement, HudKind, NotModeled, Stop, Val};
+use crate::{Change, HudArgs, HudElement, HudKind, NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
     Err(Stop::NotModeled(NotModeled::new(what)))
@@ -37,6 +37,7 @@ fn create_element(
     name: &str,
     recipients: Vec<String>,
     args: HudArgs,
+    changes: &mut Vec<Change>,
 ) {
     let id = hud.elements.len() as u64;
     hud.elements.push(HudElement {
@@ -51,30 +52,41 @@ fn create_element(
     if matches!(kind, HudKind::HudText | HudKind::ProgressBarHud) {
         hud.last_text_id = Some(id);
     }
+    changes.push(Change::HudCreate { id, element: kind });
 }
 
 /// Execute a modeled HUD action against `hud`; `None` when `name` is not
-/// one of them.
+/// one of them. Element creations and destructions are appended to
+/// `changes`.
 pub(crate) fn action(
     name: &str,
     args: &[Value],
     env: &Env,
     hud: &mut Hud,
     tick: u64,
+    changes: &mut Vec<Change>,
 ) -> Option<Result<(), Stop>> {
     Some(match name {
-        "createHudText" => create_hud_text(args, env, hud, tick),
-        "progressBarHud" => progress_bar_hud(args, env, hud, tick),
-        "bigMessage" | "smallMessage" => message(name, args, env, hud, tick),
-        "setObjectiveDescription" => objective_description(args, env, hud, tick),
-        "destroyHudText" | "destroyProgressBarHud" => destroy(name, args, env, hud, tick),
-        "destroyAllHudText" | "destroyAllProgressBarHudText" => destroy_all(name, args, hud, tick),
+        "createHudText" => create_hud_text(args, env, hud, tick, changes),
+        "progressBarHud" => progress_bar_hud(args, env, hud, tick, changes),
+        "bigMessage" | "smallMessage" => message(name, args, env, hud, tick, changes),
+        "setObjectiveDescription" => objective_description(args, env, hud, tick, changes),
+        "destroyHudText" | "destroyProgressBarHud" => destroy(name, args, env, hud, tick, changes),
+        "destroyAllHudText" | "destroyAllProgressBarHudText" => {
+            destroy_all(name, args, hud, tick, changes)
+        }
         "enableMessages" | "disableMessages" => message_toggle(name, args, env),
         _ => return None,
     })
 }
 
-fn create_hud_text(args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> Result<(), Stop> {
+fn create_hud_text(
+    args: &[Value],
+    env: &Env,
+    hud: &mut Hud,
+    tick: u64,
+    changes: &mut Vec<Change>,
+) -> Result<(), Stop> {
     let [
         visible_to,
         header,
@@ -114,11 +126,18 @@ fn create_hud_text(args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> Resul
         "createHudText",
         recipients,
         args,
+        changes,
     );
     Ok(())
 }
 
-fn progress_bar_hud(args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> Result<(), Stop> {
+fn progress_bar_hud(
+    args: &[Value],
+    env: &Env,
+    hud: &mut Hud,
+    tick: u64,
+    changes: &mut Vec<Change>,
+) -> Result<(), Stop> {
     let [
         visible_to,
         value,
@@ -156,11 +175,19 @@ fn progress_bar_hud(args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> Resu
         "progressBarHud",
         recipients,
         args,
+        changes,
     );
     Ok(())
 }
 
-fn message(name: &str, args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> Result<(), Stop> {
+fn message(
+    name: &str,
+    args: &[Value],
+    env: &Env,
+    hud: &mut Hud,
+    tick: u64,
+    changes: &mut Vec<Change>,
+) -> Result<(), Stop> {
     let [visible_to, header] = args else {
         return unsupported(format!("{name} arguments"));
     };
@@ -174,11 +201,17 @@ fn message(name: &str, args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> R
     } else {
         HudKind::SmallMessage
     };
-    create_element(hud, kind, tick, name, recipients, args);
+    create_element(hud, kind, tick, name, recipients, args, changes);
     Ok(())
 }
 
-fn objective_description(args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> Result<(), Stop> {
+fn objective_description(
+    args: &[Value],
+    env: &Env,
+    hud: &mut Hud,
+    tick: u64,
+    changes: &mut Vec<Change>,
+) -> Result<(), Stop> {
     let [visible_to, text, reevaluation] = args else {
         return unsupported("setObjectiveDescription arguments");
     };
@@ -198,6 +231,10 @@ fn objective_description(args: &[Value], env: &Env, hud: &mut Hud, tick: u64) ->
             element.recipients.retain(|id| !recipients.contains(id));
             if element.recipients.is_empty() {
                 element.destroyed_tick = Some(tick);
+                changes.push(Change::HudDestroy {
+                    id: element.id,
+                    element: element.kind,
+                });
             }
         }
     }
@@ -208,11 +245,19 @@ fn objective_description(args: &[Value], env: &Env, hud: &mut Hud, tick: u64) ->
         "setObjectiveDescription",
         recipients,
         args,
+        changes,
     );
     Ok(())
 }
 
-fn destroy(name: &str, args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> Result<(), Stop> {
+fn destroy(
+    name: &str,
+    args: &[Value],
+    env: &Env,
+    hud: &mut Hud,
+    tick: u64,
+    changes: &mut Vec<Change>,
+) -> Result<(), Stop> {
     let [text_id] = args else {
         return unsupported(format!("{name} arguments"));
     };
@@ -229,6 +274,10 @@ fn destroy(name: &str, args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> R
                 element.kind == kind && element.destroyed_tick.is_none() && element.id as f64 == id
             }) {
                 element.destroyed_tick = Some(tick);
+                changes.push(Change::HudDestroy {
+                    id: element.id,
+                    element: element.kind,
+                });
             }
         }
         other => return unsupported(format!("{name} of {other:?}")),
@@ -236,7 +285,13 @@ fn destroy(name: &str, args: &[Value], env: &Env, hud: &mut Hud, tick: u64) -> R
     Ok(())
 }
 
-fn destroy_all(name: &str, args: &[Value], hud: &mut Hud, tick: u64) -> Result<(), Stop> {
+fn destroy_all(
+    name: &str,
+    args: &[Value],
+    hud: &mut Hud,
+    tick: u64,
+    changes: &mut Vec<Change>,
+) -> Result<(), Stop> {
     let [] = args else {
         return unsupported(format!("{name} arguments"));
     };
@@ -248,6 +303,10 @@ fn destroy_all(name: &str, args: &[Value], hud: &mut Hud, tick: u64) -> Result<(
     for element in &mut hud.elements {
         if element.kind == kind && element.destroyed_tick.is_none() {
             element.destroyed_tick = Some(tick);
+            changes.push(Change::HudDestroy {
+                id: element.id,
+                element: element.kind,
+            });
         }
     }
     Ok(())

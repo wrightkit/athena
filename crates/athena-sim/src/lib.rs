@@ -264,9 +264,108 @@ pub struct HudElement {
     pub args: HudArgs,
 }
 
+/// One rule execution that started or resumed on a tick.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuleRun {
+    /// The rule's index among the program's enabled rules, in file order.
+    pub rule: usize,
+    /// The rule's name.
+    pub name: String,
+    /// The scenario `id` of the run's `Event Player`: an injected event's
+    /// `eventPlayer`, or the player an `Ongoing - Each Player` run is
+    /// bound to; `null` for `Ongoing - Global` runs and events without
+    /// one.
+    pub event_player: Option<String>,
+    /// How the execution ended on this tick.
+    #[serde(flatten)]
+    pub ended: RunEnd,
+}
+
+/// How a rule execution recorded in the timeline ended on its tick.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "ended", rename_all = "snake_case")]
+pub enum RunEnd {
+    /// The execution stepped past its last action.
+    Finished,
+    /// A `Wait`/`Wait Until` suspended it; `wake` is the earliest tick it
+    /// can resume.
+    Waiting { wake: u64 },
+    /// It was killed: by the run's stop (`not_modeled`, `missing_input`,
+    /// the step limit) or by an `Abort When False` wait going false.
+    Aborted,
+}
+
+/// One state change recorded in a timeline entry.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Change {
+    /// A `Set`/`Modify Global Variable` write. `index` is the element path
+    /// of an array-element write (`null` for a whole-variable write); no
+    /// modeled action produces one yet.
+    GlobalVariable {
+        name: String,
+        index: Option<Vec<u64>>,
+        old: Val,
+        new: Val,
+    },
+    /// A `Set`/`Modify Player Variable` write, with the player `id`.
+    PlayerVariable {
+        player: String,
+        name: String,
+        index: Option<Vec<u64>>,
+        old: Val,
+        new: Val,
+    },
+    /// A change to a player's catalog-derived world state. `field` is
+    /// `health`, `shield`, `armor`, `cooldown.<slot>` (for example
+    /// `cooldown.ability1`) or `ultimate.charge`; for pools `old`/`new` are
+    /// the `current` points, for a cooldown the reported seconds (`null`
+    /// when the slot had none), and nothing writes `ultimate.charge` in
+    /// this version.
+    World {
+        player: String,
+        field: String,
+        old: Val,
+        new: Val,
+    },
+    /// A HUD element was created; `id` indexes `hud`.
+    HudCreate { id: u64, element: HudKind },
+    /// A HUD element was destroyed.
+    HudDestroy { id: u64, element: HudKind },
+    /// A `Log To Inspector` line.
+    Log { text: String },
+}
+
+/// One timeline entry: the activity of one tick. `rules` lists the rule
+/// executions that started or resumed on the tick, `changes` the state
+/// changes they made, both in execution order.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TimelineEntry {
+    pub tick: u64,
+    /// The tick's `Total Time Elapsed` in milliseconds: 15 + tick·16.
+    pub time: f64,
+    pub rules: Vec<RuleRun>,
+    pub changes: Vec<Change>,
+}
+
+/// The per-tick timeline of a run: one entry per tick that had activity, in
+/// order. A run that stops early still returns the timeline up to the stop.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct Timeline {
+    pub entries: Vec<TimelineEntry>,
+    /// `true` once `entries` reached the cap of
+    /// [`TIMELINE_ENTRY_LIMIT`]; later ticks are dropped.
+    pub truncated: bool,
+}
+
+/// The most ticks with activity a trace's `timeline` keeps.
+pub const TIMELINE_ENTRY_LIMIT: usize = 10_000;
+
 /// What a run produced. `logs`, `globals`, `players` and `hud` describe the
 /// state when the run ended: after the last tick for `Complete`, at the stop
-/// for `NotModeled` and `MissingInput`. Consumers must check `outcome`
+/// for `NotModeled` and `MissingInput`. `timeline` records what happened on
+/// each tick that had activity. Consumers must check `outcome`
 /// before using any of them.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Trace {
@@ -278,6 +377,8 @@ pub struct Trace {
     pub players: BTreeMap<String, PlayerState>,
     /// The HUD elements the run created, in creation order.
     pub hud: Vec<HudElement>,
+    /// The per-tick timeline.
+    pub timeline: Timeline,
     /// The live inputs the program read but the scenario did not supply.
     /// Empty unless `outcome` is `missing_input`; at most one entry in
     /// version 1.
