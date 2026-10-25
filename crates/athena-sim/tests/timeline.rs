@@ -269,6 +269,8 @@ rule ("init") {
             Change::World { .. } => "world",
             Change::HudCreate { .. } => "hudCreate",
             Change::HudDestroy { .. } => "hudDestroy",
+            Change::EffectCreate { .. } => "effectCreate",
+            Change::EffectDestroy { .. } => "effectDestroy",
             Change::Log { .. } => "log",
         })
         .collect();

@@ -62,6 +62,10 @@ pub(crate) struct Player {
     /// Player variables from `state`. A variable not listed starts as
     /// `null`.
     pub vars: BTreeMap<String, Val>,
+    /// Held state of buttons from `buttons`, keyed by slot name
+    /// (`jump`, `ability1`, …). A slot not listed is a live input the
+    /// program cannot read: `Is Button Held` on it is a `missing_input`.
+    pub held: BTreeMap<String, bool>,
     /// The player's catalog-derived world state, resolved when the run
     /// starts.
     pub world: crate::state::WorldSlot,
@@ -148,6 +152,8 @@ struct PlayerDoc {
     host: bool,
     #[serde(default)]
     state: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    buttons: BTreeMap<String, bool>,
 }
 
 #[derive(Deserialize)]
@@ -330,6 +336,14 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         for (name, value) in &player.state {
             vars.insert(name.clone(), value_to_val(value)?);
         }
+        for slot in player.buttons.keys() {
+            if !crate::eval::BUTTON_SLOTS.contains(&slot.as_str()) {
+                return load_error(format!(
+                    "player `{}` has unknown button `{slot}`",
+                    player.id
+                ));
+            }
+        }
         let loaded = Player {
             hero: player.hero,
             hero_member,
@@ -340,6 +354,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
             }),
             host: player.host,
             vars,
+            held: player.buttons,
             world: crate::state::WorldSlot::Unresolved,
         };
         if players.insert(player.id.clone(), loaded).is_some() {

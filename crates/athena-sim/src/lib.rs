@@ -1,4 +1,6 @@
+mod actions;
 mod blocks;
+mod effects;
 mod eval;
 mod hero_settings;
 mod hud;
@@ -68,6 +70,8 @@ pub enum MissingInputKind {
     EventPlayer,
     /// An entry of an injected event's `values`.
     EventValue,
+    /// The held state of a player's button.
+    Button,
 }
 
 /// A live input the program read but the scenario did not supply. The run
@@ -79,7 +83,8 @@ pub struct MissingInput {
     /// The `id` of the player the input belongs to, or `None` for
     /// `eventPlayer` and `eventValue`.
     pub player: Option<String>,
-    /// The event-value name for `eventValue`; `None` for the others.
+    /// The event-value name for `eventValue`, the button slot for
+    /// `button`; `None` for the others.
     pub name: Option<String>,
     /// The tick on which the program read it.
     pub tick: Option<u64>,
@@ -156,10 +161,11 @@ pub struct UltimateState {
     pub cost: f64,
 }
 
-/// A player's catalog-derived world state: health pools, ability cooldowns
-/// and ultimate charge. Start values come from `workshop_rs::hero_values` at
-/// `CURRENT_VERSION`; `Damage` and `Heal` move `current` inside a pool and
-/// nothing else changes it (no ability use is simulated).
+/// A player's catalog-derived world state: health pools, ability cooldowns,
+/// ultimate charge, status effects and button slots. Start values come from
+/// `workshop_rs::hero_values` at `CURRENT_VERSION`; `Damage` and `Heal` move
+/// `current` inside a pool and nothing else changes it (no ability use is
+/// simulated).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PlayerWorld {
     /// The `health` pool; a hero always has one.
@@ -173,6 +179,12 @@ pub struct PlayerWorld {
     pub cooldowns: BTreeMap<String, f64>,
     /// Ultimate charge toward the catalog's cost.
     pub ultimate: UltimateState,
+    /// Status effects `Set Status` applied: `Status` member id to the
+    /// `Total Time Elapsed` seconds at which the status ends.
+    pub statuses: BTreeMap<String, f64>,
+    /// The `Allow Button`/`Disallow Button` writes per button slot; a
+    /// slot never written is allowed.
+    pub buttons: BTreeMap<String, bool>,
 }
 
 /// A player's row in the state table the trace reports.
@@ -204,6 +216,68 @@ pub enum HudKind {
     SmallMessage,
     /// `setObjectiveDescription`.
     ObjectiveDescription,
+}
+
+/// Which action produced an effect entity.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EffectKind {
+    /// `createEffect` — a durable entity `Destroy Effect` can target and
+    /// `Last Created Entity` reads.
+    Effect,
+    /// `playEffect` — a one-shot effect, present only on its tick.
+    PlayedEffect,
+}
+
+/// The evaluated arguments an effect entity records. A field is present
+/// only when the action takes that argument. Value arguments serialize as
+/// [`Val`]; enum arguments (effect type, color, reevaluation) serialize as
+/// the catalog member id. `position` is the evaluated argument: the model
+/// has no geometry, so it is whatever the expression evaluated to — an
+/// expression that needs geometry stops the run as `not_modeled` before
+/// the element is recorded.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectArgs {
+    /// The `Effect`/`DynamicEffect` member id of the `Type` argument.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<Val>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub radius: Option<Val>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reevaluation: Option<String>,
+}
+
+/// An effect entity the run created or played. The `effects` trace field
+/// lists every entity in creation order; a played effect records
+/// `destroyedTick` equal to `createdTick` — it is never present past its
+/// tick.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct EffectElement {
+    /// Stable id in creation order, starting at 0. `lastCreatedEntity`
+    /// resolves to the `id` of the newest `effect` element.
+    pub id: u64,
+    pub kind: EffectKind,
+    /// The tick the entity was created or played on.
+    #[serde(rename = "createdTick")]
+    pub created_tick: u64,
+    /// The tick a `Destroy Effect` removed the entity; `null` while
+    /// present.
+    #[serde(rename = "destroyedTick")]
+    pub destroyed_tick: Option<u64>,
+    /// The scenario `id`s of the players the entity is presented to: the
+    /// evaluated `Visible To` argument.
+    pub recipients: Vec<String>,
+    /// A short description of the creating statement, for people, as in
+    /// `outcome`. Do not match on it.
+    pub construct: String,
+    /// The evaluated arguments of the action.
+    #[serde(flatten)]
+    pub args: EffectArgs,
 }
 
 /// The evaluated arguments a HUD element records. A field is present only
@@ -336,6 +410,10 @@ pub enum Change {
     HudCreate { id: u64, element: HudKind },
     /// A HUD element was destroyed.
     HudDestroy { id: u64, element: HudKind },
+    /// An effect entity was created or played; `id` indexes `effects`.
+    EffectCreate { id: u64, element: EffectKind },
+    /// An effect entity was destroyed.
+    EffectDestroy { id: u64, element: EffectKind },
     /// A `Log To Inspector` line.
     Log { text: String },
 }
@@ -391,6 +469,8 @@ pub struct Trace {
     pub players: BTreeMap<String, PlayerState>,
     /// The HUD elements the run created, in creation order.
     pub hud: Vec<HudElement>,
+    /// The effect entities the run created or played, in creation order.
+    pub effects: Vec<EffectElement>,
     /// The per-tick timeline.
     pub timeline: Timeline,
     /// The live inputs the program read but the scenario did not supply.

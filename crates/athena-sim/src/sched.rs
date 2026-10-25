@@ -69,6 +69,8 @@ pub(crate) fn run(
         players,
         logs: Vec::new(),
         hud: Hud::default(),
+        effects: crate::effects::Effects::default(),
+        pending_starts: Vec::new(),
         runs: Vec::new(),
         changes: Vec::new(),
         timeline: Timeline::default(),
@@ -106,6 +108,7 @@ pub(crate) fn run(
             })
             .collect(),
         hud: world.hud.elements,
+        effects: world.effects.elements,
         timeline: world.timeline,
         missing_inputs,
     }
@@ -323,6 +326,27 @@ fn run_tick(
         }
     }
     for instance in instances.iter_mut() {
+        // `Start Rule` requests targeting this instance's rule apply when
+        // the instance is visited: a rule listed later in the program
+        // starts on the same tick, an earlier one on the next tick.
+        let mut start = 0;
+        while start < world.pending_starts.len() {
+            if world.pending_starts[start].0 != instance.rule_idx {
+                start += 1;
+                continue;
+            }
+            let (_, restart) = world.pending_starts.remove(start);
+            let running = instance.wake.is_some() || !instance.frames.is_empty();
+            if restart || !running {
+                instance.frames.clear();
+                instance.clause_jump = None;
+                instance.wake = None;
+                instance.frames.push(Frame {
+                    rule_idx: instance.rule_idx,
+                    pc: 0,
+                });
+            }
+        }
         match &instance.rule.event {
             Event::Global | Event::EachPlayer | Event::EachPlayerWithFilters { .. } => {
                 // The condition is tracked every tick, also during a Wait:
@@ -341,6 +365,7 @@ fn run_tick(
                     last_text_id: world.hud.last_text_id,
                     element: None,
                     once: &pass,
+                    last_entity: world.effects.last_created,
                     now,
                 };
                 let holds = conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))?;
@@ -436,6 +461,7 @@ fn run_tick(
                         last_text_id: world.hud.last_text_id,
                         element: None,
                         once: &pass,
+                        last_entity: world.effects.last_created,
                         now,
                     };
                     if conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))? {
@@ -451,7 +477,37 @@ fn run_tick(
                     }
                 }
             }
-            Event::Subroutine(_) => {}
+            Event::Subroutine(_) => {
+                // A subroutine instance runs only what a `Start Rule`
+                // pushed onto it. A subroutine rule has no conditions, so
+                // the wait behaviors that read them do not apply; a
+                // `Wait Until` still re-checks its own condition.
+                if instance.wake.is_some_and(|wake| wake > tick)
+                    && let WaitMode::Until(frame) = instance.wait_mode
+                {
+                    let env = Env {
+                        globals: &world.globals,
+                        players: &world.players,
+                        event: instance.event.as_ref(),
+                        each_player: None,
+                        last_text_id: world.hud.last_text_id,
+                        element: None,
+                        once: &instance.until_once,
+                        last_entity: world.effects.last_created,
+                        now,
+                    };
+                    if until_holds(rule_list, frame, &env).map_err(|e| e.at(tick))? {
+                        instance.wake = Some(tick);
+                    }
+                }
+                if instance.wake.is_some_and(|wake| wake <= tick) {
+                    instance.wake = None;
+                }
+                if instance.wake.is_none() && !instance.frames.is_empty() {
+                    run_and_record(instance, rule_list, blocks, subroutines, world, tick, now)
+                        .map_err(|e| e.at(tick))?;
+                }
+            }
         }
     }
     Ok(())
