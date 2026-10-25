@@ -54,6 +54,9 @@ pub(crate) struct Instance<'a> {
     /// by a nested chain or a subroutine frame can never satisfy the
     /// enclosing chain's search.
     pub clause_jump: Option<Frame>,
+    /// An `Abort`/`Abort If` ended the run in progress; the timeline
+    /// records it `aborted` rather than `finished`.
+    pub aborted: bool,
 }
 
 pub(crate) struct Loaded<'a> {
@@ -144,6 +147,7 @@ pub(crate) fn load<'a>(
                 pending: VecDeque::new(),
                 event: None,
                 clause_jump: None,
+                aborted: false,
             });
         }
     }
