@@ -263,6 +263,27 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 None => unsupported("Host Player: the scenario marks no host player"),
             }
         }
+        // Modeled, not measured: the simulator runs one lobby whose settings
+        // nobody edits, so a Workshop Setting yields its declared `default`
+        // argument. `min`/`max`, `options` and `sortOrder` are authoring
+        // metadata the running rules never see; the scenario format has no
+        // settings overrides.
+        "createWorkshopSettingFloat"
+        | "workshopSettingInteger"
+        | "workshopSettingToggle"
+        | "workshopSettingCombo"
+        | "createWorkshopSettingHero" => {
+            let [_, _, default, ..] = args else {
+                return unsupported(format!("{name} with {} arguments", args.len()));
+            };
+            match default {
+                // A hero setting's default is a `Hero` literal; it yields the
+                // catalog member id as text, the same member id `Hero Of`
+                // yields, so a hero setting and a played hero compare equal.
+                Value::Enum { value, .. } => Ok(Val::Text(value.clone())),
+                _ => eval(default, env),
+            }
+        }
         // Modeled, not measured: a player with a hero is spawned and alive.
         "hasSpawned" | "isAlive" => {
             let [player] = arguments::<1>(name, args)?;
@@ -316,11 +337,14 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "getHero" | "teamOf" => {
             let [player] = arguments::<1>(name, args)?;
             let id = player_id(player, env)?;
-            let declared = env.players.get(&id).and_then(|player| match name {
-                "getHero" => player.hero.clone(),
+            // `Hero Of` yields the catalog member id the declared `hero`
+            // resolves to — hero text compares by member id, not by the
+            // scenario's spelling; `Team Of` yields the declared `team`.
+            let resolved = env.players.get(&id).and_then(|player| match name {
+                "getHero" => player.hero_member.clone(),
                 _ => player.team.map(|team| team.as_str().to_string()),
             });
-            match declared {
+            match resolved {
                 Some(value) => Ok(Val::Text(value)),
                 None => missing(
                     if name == "getHero" {

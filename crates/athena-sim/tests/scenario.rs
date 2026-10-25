@@ -275,7 +275,7 @@ fn a_missing_event_player_is_a_missing_input() {
 }
 
 #[test]
-fn hero_and_team_reads_use_the_declared_values() {
+fn hero_and_team_reads_use_the_resolved_values() {
     let scenario = r#"{
         "scenarioVersion": 1,
         "seconds": 2,
@@ -284,7 +284,9 @@ fn hero_and_team_reads_use_the_declared_values() {
     }"#;
     let trace = run(HERO_TEAM, scenario);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["h"], Val::Text("Ana".into()));
+    // `Hero Of` yields the catalog member id the declared hero resolves to,
+    // so it equals a `Workshop Setting Hero` whatever the scenario spelling.
+    assert_eq!(trace.globals["h"], Val::Text("ANA".into()));
     assert_eq!(trace.globals["t"], Val::Text("team1".into()));
 }
 

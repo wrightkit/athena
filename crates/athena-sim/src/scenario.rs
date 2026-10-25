@@ -37,8 +37,8 @@ pub(crate) struct Player {
     /// input.
     pub hero: Option<String>,
     /// The catalog `Hero` member id `hero` names (for example `DVA` for
-    /// `D.Va`); the hero filter of a rule event matches on it. `None` when
-    /// `hero` is absent.
+    /// `D.Va`); `Hero Of` yields it and the hero filter of a rule event
+    /// matches on it. `None` when `hero` is absent.
     pub hero_member: Option<String>,
     /// The en-US spellings of the catalog member `hero` names, used to find
     /// the hero in the gameplay dataset for the hero values catalog. Empty
