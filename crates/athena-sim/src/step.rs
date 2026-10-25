@@ -1,6 +1,7 @@
 //! One step of a rule instance: the action interpreter `run_instance`
 //! runs a frame stack until a `Wait` suspends it or it finishes, plus
-//! the `World` it reads and writes.
+//! the `World` it reads and writes, recording the state changes in
+//! `world.changes` for the tick's timeline entry.
 
 use std::collections::BTreeMap;
 
@@ -12,7 +13,7 @@ use crate::hud::Hud;
 use crate::load::{Frame, Instance, WaitMode};
 use crate::scenario::Player;
 use crate::state::{self, WorldSlot};
-use crate::{LogEntry, NotModeled, Stop, Val};
+use crate::{Change, LogEntry, NotModeled, PlayerWorld, RuleRun, Stop, Timeline, Val};
 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
@@ -45,6 +46,15 @@ pub(crate) struct World {
     pub players: BTreeMap<String, Player>,
     pub logs: Vec<LogEntry>,
     pub hud: Hud,
+    /// The rule executions of the tick in progress — started, resumed or
+    /// ended — in execution order; `tick_loop` drains them into the
+    /// tick's timeline entry.
+    pub runs: Vec<RuleRun>,
+    /// The state changes of the tick in progress, in execution order;
+    /// `tick_loop` drains them into the tick's timeline entry.
+    pub changes: Vec<Change>,
+    /// The recorded timeline.
+    pub timeline: Timeline,
 }
 
 /// The resolved state of a scenario player. A player the scenario did
@@ -61,6 +71,16 @@ fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Reso
         WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
         WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
     }
+}
+
+/// A player's pool `current` points in absorb order, `(field, points)`;
+/// `None` for a pool the player does not have.
+fn pools(world: &PlayerWorld) -> [(&'static str, Option<f64>); 3] {
+    [
+        ("shield", world.shield.as_ref().map(|pool| pool.current)),
+        ("armor", world.armor.as_ref().map(|pool| pool.current)),
+        ("health", Some(world.health.current)),
+    ]
 }
 
 pub(crate) fn flag(value: Val) -> Result<bool, Stop> {
@@ -106,7 +126,14 @@ pub(crate) fn run_instance(
             Action::Disabled { .. } => advance(inst),
             Action::SetGlobalVariable { variable, value } => {
                 let value = eval(value, &env)?;
-                world.globals.insert(variable.clone(), value);
+                let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
+                world.globals.insert(variable.clone(), value.clone());
+                world.changes.push(Change::GlobalVariable {
+                    name: variable.clone(),
+                    index: None,
+                    old,
+                    new: value,
+                });
                 advance(inst);
             }
             Action::ModifyGlobalVariable {
@@ -115,14 +142,20 @@ pub(crate) fn run_instance(
                 value,
             } => {
                 let operand = number(&eval(value, &env)?)?;
-                let current = number(world.globals.get(variable).unwrap_or(&Val::Null))?;
+                let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
                 let updated = match op {
-                    ModifyOp::Add => current + operand,
-                    ModifyOp::Subtract => current - operand,
-                    ModifyOp::Multiply => current * operand,
+                    ModifyOp::Add => number(&old)? + operand,
+                    ModifyOp::Subtract => number(&old)? - operand,
+                    ModifyOp::Multiply => number(&old)? * operand,
                     other => return unsupported(format!("modify operation {other:?}")),
                 };
                 world.globals.insert(variable.clone(), Val::Number(updated));
+                world.changes.push(Change::GlobalVariable {
+                    name: variable.clone(),
+                    index: None,
+                    old,
+                    new: Val::Number(updated),
+                });
                 advance(inst);
             }
             Action::SetPlayerVariable {
@@ -135,7 +168,15 @@ pub(crate) fn run_instance(
                 let Some(target) = world.players.get_mut(&id) else {
                     return unsupported(format!("player variable of undeclared player `{id}`"));
                 };
-                target.vars.insert(variable.clone(), value);
+                let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
+                target.vars.insert(variable.clone(), value.clone());
+                world.changes.push(Change::PlayerVariable {
+                    player: id,
+                    name: variable.clone(),
+                    index: None,
+                    old,
+                    new: value,
+                });
                 advance(inst);
             }
             Action::ModifyPlayerVariable {
@@ -149,14 +190,21 @@ pub(crate) fn run_instance(
                 let Some(target) = world.players.get_mut(&id) else {
                     return unsupported(format!("player variable of undeclared player `{id}`"));
                 };
-                let current = number(target.vars.get(variable).unwrap_or(&Val::Null))?;
+                let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
                 let updated = match op {
-                    ModifyOp::Add => current + operand,
-                    ModifyOp::Subtract => current - operand,
-                    ModifyOp::Multiply => current * operand,
+                    ModifyOp::Add => number(&old)? + operand,
+                    ModifyOp::Subtract => number(&old)? - operand,
+                    ModifyOp::Multiply => number(&old)? * operand,
                     other => return unsupported(format!("modify operation {other:?}")),
                 };
                 target.vars.insert(variable.clone(), Val::Number(updated));
+                world.changes.push(Change::PlayerVariable {
+                    player: id,
+                    name: variable.clone(),
+                    index: None,
+                    old,
+                    new: Val::Number(updated),
+                });
                 advance(inst);
             }
             Action::If { condition } => {
@@ -220,7 +268,14 @@ pub(crate) fn run_instance(
                     number(&eval(stop, &env)?)?,
                     number(&eval(step, &env)?)?,
                 );
+                let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
                 world.globals.insert(variable.clone(), Val::Number(start));
+                world.changes.push(Change::GlobalVariable {
+                    name: variable.clone(),
+                    index: None,
+                    old,
+                    new: Val::Number(start),
+                });
                 // The loop-exit check runs at the `For` line once, then at
                 // each `End`; a value already past the stop never enters.
                 inst.frames.last_mut().expect("a running frame").pc = if for_done(start, stop, step)
@@ -246,7 +301,15 @@ pub(crate) fn run_instance(
                 let Some(target) = world.players.get_mut(&id) else {
                     return unsupported(format!("player variable of undeclared player `{id}`"));
                 };
+                let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
                 target.vars.insert(variable.clone(), Val::Number(start));
+                world.changes.push(Change::PlayerVariable {
+                    player: id,
+                    name: variable.clone(),
+                    index: None,
+                    old,
+                    new: Val::Number(start),
+                });
                 inst.frames.last_mut().expect("a running frame").pc = if for_done(start, stop, step)
                 {
                     map.pairs[pc].expect("paired at load") + 1
@@ -268,9 +331,15 @@ pub(crate) fn run_instance(
                     } => {
                         let (stop, step) =
                             (number(&eval(stop, &env)?)?, number(&eval(step, &env)?)?);
-                        let current = number(world.globals.get(variable).unwrap_or(&Val::Null))?;
-                        let updated = current + step;
+                        let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
+                        let updated = number(&old)? + step;
                         world.globals.insert(variable.clone(), Val::Number(updated));
+                        world.changes.push(Change::GlobalVariable {
+                            name: variable.clone(),
+                            index: None,
+                            old,
+                            new: Val::Number(updated),
+                        });
                         if for_done(updated, stop, step) {
                             pc + 1
                         } else {
@@ -292,9 +361,16 @@ pub(crate) fn run_instance(
                                 "player variable of undeclared player `{id}`"
                             ));
                         };
-                        let current = number(target.vars.get(variable).unwrap_or(&Val::Null))?;
-                        let updated = current + step;
+                        let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
+                        let updated = number(&old)? + step;
                         target.vars.insert(variable.clone(), Val::Number(updated));
+                        world.changes.push(Change::PlayerVariable {
+                            player: id,
+                            name: variable.clone(),
+                            index: None,
+                            old,
+                            new: Val::Number(updated),
+                        });
                         if for_done(updated, stop, step) {
                             pc + 1
                         } else {
@@ -326,7 +402,11 @@ pub(crate) fn run_instance(
                     let Val::Text(text) = eval(message, &env)? else {
                         return unsupported("logToInspector of a non-string");
                     };
-                    world.logs.push(LogEntry { tick, text });
+                    world.logs.push(LogEntry {
+                        tick,
+                        text: text.clone(),
+                    });
+                    world.changes.push(Change::Log { text });
                     advance(inst);
                 }
                 "wait" => {
@@ -391,7 +471,19 @@ pub(crate) fn run_instance(
                     };
                     for id in ids {
                         let target = world_state(world, &id)?;
+                        let before = pools(&target.world);
                         state::damage(&mut target.world, amount * dealt * target.damage_received);
+                        let after = pools(&target.world);
+                        for ((field, old), (_, new)) in before.into_iter().zip(after) {
+                            if old != new {
+                                world.changes.push(Change::World {
+                                    player: id.clone(),
+                                    field: field.to_string(),
+                                    old: old.map_or(Val::Null, Val::Number),
+                                    new: new.map_or(Val::Null, Val::Number),
+                                });
+                            }
+                        }
                     }
                     advance(inst);
                 }
@@ -413,7 +505,17 @@ pub(crate) fn run_instance(
                     };
                     for id in ids {
                         let target = world_state(world, &id)?;
+                        let old = target.world.health.current;
                         state::heal(&mut target.world, amount * dealt * target.healing_received);
+                        let new = target.world.health.current;
+                        if new != old {
+                            world.changes.push(Change::World {
+                                player: id,
+                                field: "health".to_string(),
+                                old: Val::Number(old),
+                                new: Val::Number(new),
+                            });
+                        }
                     }
                     advance(inst);
                 }
@@ -429,11 +531,25 @@ pub(crate) fn run_instance(
                     let seconds = number(&eval(cooldown, &env)?)?;
                     for id in ids {
                         let target = world_state(world, &id)?;
+                        let old = target.world.cooldowns.get(slot).copied();
                         target.world.cooldowns.insert(slot.to_string(), seconds);
+                        world.changes.push(Change::World {
+                            player: id,
+                            field: format!("cooldown.{slot}"),
+                            old: old.map_or(Val::Null, Val::Number),
+                            new: Val::Number(seconds),
+                        });
                     }
                     advance(inst);
                 }
-                other => match crate::hud::action(other, args, &env, &mut world.hud, tick) {
+                other => match crate::hud::action(
+                    other,
+                    args,
+                    &env,
+                    &mut world.hud,
+                    tick,
+                    &mut world.changes,
+                ) {
                     Some(result) => {
                         result?;
                         advance(inst);

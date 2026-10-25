@@ -33,10 +33,11 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `globals` | Global variables at the end of the run. A declared variable that was never set is `null`. |
 | `players` | The player state table: one entry per scenario player, keyed by its `id`. Empty when the run had no scenario. See below. |
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
+| `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
 | `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`), `player` (the player `id` the input belongs to, `null` for `eventPlayer` and `eventValue`), `name` (the event-value name, `null` for the others), `tick`, `construct`. |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
-`logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`.
+`logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
 
 ### `players` rows
 
@@ -104,6 +105,41 @@ HUD behavior is **modeled** with these limits:
 - The objective description is a singleton per player: a new `objectiveDescription` removes its recipients from every present `objectiveDescription` element, which is destroyed (`destroyedTick` set) when no recipient remains.
 - A destroy action affects only elements of its own kind. An unknown, already-destroyed or `null` text id destroys nothing.
 
+### Timeline
+
+`timeline` holds one `entries` element per tick that had activity — a rule execution or a state change — in order; ticks without activity are omitted. A run that ends `not_modeled` or `missing_input` still returns the entries up to and including the stop tick.
+
+The timeline is bounded so a long or dense run cannot blow up the JSON: `entries` stops at 10 000 (`TIMELINE_ENTRY_LIMIT`), and across all entries `rules` stops at 100 000 (`TIMELINE_RULE_LIMIT`) and `changes` at 100 000 (`TIMELINE_CHANGE_LIMIT`). Records past a bound are dropped — also inside a tick — and `truncated` is `true` once any bound dropped something.
+
+Each entry:
+
+| Field | Meaning |
+| --- | --- |
+| `tick` | The tick. |
+| `time` | The tick's `Total Time Elapsed` in milliseconds: 15 + tick·16. |
+| `rules` | The rule executions that started, resumed or ended on the tick, in execution order. See below. |
+| `changes` | The state changes the executions made, in execution order across rules. See below. |
+
+Each `rules` element:
+
+| Field | Meaning |
+| --- | --- |
+| `rule` | The rule's index among the program's enabled rules, in file order. |
+| `name` | The rule's name. |
+| `eventPlayer` | The scenario `id` of the run's `Event Player`: an injected event's `eventPlayer`, or the player an `Ongoing - Each Player` run is bound to; `null` for `Ongoing - Global` runs and events without one. |
+| `ended` | How the execution ended on the tick: `finished` (stepped past its last action), `waiting` with `wake` (suspended; `wake` is the tick the wait expires — the resume tick for `Wait`, the timeout tick for `Wait Until`, whose condition can resume it earlier) or `aborted` (killed by the run's stop, or by an `Abort When False` wait going false). |
+
+Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as the `Val` form:
+
+| `kind` | Fields | The change |
+| --- | --- | --- |
+| `globalVariable` | `name`, `index`, `old`, `new` | A `Set`/`Modify Global Variable` write. `index` is the element path of an array-element write (`null` for a whole-variable write); no modeled action produces one yet. |
+| `playerVariable` | `player`, `name`, `index`, `old`, `new` | A `Set`/`Modify Player Variable` write; `player` is the player `id`. |
+| `world` | `player`, `field`, `old`, `new` | A change to a player's world state. `field` is `health`, `shield`, `armor`, `cooldown.<slot>` (for example `cooldown.ability1`) or `ultimate.charge`. For pools `old`/`new` are the `current` points; for a cooldown the reported seconds (`null` when the slot had none). Nothing writes `ultimate.charge` in this version. |
+| `hudCreate` | `id`, `element` | A HUD element was created; `id` indexes `hud`, `element` is its `kind`. |
+| `hudDestroy` | `id`, `element` | A HUD element was destroyed. |
+| `log` | `text` | A `Log To Inspector` line. |
+
 ### JSON form
 
 `Trace` implements `serde::Serialize`. The JSON shape is part of the contract:
@@ -146,6 +182,33 @@ HUD behavior is **modeled** with these limits:
       "specVisibility": "DEFAULT"
     }
   ],
+  "timeline": {
+    "entries": [
+      {
+        "tick": 0,
+        "time": 15.0,
+        "rules": [
+          {
+            "rule": 0,
+            "name": "init",
+            "eventPlayer": null,
+            "ended": "finished"
+          }
+        ],
+        "changes": [
+          {
+            "kind": "globalVariable",
+            "name": "a",
+            "index": null,
+            "old": { "type": "null" },
+            "new": { "type": "number", "value": 1.0 }
+          },
+          { "kind": "hudCreate", "id": 0, "element": "hudText" }
+        ]
+      }
+    ],
+    "truncated": false
+  },
   "missingInputs": [],
   "expectations": []
 }
