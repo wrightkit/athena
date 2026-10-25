@@ -230,6 +230,132 @@ fn a_fresh_chain_does_not_inherit_a_previous_chains_clause_jump() {
     assert_eq!(trace.globals["hits"], Val::Number(1.0));
 }
 
+/// An `If`/`End` nested in a matched clause body exhausts its chain on a
+/// false condition; the pending jump must not read as the enclosing `Else`'s.
+const NESTED_EXHAUSTED_IF: &str = r#"
+variables {
+    global:
+        0: hits
+}
+
+rule ("nested else") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        If(True);
+            Set Global Variable(hits, 1);
+            If(False);
+                Set Global Variable(hits, -1);
+            End;
+        Else;
+            Set Global Variable(hits, 99);
+        End;
+    }
+}
+
+rule ("nested else-if") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        If(True);
+            Set Global Variable(hits, 2);
+            If(False);
+                Set Global Variable(hits, -2);
+            End;
+        Else If(True);
+            Set Global Variable(hits, 99);
+        End;
+    }
+}
+"#;
+
+#[test]
+fn an_exhausted_if_inside_a_clause_does_not_trigger_the_outer_else() {
+    let trace = run(NESTED_EXHAUSTED_IF);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["hits"], Val::Number(2.0));
+}
+
+/// The nested `If` must not deliver the run to the `Else If` head either: a
+/// condition that is not a boolean stops `not_modeled` if it is evaluated.
+const NESTED_EXHAUSTED_IF_UNEVALUATED: &str = r#"
+variables {
+    global:
+        0: hits
+}
+
+rule ("nested else-if") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        If(True);
+            Set Global Variable(hits, 1);
+            If(False);
+                Set Global Variable(hits, -1);
+            End;
+        Else If(Global.hits);
+            Set Global Variable(hits, 99);
+        End;
+    }
+}
+"#;
+
+#[test]
+fn an_exhausted_if_inside_a_clause_does_not_evaluate_the_outer_else_if() {
+    let trace = run(NESTED_EXHAUSTED_IF_UNEVALUATED);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["hits"], Val::Number(1.0));
+}
+
+/// A subroutine ending in an exhausted `If`/`End` returns with a pending
+/// jump in its own rule; the caller's `Else` head must not match it.
+const SUBROUTINE_EXHAUSTED_IF: &str = r#"
+variables {
+    global:
+        0: hits
+}
+
+subroutines {
+    0: inner
+}
+
+rule ("Subroutine inner") {
+    event {
+        Subroutine;
+        inner;
+    }
+    actions {
+        If(False);
+            Set Global Variable(hits, -1);
+        End;
+    }
+}
+
+rule ("caller") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        If(True);
+            Set Global Variable(hits, 1);
+            Call Subroutine(inner);
+        Else;
+            Set Global Variable(hits, 99);
+        End;
+    }
+}
+"#;
+
+#[test]
+fn an_if_exhausted_inside_a_subroutine_does_not_trigger_the_callers_else() {
+    let trace = run(SUBROUTINE_EXHAUSTED_IF);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["hits"], Val::Number(1.0));
+}
+
 /// A stray `End` line: the parser keeps it as a raw action, and reaching it
 /// still stops the run instead of pairing with nothing.
 #[test]

@@ -47,9 +47,13 @@ pub(crate) struct Instance<'a> {
     pub pending: VecDeque<EventCtx>,
     /// The injected event the current run executes for, if event-triggered.
     pub event: Option<EventCtx>,
-    /// Set when control jumped to a clause head on a false condition, so the
-    /// head evaluates rather than exits the chain.
-    pub clause_jump: bool,
+    /// The clause head a false `If`/`Else If` jumped to, as a frame
+    /// position. A head that is not this target was reached by fall-through
+    /// after a matched clause and exits its chain. The jump is consumed the
+    /// step after it is set or names an `End` line, so a stale target left
+    /// by a nested chain or a subroutine frame can never satisfy the
+    /// enclosing chain's search.
+    pub clause_jump: Option<Frame>,
 }
 
 pub(crate) struct Loaded<'a> {
@@ -139,7 +143,7 @@ pub(crate) fn load<'a>(
                 prev: false,
                 pending: VecDeque::new(),
                 event: None,
-                clause_jump: false,
+                clause_jump: None,
             });
         }
     }

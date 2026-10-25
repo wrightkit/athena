@@ -161,38 +161,45 @@ pub(crate) fn run_instance(
             }
             Action::If { condition } => {
                 if flag(eval(condition, &env)?)? {
-                    // A new chain starts clean; a stale flag would read the
+                    // A new chain starts clean; a stale jump would read the
                     // next `ElseIf`/`Else` as a clause head to evaluate.
-                    inst.clause_jump = false;
+                    inst.clause_jump = None;
                     advance(inst);
                 } else {
-                    inst.clause_jump = true;
-                    inst.frames.last_mut().expect("a running frame").pc =
-                        map.next_clause[pc].expect("paired at load");
+                    let target = map.next_clause[pc].expect("paired at load");
+                    inst.clause_jump = Some(Frame {
+                        rule_idx,
+                        pc: target,
+                    });
+                    inst.frames.last_mut().expect("a running frame").pc = target;
                 }
             }
             Action::ElseIf { condition } => {
-                if !inst.clause_jump {
+                if inst.clause_jump != Some(Frame { rule_idx, pc }) {
                     inst.frames.last_mut().expect("a running frame").pc =
                         map.chain_end[pc].expect("paired at load") + 1;
                 } else {
-                    inst.clause_jump = false;
+                    inst.clause_jump = None;
                     if flag(eval(condition, &env)?)? {
                         advance(inst);
                     } else {
-                        inst.clause_jump = true;
-                        inst.frames.last_mut().expect("a running frame").pc =
-                            map.next_clause[pc].expect("paired at load");
+                        let target = map.next_clause[pc].expect("paired at load");
+                        inst.clause_jump = Some(Frame {
+                            rule_idx,
+                            pc: target,
+                        });
+                        inst.frames.last_mut().expect("a running frame").pc = target;
                     }
                 }
             }
             Action::Else => {
-                inst.frames.last_mut().expect("a running frame").pc = if inst.clause_jump {
-                    inst.clause_jump = false;
-                    pc + 1
-                } else {
-                    map.chain_end[pc].expect("paired at load") + 1
-                };
+                inst.frames.last_mut().expect("a running frame").pc =
+                    if inst.clause_jump == Some(Frame { rule_idx, pc }) {
+                        inst.clause_jump = None;
+                        pc + 1
+                    } else {
+                        map.chain_end[pc].expect("paired at load") + 1
+                    };
             }
             Action::While { condition } => {
                 inst.frames.last_mut().expect("a running frame").pc =
