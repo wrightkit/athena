@@ -276,6 +276,32 @@ fn a_changed_probe_makes_ingest_refuse() {
 }
 
 #[test]
+fn a_pretty_printed_sources_array_is_replaced_whole() {
+    let id = "p1-wait-rounding";
+    let dir = fresh_probe(id);
+    let log = recorded_capture(id, "capture.txt");
+    saved(&dir, &log, "run-1.txt");
+    // Re-format the record as a JSON formatter would: `sources` over
+    // several lines. Later runs must still leave valid JSON.
+    let text = fs::read_to_string(dir.join("capture.json")).unwrap();
+    let spread = text.replace(
+        "  \"sources\": [\"run-1.txt\"]",
+        "  \"sources\": [\n    \"run-1.txt\"\n  ]",
+    );
+    assert_ne!(text, spread);
+    fs::write(dir.join("capture.json"), spread).unwrap();
+
+    saved(&dir, &log, "run-2.txt");
+    saved(&dir, &log, "run-3.txt");
+    let record = recorded(&dir);
+    assert_eq!(record["runs"], 3);
+    assert_eq!(
+        record["sources"],
+        serde_json::json!(["run-1.txt", "run-2.txt", "run-3.txt"])
+    );
+}
+
+#[test]
 fn ingest_edits_only_its_managed_keys_in_capture_json() {
     let id = "p1-wait-rounding";
     let dir = fresh_probe(id);

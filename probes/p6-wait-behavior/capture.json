@@ -1,15 +1,15 @@
 {
   "probe": "p6-wait-behavior",
   "client": {
-    "version": "2.25.0.0 - 154461.1",
-    "date": "2026-10-19",
+    "version": "2.25.0.1 - 154504.1",
+    "date": "2026-10-25",
     "locale": "zh-CN"
   },
-  "runs": 0,
+  "runs": 3,
   "probe_sha256": "f4c36631ebcec1c2a73d4ec48a768c731fa0cdec05597383d8cdae065d460c1f",
   "hypothesis": "Compare Ignore Condition, Abort When False and Restart When True across two true intervals; the driver logs the counters as P6 counts before done",
-  "observed": [],
-  "result": "inconclusive",
-  "notes": "previously match at sha 4f5ed507cbbc23672386325e2b42b20de799fbcd858ce9fa072f96718dc6bc23; captures moved to stale/ after the P6 counts line changed the probe. endAbort is not in the counts line and still needs the variable export",
-  "sources": []
+  "observed": [{"runs": [1, 2, 3], "flag_t_ms": [0, 208, 416, 624], "ignore_end_t_ms": 1008, "restart_end_t_ms": 1424, "done_t_ms": 2624, "nIgnore": 1, "nAbort": 2, "nRestart": 2, "endIgnore": 1, "endRestart": 1}],
+  "result": "match",
+  "notes": "previously match at sha 4f5ed507cbbc23672386325e2b42b20de799fbcd858ce9fa072f96718dc6bc23; captures moved to stale/ after the P6 counts line changed the probe. endAbort is not in the counts line. Three original log files were received through UU Remote file transfer. The run-1 variable export is retained locally as .wright/runs/p6-variables-1.txt. The Inspector showed endAbort=0 after completion; its variable export omitted this zero-valued variable. The run-3 Inspector also showed endAbort=0. Slow Motion is a Workshop action, not a toggle; the probe does not use it, and the procedure clears the rule list before pasting.",
+  "sources": ["Log-2026-10-25-15-20-52.txt","Log-2026-10-25-15-23-18.txt","Log-2026-10-25-15-24-50.txt"]
 }

@@ -10,9 +10,9 @@ Check `runs` and `result` in the capture before relying on one.
 - Wait rounds up to a whole number of ticks (P1).
 - `Wait Until(True, 0)` takes 0 ticks; `Wait(0)` takes 1 tick (P4).
 - Ongoing is edge-triggered; an edge that occurs while the rule is in a Wait is dropped, not queued (P2).
-- Rules whose conditions become true on the same tick run in file order when the rule that sets the condition is earlier in the file (P3). The captures behind this are stale pending a rerun: the end line was renamed to the unique token `P3a done`, so they moved to `stale/`.
-- When the rule that sets the condition is later in the file, the earlier rules see the change one tick later (P3 driver-last). The captures behind this are stale pending a rerun: the end line was renamed to the unique token `P3b done`, so they moved to `stale/`.
-- Wait Behavior (P6), with a condition that goes true, false, true, false while the rule waits 1 s: `Ignore Condition` finishes the wait and drops the later edges; `Abort When False` abandons the rest of the actions when the condition goes false, and a later true edge starts a new run; `Restart When True` restarts the full wait at the new true edge. The captures behind this are stale pending a rerun: the probe now also logs a `P6 counts` line, so they moved to `stale/`.
+- Rules whose conditions become true on the same tick run in file order when the rule that sets the condition is earlier in the file (P3).
+- When the rule that sets the condition is later in the file, the earlier rules see the change one tick later (P3 driver-last).
+- Wait Behavior (P6), with a condition that goes true, false, true, false while the rule waits 1 s: `Ignore Condition` finishes the wait and drops the later edges; `Abort When False` abandons the rest of the actions when the condition goes false, and a later true edge starts a new run; `Restart When True` restarts the full wait at the new true edge.
 
 ## Values
 

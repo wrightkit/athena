@@ -213,22 +213,31 @@ fn strip_marker(notes: &str) -> &str {
 /// keeping the rest of the file, its key order and its formatting. The
 /// convention's `capture.json` keeps that exact two-space shape; a file
 /// that drifts (other indentation, two keys at that indent) fails instead
-/// of being normalized silently.
+/// of being normalized silently. A value that spans several lines, as in a
+/// pretty-printed array, is replaced whole: its lines run up to the next
+/// two-space key or the closing brace.
 fn set_top_level(text: &str, key: &str, value: &str) -> Option<String> {
     let prefix = format!("  \"{key}\": ");
+    let is_key = |line: &str| line.starts_with("  \"") || line == "}";
+    let source: Vec<&str> = text.lines().collect();
+    let mut lines: Vec<String> = Vec::new();
     let mut found = 0;
-    let lines: Vec<String> = text
-        .lines()
-        .map(|line| {
-            if line.starts_with(&prefix) {
-                found += 1;
-                let comma = if line.ends_with(',') { "," } else { "" };
-                format!("{prefix}{value}{comma}")
-            } else {
-                line.to_string()
+    let mut i = 0;
+    while i < source.len() {
+        if source[i].starts_with(&prefix) {
+            found += 1;
+            let mut last = i;
+            while source.get(last + 1).is_some_and(|line| !is_key(line)) {
+                last += 1;
             }
-        })
-        .collect();
+            let comma = if source[last].ends_with(',') { "," } else { "" };
+            lines.push(format!("{prefix}{value}{comma}"));
+            i = last + 1;
+        } else {
+            lines.push(source[i].to_string());
+            i += 1;
+        }
+    }
     (found == 1).then(|| lines.join("\n") + "\n")
 }
 

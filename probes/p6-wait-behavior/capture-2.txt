@@ -1,0 +1,8 @@
+[00:00:03] P6 flag=true t_ms=0
+[00:00:03] P6 flag=false t_ms=208.00
+[00:00:03] P6 flag=true t_ms=416.00
+[00:00:03] P6 flag=false t_ms=624.00
+[00:00:04] P6 Ignore end t_ms=1008.00
+[00:00:04] P6 Restart end t_ms=1424
+[00:00:05] P6 counts nIgnore=1 nAbort=2 nRestart=2 endIgnore=1 endRestart=1
+[00:00:05] P6 done t_ms=2624.00
