@@ -42,6 +42,8 @@ pub(crate) struct Player {
     pub hero_spellings: Vec<String>,
     /// Team; likewise a live input.
     pub team: Option<Team>,
+    /// The player `Host Player` returns; at most one player has it.
+    pub host: bool,
     /// Player variables from `state`. A variable not listed starts as
     /// `null`.
     pub vars: BTreeMap<String, Val>,
@@ -127,6 +129,8 @@ struct PlayerDoc {
     id: String,
     hero: Option<String>,
     team: Option<TeamDoc>,
+    #[serde(default)]
+    host: bool,
     #[serde(default)]
     state: BTreeMap<String, serde_json::Value>,
 }
@@ -312,12 +316,17 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
                 TeamDoc::Team1 => Team::Team1,
                 TeamDoc::Team2 => Team::Team2,
             }),
+            host: player.host,
             vars,
             world: crate::state::WorldSlot::Unresolved,
         };
         if players.insert(player.id.clone(), loaded).is_some() {
             return load_error(format!("player `id` `{}` is declared twice", player.id));
         }
+    }
+
+    if players.values().filter(|player| player.host).count() > 1 {
+        return load_error("more than one player is marked `host`");
     }
 
     let mut events = Vec::new();

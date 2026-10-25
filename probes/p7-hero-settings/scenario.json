@@ -5,7 +5,8 @@
     {
       "id": "p1",
       "hero": "ana",
-      "team": "team1"
+      "team": "team1",
+      "host": true
     }
   ]
 }

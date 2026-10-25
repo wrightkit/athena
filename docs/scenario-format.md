@@ -39,6 +39,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 | `id` | yes | Text that names the player in this file. It must be unique; the loader checks this (see Loader checks). |
 | `hero` | no | Hero name, for example `ana`. |
 | `team` | no | `team1` or `team2`. |
+| `host` | no | `true` marks the player `Host Player` returns. At most one player has it. Default `false`. |
 | `state` | no | Map from player-variable name to start value. A variable not listed starts as `null`. |
 
 ### Event
@@ -69,6 +70,7 @@ JSON Schema cannot express some rules. The `athena` loader must check them and r
 - Player `id` values are unique.
 - Every `eventPlayer` and every expectation `player` is the `id` of a player in the file.
 - Every `hero` is a hero name known to `workshop-rs` (decision 3): the canonical `Hero` member id of the catalog (for example `JUNKER_QUEEN`) or its en-US spelling (`Junker Queen`), matched case-insensitively.
+- At most one player has `"host": true`.
 - `scenarioVersion` is checked first (see Version).
 
 ## Defaults and missing inputs
@@ -91,7 +93,7 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 
 An input of group 2 is **missing** when the program reads it during the run and the scenario does not supply it. The simulator never fills it in. It stops the run at that read, and the trace names the input.
 
-Modeled reads in version 1: the event player (`Event Player`), a player's hero (`Hero Of`) and team (`Team Of`), a player variable, and the scalar event values `eventDamage`, `eventHealing`, `eventWasCriticalHit`, `eventWasEnvironment` and `eventWasHealthPack` — each looked up in `values` by its catalog name. Other event-scoped values (`attacker`, `victim`, `hostPlayer`, `eventAbility`, `eventDirection`) are not modeled and stop the run as `not_modeled`. An injected event fires every rule whose event kind matches `kind`; team and player filters other than `All` are not modeled, and a rule that declares them stops the load as `not_modeled`.
+Modeled reads in version 1: the event player (`Event Player`), a player's hero (`Hero Of`) and team (`Team Of`), a player variable, and the scalar event values `eventDamage`, `eventHealing`, `eventWasCriticalHit`, `eventWasEnvironment` and `eventWasHealthPack` — each looked up in `values` by its catalog name. `Host Player` returns the player marked `host`; without one it stops the run as `not_modeled`. `Has Spawned` and `Is Alive` of a player with a `hero` are true from the first tick (modeled, not measured, [architecture.md](architecture.md#choices-no-capture-covers-yet)); for a player without a `hero` they stop the run as `not_modeled`. Other event-scoped values (`attacker`, `victim`, `eventAbility`, `eventDirection`) are not modeled and stop the run as `not_modeled`. An injected event fires every rule whose event kind matches `kind`; team and player filters other than `All` are not modeled, and a rule that declares them stops the load as `not_modeled`.
 
 A malformed scenario is a different case. It is refused and nothing runs ([ADR-0033](https://github.com/wrightkit/wright/blob/main/docs/adr/0033-simulate-operation.md), decision 4). The schema and the loader checks (below) define "malformed". A well-formed scenario that lacks a group 2 input gives a trace.
 

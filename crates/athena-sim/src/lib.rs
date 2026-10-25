@@ -1,3 +1,4 @@
+mod blocks;
 mod eval;
 mod hero_settings;
 mod hud;
