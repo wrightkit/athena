@@ -131,8 +131,52 @@ pub(crate) fn button_slot(button: &Value) -> Result<&'static str, Stop> {
 pub(crate) fn number(value: &Val) -> Result<f64, Stop> {
     match value {
         Val::Number(n) => Ok(*n),
+        Val::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Val::Null => Ok(0.0),
         other => unsupported(format!("arithmetic on {other:?}")),
+    }
+}
+
+/// The truthiness a condition-family value (`and`, `or`, `not`,
+/// `ifThenElse`) reads: a boolean as itself, a number or `Null` (as `0`)
+/// by nonzero-ness. Anything else is not a condition value.
+fn truthy(value: &Val) -> Result<bool, Stop> {
+    match value {
+        Val::Bool(b) => Ok(*b),
+        Val::Number(n) => Ok(*n != 0.0),
+        Val::Null => Ok(false),
+        other => unsupported(format!("condition value {other:?}")),
+    }
+}
+
+/// The `Compare` equality of two evaluated values: numbers, booleans and
+/// `Null` by number coercion (`Null` and `False` equal `0`), text by text,
+/// players by scenario `id`, arrays by element-wise equality. Values of
+/// different types are never equal.
+pub(crate) fn values_equal(a: &Val, b: &Val) -> Result<bool, Stop> {
+    Ok(match (a, b) {
+        (Val::Array(a), Val::Array(b)) => {
+            a.len() == b.len()
+                && a.iter().zip(b.iter()).try_fold(true, |equal, (a, b)| {
+                    Ok::<_, Stop>(equal && values_equal(a, b)?)
+                })?
+        }
+        (Val::Number(_) | Val::Bool(_) | Val::Null, Val::Number(_) | Val::Bool(_) | Val::Null) => {
+            number(a)? == number(b)?
+        }
+        (Val::Text(a), Val::Text(b)) => a == b,
+        (Val::Player(a), Val::Player(b)) => a == b,
+        _ => false,
+    })
+}
+
+/// The array an array-reading value sees: an array as itself, `Null` as
+/// the empty array. Anything else is not an array.
+fn items(value: Val, construct: &str) -> Result<Vec<Val>, Stop> {
+    match value {
+        Val::Array(items) => Ok(items),
+        Val::Null => Ok(Vec::new()),
+        other => unsupported(format!("{construct} on {other:?}")),
     }
 }
 
@@ -163,6 +207,10 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
             .map(|item| eval(item, env))
             .collect::<Result<_, _>>()
             .map(Val::Array),
+        // An enum literal in a value position yields its catalog member
+        // id as text — the same form `Hero Of` and hero settings yield,
+        // so `Compare(Hero Of(p), ==, Hero(Ana))` compares equal.
+        Value::Enum { value, .. } => Ok(Val::Text(value.clone())),
         Value::GlobalVariable(name) => Ok(env.globals.get(name).cloned().unwrap_or(Val::Null)),
         Value::PlayerVariable { player, variable } => {
             let id = player_id(player, env)?;
@@ -241,19 +289,26 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 other => return unsupported(format!("allPlayers on {other}")),
             }))
         }
-        "and" => {
+        "and" | "or" => {
             let [a, b] = arguments::<2>(name, args)?;
-            // `&&` short-circuits: the right side is not read when the left
-            // is false.
-            let Val::Bool(left) = eval(a, env)? else {
-                return unsupported("`&&` on a non-boolean");
-            };
-            if !left {
-                return Ok(Val::Bool(false));
+            // `&&`/`||` short-circuit: the right side is not read when the
+            // left already decides the result.
+            if truthy(&eval(a, env)?)? == (name == "or") {
+                return Ok(Val::Bool(name == "or"));
             }
-            match eval(b, env)? {
-                Val::Bool(right) => Ok(Val::Bool(right)),
-                _ => unsupported("`&&` on a non-boolean"),
+            Ok(Val::Bool(truthy(&eval(b, env)?)?))
+        }
+        "not" => {
+            let [value] = arguments::<1>(name, args)?;
+            Ok(Val::Bool(!truthy(&eval(value, env)?)?))
+        }
+        "ifThenElse" => {
+            let [condition, when_true, when_false] = arguments::<3>(name, args)?;
+            // Only the taken branch is read.
+            if truthy(&eval(condition, env)?)? {
+                eval(when_true, env)
+            } else {
+                eval(when_false, env)
             }
         }
         "hostPlayer" => {
@@ -297,32 +352,93 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "add" => binary(|a, b| a + b),
         "subtract" => binary(|a, b| a - b),
         "multiply" => binary(|a, b| a * b),
-        "<" | ">=" => {
+        "divide" => binary(|a, b| a / b),
+        "modulo" => binary(|a, b| a % b),
+        "raiseToPower" => binary(f64::powf),
+        "min" => binary(f64::min),
+        "max" => binary(f64::max),
+        "roundToInteger" => {
+            let [value, rounding] = arguments::<2>(name, args)?;
+            let n = number(&eval(value, env)?)?;
+            let Value::Enum { value: mode, .. } = rounding else {
+                return unsupported(format!("{name} rounding {rounding:?}"));
+            };
+            Ok(Val::Number(match mode.as_str() {
+                "UP" => n.ceil(),
+                "DOWN" => n.floor(),
+                "NEAREST" => n.round(),
+                other => return unsupported(format!("{name} rounding {other}")),
+            }))
+        }
+        "<" | "<=" | ">" | ">=" => {
             let [a, b] = arguments::<2>(name, args)?;
             let (a, b) = (number(&eval(a, env)?)?, number(&eval(b, env)?)?);
-            Ok(Val::Bool(if name == "<" { a < b } else { a >= b }))
+            Ok(Val::Bool(match name {
+                "<" => a < b,
+                "<=" => a <= b,
+                ">" => a > b,
+                _ => a >= b,
+            }))
         }
-        "==" => {
+        "==" | "!=" => {
             let [a, b] = arguments::<2>(name, args)?;
             let (a, b) = (eval(a, env)?, eval(b, env)?);
-            Ok(Val::Bool(match (&a, &b) {
-                (Val::Number(_) | Val::Null, Val::Number(_) | Val::Null) => {
-                    number(&a)? == number(&b)?
-                }
-                (Val::Bool(a), Val::Bool(b)) => a == b,
-                (Val::Text(a), Val::Text(b)) => a == b,
-                (Val::Player(a), Val::Player(b)) => a == b,
-                (Val::Array(_), _) | (_, Val::Array(_)) => {
-                    return unsupported("== on an array");
-                }
-                _ => false,
-            }))
+            Ok(Val::Bool(values_equal(&a, &b)? != (name == "!=")))
         }
         "array" => args
             .iter()
             .map(|item| eval(item, env))
             .collect::<Result<_, _>>()
             .map(Val::Array),
+        "emptyArray" => {
+            let [] = arguments::<0>(name, args)?;
+            Ok(Val::Array(Vec::new()))
+        }
+        "firstOf" => {
+            let [array] = arguments::<1>(name, args)?;
+            Ok(items(eval(array, env)?, name)?
+                .into_iter()
+                .next()
+                .unwrap_or(Val::Null))
+        }
+        "countOf" => {
+            let [array] = arguments::<1>(name, args)?;
+            Ok(Val::Number(items(eval(array, env)?, name)?.len() as f64))
+        }
+        "appendToArray" => {
+            let [array, value] = arguments::<2>(name, args)?;
+            let (mut array, value) = (items(eval(array, env)?, name)?, eval(value, env)?);
+            array.push(value);
+            Ok(Val::Array(array))
+        }
+        "arrayContains" | "indexOfArrayValue" => {
+            let [array, wanted] = arguments::<2>(name, args)?;
+            let (array, wanted) = (eval(array, env)?, eval(wanted, env)?);
+            let mut found = None;
+            for (index, item) in items(array, name)?.iter().enumerate() {
+                if values_equal(item, &wanted)? {
+                    found = Some(index);
+                    break;
+                }
+            }
+            Ok(match name {
+                "arrayContains" => Val::Bool(found.is_some()),
+                _ => Val::Number(found.map_or(-1.0, |index| index as f64)),
+            })
+        }
+        "slice" => {
+            let [array, start, count] = arguments::<3>(name, args)?;
+            let (array, start, count) = (
+                items(eval(array, env)?, name)?,
+                number(&eval(start, env)?)?,
+                number(&eval(count, env)?)?,
+            );
+            let (start, end) = (
+                (start.max(0.0) as usize).min(array.len()),
+                (start.max(0.0) + count.max(0.0)) as usize,
+            );
+            Ok(Val::Array(array[start..end.min(array.len())].to_vec()))
+        }
         "valueInArray" => {
             let [array, index] = arguments::<2>(name, args)?;
             let (array, index) = (eval(array, env)?, number(&eval(index, env)?)?);

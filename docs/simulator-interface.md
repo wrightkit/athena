@@ -68,6 +68,12 @@ The `team` and player (`target`) filters of a rule event resolve against the sce
 - An `Ongoing - Each Player` rule becomes one instance per matching scenario player, ordered by scenario `id`. Each instance binds `Event Player` to its player — also inside a subroutine it calls — and has its own condition edge, `Wait`/`Wait Until` and wait-behavior state. A filter matching nobody yields no instance: the rule never fires and is not an error.
 - A player event rule (`Player Died`, `Player Joined Match`, …) runs for an injected event only when the event's `eventPlayer` satisfies the filters. An event that names no `eventPlayer` satisfies only `All`/`All`; evaluating a filtered rule against it is a `missing_input` of kind `eventPlayer`.
 
+### General and array values
+
+`If-Then-Else`, `Compare` (all six operators), `Not`, `Or`, `Divide`, `Modulo`, `Min`, `Max`, `Raise To Power`, `Round To Integer`, `First Of`, `Count Of`, `Empty Array`, `Array Contains`, `Index Of Array Value`, `Array Slice` and `Append To Array` are modeled, as are the `Set`/`Modify Global/Player Variable At Index` actions and the full `Modify` operator set (`Add` through `Remove From Array By Index`). Coercions follow the Workshop rules the simulator already uses: numbers, booleans and `Null` read as numbers (`Null` and `False` are `0`), `Null` reads as the empty array, and an enum literal in a value position yields its catalog member id as text. `==`/`!=` compare arrays element-wise; different types are never equal. A `Set * At Index` whose index is past the end appends; a negative index writes nothing. A `Modify * At Index` outside the array writes nothing. `Remove From Array By Value` drops every matching element. `And`/`Or`/`Not`/`If-Then-Else` read truthiness (`Null` and `0` are false) and `And`/`Or` short-circuit; `If-Then-Else` reads only the taken branch.
+
+None of these has a client capture; all are **modeled, not measured**.
+
 ### Workshop settings
 
 A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` — evaluates to its declared `default` argument: the simulator runs one lobby and no player edits settings. `min`/`max`, `options` and `sortOrder` are authoring metadata the running rules never see. A `Hero` setting yields its `Hero` literal's catalog member id as text — the member id `Hero Of` yields, so the two compare equal whatever spelling the scenario used. The scenario format has no place for setting overrides, so a run always sees the authored defaults.
@@ -137,8 +143,8 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 
 | `kind` | Fields | The change |
 | --- | --- | --- |
-| `globalVariable` | `name`, `index`, `old`, `new` | A `Set`/`Modify Global Variable` write. `index` is the element path of an array-element write (`null` for a whole-variable write); no modeled action produces one yet. |
-| `playerVariable` | `player`, `name`, `index`, `old`, `new` | A `Set`/`Modify Player Variable` write; `player` is the player `id`. |
+| `globalVariable` | `name`, `index`, `old`, `new` | A `Set`/`Modify Global Variable` write. `index` is the element path a `Set`/`Modify Global Variable At Index` action wrote (`null` for a whole-variable write). |
+| `playerVariable` | `player`, `name`, `index`, `old`, `new` | A `Set`/`Modify Player Variable` write; `player` is the player `id`, `index` the element path an `At Index` action wrote. |
 | `world` | `player`, `field`, `old`, `new` | A change to a player's world state. `field` is `health`, `shield`, `armor`, `cooldown.<slot>` (for example `cooldown.ability1`) or `ultimate.charge`. For pools `old`/`new` are the `current` points; for a cooldown the reported seconds (`null` when the slot had none). Nothing writes `ultimate.charge` in this version. |
 | `hudCreate` | `id`, `element` | A HUD element was created; `id` indexes `hud`, `element` is its `kind`. |
 | `hudDestroy` | `id`, `element` | A HUD element was destroyed. |
