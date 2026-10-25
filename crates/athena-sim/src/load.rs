@@ -64,7 +64,8 @@ pub(crate) struct Loaded<'a> {
 /// filters: `Team 1`/`Team 2` match the declared `team`, a hero name matches
 /// the catalog member the declared `hero` resolves to, and `All` imposes no
 /// constraint. `Slot N` names a lobby position the scenario format cannot
-/// express, so a rule declaring one is not modeled.
+/// express, so reaching it while matching a player is not modeled; a
+/// filter the `team` arm rejects first is never evaluated.
 pub(crate) fn player_matches(
     rule: &Rule,
     team: EventTeam,

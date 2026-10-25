@@ -62,7 +62,7 @@ The simulator never skips an unmodeled construct and never replaces it with a de
 
 ### Player-scoped rules
 
-The `team` and player (`target`) filters of a rule event resolve against the scenario players: `All` imposes no constraint, `Team 1`/`Team 2` match the declared `team`, and a hero name matches the catalog `Hero` member the declared `hero` resolves to. A `Slot N` target names a lobby position the scenario format cannot express; a rule declaring one stops the run as `not_modeled`.
+The `team` and player (`target`) filters of a rule event resolve against the scenario players: `All` imposes no constraint, `Team 1`/`Team 2` match the declared `team`, and a hero name matches the catalog `Hero` member the declared `hero` resolves to. A `Slot N` target names a lobby position the scenario format cannot express; evaluating the filter against a scenario player or a matching injected event is `not_modeled`. A `Slot` filter no evaluation reaches — the `team` arm fails first for every player, or no matching event is injected — never fires and is not an error.
 
 - An `Ongoing - Each Player` rule becomes one instance per matching scenario player, ordered by scenario `id`. Each instance binds `Event Player` to its player — also inside a subroutine it calls — and has its own condition edge, `Wait`/`Wait Until` and wait-behavior state. A filter matching nobody yields no instance: the rule never fires and is not an error.
 - A player event rule (`Player Died`, `Player Joined Match`, …) runs for an injected event only when the event's `eventPlayer` satisfies the filters. An event that names no `eventPlayer` satisfies only `All`/`All`; evaluating a filtered rule against it is a `missing_input` of kind `eventPlayer`.
