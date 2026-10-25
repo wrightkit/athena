@@ -1,16 +1,17 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 
 use workshop_rs::hero_values::HeroValues;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, Program, Rule, Value};
 
-use crate::blocks::{Blocks, block_maps};
+use crate::blocks::Blocks;
 use crate::eval::{Env, button_slot, eval, number, player_id, player_ids};
 use crate::hud::Hud;
+use crate::load::{Frame, Instance, Loaded, WaitMode, load, player_matches};
 use crate::scenario::{EventCtx, Expectation, Player, Scenario};
 use crate::state::{self, WorldSlot};
 use crate::{
-    ExpectationResult, ExpectationStatus, LogEntry, NotModeled, Options, Outcome, PlayerState,
-    Stop, Trace, Val,
+    ExpectationResult, ExpectationStatus, LogEntry, MissingInput, MissingInputKind, NotModeled,
+    Options, Outcome, PlayerState, Stop, Trace, Val,
 };
 
 /// One server tick (P0, P1).
@@ -30,41 +31,6 @@ fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
 /// Ticks a `Wait(seconds)` lasts: rounded up, never less than one (P1, P4).
 fn wait_ticks(seconds: f64) -> u64 {
     ((seconds * 1000.0 / (TICK_S * 1000.0) - 1e-9).ceil() as u64).max(1)
-}
-
-/// The position of a rule execution in progress: the rule whose actions the
-/// program counter reads. A `Call Subroutine` action pushes a frame.
-#[derive(Clone, Copy, PartialEq)]
-struct Frame {
-    rule_idx: usize,
-    pc: usize,
-}
-
-/// What ends or cancels the suspension of a rule run besides its wake tick.
-#[derive(Clone, Copy, PartialEq)]
-enum WaitMode {
-    Ignore,
-    AbortWhenFalse,
-    RestartWhenTrue,
-    /// A `Wait Until`; the frame points at that action, whose condition is
-    /// checked every tick.
-    Until(Frame),
-}
-
-struct Instance<'a> {
-    rule: &'a Rule,
-    rule_idx: usize,
-    frames: Vec<Frame>,
-    wake: Option<u64>,
-    wait_mode: WaitMode,
-    prev: bool,
-    /// Injected events that triggered this rule and wait for it to be idle.
-    pending: VecDeque<EventCtx>,
-    /// The injected event the current run executes for, if event-triggered.
-    event: Option<EventCtx>,
-    /// Set when control jumped to a clause head on a false condition, so the
-    /// head evaluates rather than exits the chain.
-    clause_jump: bool,
 }
 
 struct World {
@@ -88,64 +54,6 @@ fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Reso
         WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
         WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
     }
-}
-
-struct Loaded<'a> {
-    rules: Vec<&'a Rule>,
-    blocks: Vec<Blocks>,
-    /// Subroutine name → rule index.
-    subroutines: BTreeMap<String, usize>,
-    instances: Vec<Instance<'a>>,
-}
-
-fn load(program: &Program) -> Result<Loaded<'_>, Stop> {
-    let mut rules = Vec::new();
-    let mut blocks = Vec::new();
-    let mut subroutines = BTreeMap::new();
-    let mut instances = Vec::new();
-    for (rule_idx, rule) in program
-        .rules
-        .iter()
-        .filter(|rule| !rule.disabled)
-        .enumerate()
-    {
-        match &rule.event {
-            Event::Global | Event::Subroutine(_) => {}
-            Event::Player {
-                team: EventTeam::All,
-                target: EventTarget::All,
-                ..
-            } => {}
-            Event::Player { .. } => {
-                return unsupported(format!("rule `{}`: event team or player filter", rule.name));
-            }
-            other => {
-                return unsupported(format!("rule `{}`: event {other:?}", rule.name));
-            }
-        }
-        if let Event::Subroutine(name) = &rule.event {
-            subroutines.insert(name.clone(), rule_idx);
-        }
-        rules.push(rule);
-        blocks.push(block_maps(&rule.actions)?);
-        instances.push(Instance {
-            rule,
-            rule_idx,
-            frames: Vec::new(),
-            wake: None,
-            wait_mode: WaitMode::Ignore,
-            prev: false,
-            pending: VecDeque::new(),
-            event: None,
-            clause_jump: false,
-        });
-    }
-    Ok(Loaded {
-        rules,
-        blocks,
-        subroutines,
-        instances,
-    })
 }
 
 fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, Stop> {
@@ -204,6 +112,7 @@ fn run_instance(
             globals: &world.globals,
             players: &world.players,
             event: inst.event.as_ref(),
+            each_player: inst.each_player.as_deref(),
             last_text_id: world.hud.last_text_id,
             now,
         };
@@ -515,15 +424,16 @@ pub(crate) fn run(
     };
     let events = events_by_tick(&events);
     let mut missing_inputs = Vec::new();
-    let outcome =
-        match load(program).and_then(|loaded| tick_loop(loaded, &mut world, options, &events)) {
-            Ok(()) => Outcome::Complete,
-            Err(Stop::NotModeled(not_modeled)) => Outcome::NotModeled(not_modeled),
-            Err(Stop::MissingInput(missing)) => {
-                missing_inputs.push(missing);
-                Outcome::MissingInput
-            }
-        };
+    let outcome = match load(program, &world.players)
+        .and_then(|loaded| tick_loop(loaded, &mut world, options, &events))
+    {
+        Ok(()) => Outcome::Complete,
+        Err(Stop::NotModeled(not_modeled)) => Outcome::NotModeled(not_modeled),
+        Err(Stop::MissingInput(missing)) => {
+            missing_inputs.push(missing);
+            Outcome::MissingInput
+        }
+    };
     Trace {
         expectations: expectations(&expect, &world, &outcome),
         outcome,
@@ -625,24 +535,59 @@ fn tick_loop(
         if let Some(due) = events.get(&tick) {
             for injected in due {
                 for instance in &mut loaded.instances {
-                    if let Event::Player { kind, .. } = instance.rule.event
+                    if let Event::Player { kind, team, target } = &instance.rule.event
                         && kind.catalog_id() == injected.kind
                     {
-                        instance.pending.push_back(injected.clone());
+                        // The team/player filters read the event player: an
+                        // event that does not name one can only satisfy
+                        // `All`.
+                        let eligible = match &injected.player {
+                            Some(id) => player_matches(
+                                instance.rule,
+                                *team,
+                                target,
+                                world
+                                    .players
+                                    .get(id)
+                                    .expect("the scenario loader checks `eventPlayer` is declared"),
+                            )
+                            .map_err(|stop| stop.at(tick))?,
+                            None if *team == EventTeam::All && *target == EventTarget::All => true,
+                            None => {
+                                return Err(Stop::MissingInput(
+                                    MissingInput::new(
+                                        MissingInputKind::EventPlayer,
+                                        None,
+                                        None,
+                                        format!(
+                                            "rule `{}`: event team or player filter",
+                                            instance.rule.name
+                                        ),
+                                    )
+                                    .at(tick),
+                                ));
+                            }
+                        };
+                        if eligible {
+                            instance.pending.push_back(injected.clone());
+                        }
                     }
                 }
             }
         }
         for instance in &mut loaded.instances {
             match &instance.rule.event {
-                Event::Global => {
+                Event::Global | Event::EachPlayer | Event::EachPlayerWithFilters { .. } => {
                     // The condition is tracked every tick, also during a Wait:
                     // an edge while a run is suspended is dropped, not queued
-                    // (P2).
+                    // (P2). An `Ongoing - Each Player` instance runs this same
+                    // ongoing logic with `Event Player` bound to its player.
+                    let each_player = instance.each_player.clone();
                     let env = Env {
                         globals: &world.globals,
                         players: &world.players,
                         event: None,
+                        each_player: each_player.as_deref(),
                         last_text_id: world.hud.last_text_id,
                         now,
                     };
@@ -730,6 +675,7 @@ fn tick_loop(
                             globals: &world.globals,
                             players: &world.players,
                             event: instance.event.as_ref(),
+                            each_player: None,
                             last_text_id: world.hud.last_text_id,
                             now,
                         };
@@ -753,7 +699,7 @@ fn tick_loop(
                         }
                     }
                 }
-                Event::Subroutine(_) | Event::EachPlayer | Event::EachPlayerWithFilters { .. } => {}
+                Event::Subroutine(_) => {}
             }
         }
     }

@@ -11,6 +11,9 @@ pub(crate) struct Env<'a> {
     pub players: &'a BTreeMap<String, Player>,
     /// The injected event the running rule was triggered by, if any.
     pub event: Option<&'a EventCtx>,
+    /// The player an `Ongoing - Each Player` instance runs for; `Event
+    /// Player` reads it when no injected event supplies one.
+    pub each_player: Option<&'a str>,
     /// The `id` of the newest `hudText`/`progressBarHud` element; what
     /// `Last Text ID` reads. `None` before the first one is created.
     pub last_text_id: Option<u64>,
@@ -170,8 +173,12 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
                 .cloned()
                 .unwrap_or(Val::Null))
         }
-        Value::EventPlayer => match env.event.and_then(|event| event.player.as_ref()) {
-            Some(id) => Ok(Val::Player(id.clone())),
+        Value::EventPlayer => match env
+            .event
+            .and_then(|event| event.player.as_deref())
+            .or(env.each_player)
+        {
+            Some(id) => Ok(Val::Player(id.to_string())),
             None => missing(
                 MissingInputKind::EventPlayer,
                 None,

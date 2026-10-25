@@ -2,6 +2,7 @@ mod blocks;
 mod eval;
 mod hero_settings;
 mod hud;
+mod load;
 mod scenario;
 mod sched;
 mod state;
