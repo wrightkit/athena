@@ -1,4 +1,4 @@
-//! Jump targets for the block actions (`While`, `If`) of one rule.
+//! Jump targets for the block actions (`While`, `For`, `If`) of one rule.
 
 use workshop_rs::Action;
 
@@ -10,7 +10,7 @@ fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
 
 /// Jump targets for the block actions of one rule.
 pub(crate) struct Blocks {
-    /// `While` → its `End`; `End` → its opener (`While` or `If`).
+    /// `While`/`For` → its `End`; `End` → its opener (a loop head or `If`).
     pub pairs: Vec<Option<usize>>,
     /// `If`/`ElseIf` → the next clause head or `End`; `Else` → the `End`.
     pub next_clause: Vec<Option<usize>>,
@@ -21,6 +21,7 @@ pub(crate) struct Blocks {
 /// A block that stays open until its `End` line.
 enum Open {
     While(usize),
+    For(usize),
     If {
         clauses: Vec<usize>,
         else_seen: bool,
@@ -35,6 +36,9 @@ pub(crate) fn block_maps(actions: &[Action]) -> Result<Blocks, Stop> {
     for (index, action) in actions.iter().enumerate() {
         match action {
             Action::While { .. } => stack.push(Open::While(index)),
+            Action::ForGlobalVariable { .. } | Action::ForPlayerVariable { .. } => {
+                stack.push(Open::For(index));
+            }
             Action::If { .. } => stack.push(Open::If {
                 clauses: vec![index],
                 else_seen: false,
@@ -51,7 +55,7 @@ pub(crate) fn block_maps(actions: &[Action]) -> Result<Blocks, Stop> {
                 _ => return unsupported("a clause action without an `If`"),
             },
             Action::End => match stack.pop() {
-                Some(Open::While(open)) => {
+                Some(Open::While(open)) | Some(Open::For(open)) => {
                     pairs[open] = Some(index);
                     pairs[index] = Some(open);
                 }
@@ -70,11 +74,40 @@ pub(crate) fn block_maps(actions: &[Action]) -> Result<Blocks, Stop> {
     }
     match stack.last() {
         Some(Open::While(_)) => unsupported("`While` without an `End`"),
+        Some(Open::For(_)) => unsupported("`For` without an `End`"),
         Some(Open::If { .. }) => unsupported("`If` without an `End`"),
         None => Ok(Blocks {
             pairs,
             next_clause,
             chain_end,
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_end_without_an_opener_is_not_modeled() {
+        let Err(Stop::NotModeled(stop)) = block_maps(&[Action::End]) else {
+            panic!("an unpaired `End` must stop not_modeled");
+        };
+        assert_eq!(stop.construct, "End without an opening action");
+    }
+
+    #[test]
+    fn a_for_pairs_its_end_like_a_while() {
+        let blocks = block_maps(&[
+            Action::ForGlobalVariable {
+                variable: "i".into(),
+                start: workshop_rs::Value::Number(0.0),
+                stop: workshop_rs::Value::Number(3.0),
+                step: workshop_rs::Value::Number(1.0),
+            },
+            Action::End,
+        ])
+        .expect("a paired `For`/`End` maps");
+        assert_eq!(blocks.pairs, vec![Some(1), Some(0)]);
     }
 }
