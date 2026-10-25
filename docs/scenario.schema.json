@@ -40,6 +40,7 @@
         "id": { "$ref": "#/$defs/id" },
         "hero": { "type": "string", "minLength": 1 },
         "team": { "enum": ["team1", "team2"] },
+        "host": { "type": "boolean" },
         "state": { "$ref": "#/$defs/values" }
       }
     },

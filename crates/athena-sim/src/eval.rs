@@ -234,6 +234,38 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 other => return unsupported(format!("allPlayers on {other}")),
             }))
         }
+        "and" => {
+            let [a, b] = arguments::<2>(name, args)?;
+            // `&&` short-circuits: the right side is not read when the left
+            // is false.
+            let Val::Bool(left) = eval(a, env)? else {
+                return unsupported("`&&` on a non-boolean");
+            };
+            if !left {
+                return Ok(Val::Bool(false));
+            }
+            match eval(b, env)? {
+                Val::Bool(right) => Ok(Val::Bool(right)),
+                _ => unsupported("`&&` on a non-boolean"),
+            }
+        }
+        "hostPlayer" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.players.iter().find(|(_, player)| player.host) {
+                Some((id, _)) => Ok(Val::Player(id.clone())),
+                None => unsupported("Host Player: the scenario marks no host player"),
+            }
+        }
+        // Modeled, not measured: a player with a hero is spawned and alive.
+        "hasSpawned" | "isAlive" => {
+            let [player] = arguments::<1>(name, args)?;
+            let id = player_id(player, env)?;
+            match env.players.get(&id) {
+                Some(player) if player.hero.is_some() => Ok(Val::Bool(true)),
+                Some(_) => unsupported(format!("{name} of player `{id}` without a hero")),
+                None => unsupported(format!("`{id}` is not a scenario player")),
+            }
+        }
         "add" => binary(|a, b| a + b),
         "subtract" => binary(|a, b| a - b),
         "multiply" => binary(|a, b| a * b),

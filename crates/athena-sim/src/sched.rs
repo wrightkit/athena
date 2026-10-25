@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, VecDeque};
 use workshop_rs::hero_values::HeroValues;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, Program, Rule, Value};
 
+use crate::blocks::{Blocks, block_maps};
 use crate::eval::{Env, button_slot, eval, number, player_id, player_ids};
 use crate::hud::Hud;
 use crate::scenario::{EventCtx, Expectation, Player, Scenario};
@@ -31,22 +32,23 @@ fn wait_ticks(seconds: f64) -> u64 {
     ((seconds * 1000.0 / (TICK_S * 1000.0) - 1e-9).ceil() as u64).max(1)
 }
 
-/// Jump targets for the block actions of one rule.
-struct Blocks {
-    /// `While` → its `End`; `End` → its opener (`While` or `If`).
-    pairs: Vec<Option<usize>>,
-    /// `If`/`ElseIf` → the next clause head or `End`; `Else` → the `End`.
-    next_clause: Vec<Option<usize>>,
-    /// `ElseIf`/`Else` → the `End` of the chain, where fall-through exits.
-    chain_end: Vec<Option<usize>>,
-}
-
 /// The position of a rule execution in progress: the rule whose actions the
 /// program counter reads. A `Call Subroutine` action pushes a frame.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct Frame {
     rule_idx: usize,
     pc: usize,
+}
+
+/// What ends or cancels the suspension of a rule run besides its wake tick.
+#[derive(Clone, Copy, PartialEq)]
+enum WaitMode {
+    Ignore,
+    AbortWhenFalse,
+    RestartWhenTrue,
+    /// A `Wait Until`; the frame points at that action, whose condition is
+    /// checked every tick.
+    Until(Frame),
 }
 
 struct Instance<'a> {
@@ -54,6 +56,7 @@ struct Instance<'a> {
     rule_idx: usize,
     frames: Vec<Frame>,
     wake: Option<u64>,
+    wait_mode: WaitMode,
     prev: bool,
     /// Injected events that triggered this rule and wait for it to be idle.
     pending: VecDeque<EventCtx>,
@@ -84,67 +87,6 @@ fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Reso
         WorldSlot::Resolved(state) => Ok(state),
         WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
         WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
-    }
-}
-
-/// A block that stays open until its `End` line.
-enum Open {
-    While(usize),
-    If {
-        clauses: Vec<usize>,
-        else_seen: bool,
-    },
-}
-
-fn block_maps(actions: &[Action]) -> Result<Blocks, Stop> {
-    let mut pairs = vec![None; actions.len()];
-    let mut next_clause = vec![None; actions.len()];
-    let mut chain_end = vec![None; actions.len()];
-    let mut stack: Vec<Open> = Vec::new();
-    for (index, action) in actions.iter().enumerate() {
-        match action {
-            Action::While { .. } => stack.push(Open::While(index)),
-            Action::If { .. } => stack.push(Open::If {
-                clauses: vec![index],
-                else_seen: false,
-            }),
-            Action::ElseIf { .. } | Action::Else => match stack.last_mut() {
-                Some(Open::If { clauses, else_seen }) if !*else_seen => {
-                    next_clause[*clauses.last().expect("an If opens its chain")] = Some(index);
-                    clauses.push(index);
-                    if matches!(action, Action::Else) {
-                        *else_seen = true;
-                    }
-                }
-                Some(Open::If { .. }) => return unsupported("a clause action after the `Else`"),
-                _ => return unsupported("a clause action without an `If`"),
-            },
-            Action::End => match stack.pop() {
-                Some(Open::While(open)) => {
-                    pairs[open] = Some(index);
-                    pairs[index] = Some(open);
-                }
-                Some(Open::If { clauses, .. }) => {
-                    let open = *clauses.first().expect("an If opens its chain");
-                    next_clause[*clauses.last().expect("an If opens its chain")] = Some(index);
-                    for clause in clauses {
-                        chain_end[clause] = Some(index);
-                    }
-                    pairs[index] = Some(open);
-                }
-                None => return unsupported("End without an opening action"),
-            },
-            _ => {}
-        }
-    }
-    match stack.last() {
-        Some(Open::While(_)) => unsupported("`While` without an `End`"),
-        Some(Open::If { .. }) => unsupported("`If` without an `End`"),
-        None => Ok(Blocks {
-            pairs,
-            next_clause,
-            chain_end,
-        }),
     }
 }
 
@@ -191,6 +133,7 @@ fn load(program: &Program) -> Result<Loaded<'_>, Stop> {
             rule_idx,
             frames: Vec::new(),
             wake: None,
+            wait_mode: WaitMode::Ignore,
             prev: false,
             pending: VecDeque::new(),
             event: None,
@@ -216,6 +159,14 @@ fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, Stop> {
         }
     }
     Ok(true)
+}
+
+/// The condition of the `Wait Until` action the frame points at.
+fn until_holds(rules: &[&Rule], frame: Frame, env: &Env) -> Result<bool, Stop> {
+    let Some(Action::Call { args, .. }) = rules[frame.rule_idx].actions.get(frame.pc) else {
+        unreachable!("a Wait Until frame points at its action");
+    };
+    flag(eval(&args[0], env)?)
 }
 
 fn flag(value: Val) -> Result<bool, Stop> {
@@ -390,12 +341,43 @@ fn run_instance(
                     let [seconds, behavior] = args.as_slice() else {
                         return unsupported("wait arguments");
                     };
-                    match behavior {
-                        Value::Enum { value, .. } if value == "IGNORE_CONDITION" => {}
+                    let mode = match behavior {
+                        Value::Enum { value, .. } => match value.as_str() {
+                            "IGNORE_CONDITION" => WaitMode::Ignore,
+                            "ABORT_WHEN_FALSE" => WaitMode::AbortWhenFalse,
+                            "RESTART_WHEN_TRUE" => WaitMode::RestartWhenTrue,
+                            other => return unsupported(format!("wait behavior {other}")),
+                        },
                         other => return unsupported(format!("wait behavior {other:?}")),
+                    };
+                    // The rule's condition is tracked for global rules only.
+                    if mode != WaitMode::Ignore && inst.event.is_some() {
+                        return unsupported("wait behavior in an event-triggered rule");
                     }
                     let ticks = wait_ticks(number(&eval(seconds, &env)?)?);
                     inst.wake = Some(tick + ticks);
+                    inst.wait_mode = mode;
+                    advance(inst);
+                    return Ok(());
+                }
+                "waitUntil" => {
+                    let [condition, timeout] = args.as_slice() else {
+                        return unsupported("waitUntil arguments");
+                    };
+                    if inst.event.is_some() {
+                        return unsupported("Wait Until in an event-triggered rule");
+                    }
+                    // A true condition continues in the same tick (P4).
+                    if flag(eval(condition, &env)?)? {
+                        advance(inst);
+                        continue;
+                    }
+                    let timeout = number(&eval(timeout, &env)?)?;
+                    if timeout <= 0.0 {
+                        return unsupported("Wait Until(false, 0)");
+                    }
+                    inst.wake = Some(tick + wait_ticks(timeout));
+                    inst.wait_mode = WaitMode::Until(Frame { rule_idx, pc });
                     advance(inst);
                     return Ok(());
                 }
@@ -657,19 +639,46 @@ fn tick_loop(
                     // The condition is tracked every tick, also during a Wait:
                     // an edge while a run is suspended is dropped, not queued
                     // (P2).
-                    let holds = conditions_hold(
-                        instance.rule,
-                        &Env {
-                            globals: &world.globals,
-                            players: &world.players,
-                            event: None,
-                            last_text_id: world.hud.last_text_id,
-                            now,
-                        },
-                    )
-                    .map_err(|e| e.at(tick))?;
+                    let env = Env {
+                        globals: &world.globals,
+                        players: &world.players,
+                        event: None,
+                        last_text_id: world.hud.last_text_id,
+                        now,
+                    };
+                    let holds = conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))?;
                     let edge = holds && !instance.prev;
                     instance.prev = holds;
+                    // A wake due this tick wins over the wait behavior.
+                    if instance.wake.is_some_and(|wake| wake > tick) {
+                        match instance.wait_mode {
+                            WaitMode::Ignore => {}
+                            WaitMode::AbortWhenFalse => {
+                                if !holds {
+                                    instance.frames.clear();
+                                    instance.wake = None;
+                                    continue;
+                                }
+                            }
+                            WaitMode::RestartWhenTrue => {
+                                if edge {
+                                    instance.frames.clear();
+                                    instance.frames.push(Frame {
+                                        rule_idx: instance.rule_idx,
+                                        pc: 0,
+                                    });
+                                    instance.wake = None;
+                                }
+                            }
+                            WaitMode::Until(frame) => {
+                                if until_holds(&loaded.rules, frame, &env)
+                                    .map_err(|e| e.at(tick))?
+                                {
+                                    instance.wake = Some(tick);
+                                }
+                            }
+                        }
+                    }
                     let start = match instance.wake {
                         Some(wake) if wake <= tick => true,
                         Some(_) => false,

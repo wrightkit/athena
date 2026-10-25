@@ -233,13 +233,11 @@ fn p3_same_tick_rule_order_driver_last() {
 }
 
 #[test]
-#[ignore = "needs Wait Until (layer 3)"]
 fn p4_wait_until_zero_tick() {
     check_probe("p4-wait-until-zero-tick");
 }
 
 #[test]
-#[ignore = "needs Wait Until and Wait Behavior (layer 3)"]
 fn p6_wait_behavior() {
     check_probe("p6-wait-behavior");
 }
@@ -256,7 +254,6 @@ fn p7_hero_settings() {
 /// scenario, so no player — reports the probe `not_modeled`. The values are
 /// test-loaded so the check does not wait on a workshop-rs release.
 #[test]
-#[ignore = "needs Wait Until, Has Spawned and Is Alive (layer 3)"]
 fn p7_hero_settings_models_the_expected_lines() {
     // `ana` as the pinned file records her: a 250 health pool, a 14-second
     // `ability1` cooldown and a 2300-point ultimate.
