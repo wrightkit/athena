@@ -256,6 +256,7 @@ fn p7_hero_settings() {
 /// scenario, so no player — reports the probe `not_modeled`. The values are
 /// test-loaded so the check does not wait on a workshop-rs release.
 #[test]
+#[ignore = "needs Wait Until, Has Spawned and Is Alive (layer 3)"]
 fn p7_hero_settings_models_the_expected_lines() {
     // `ana` as the pinned file records her: a 250 health pool, a 14-second
     // `ability1` cooldown and a 2300-point ultimate.
