@@ -2,8 +2,8 @@
 //! truncation, as `docs/simulator-interface.md` defines them (athena#48).
 
 use athena_sim::{
-    Change, HudKind, Outcome, RunEnd, TIMELINE_ENTRY_LIMIT, Val, run_scenario_with_hero_values,
-    run_text,
+    Change, HudKind, Outcome, RunEnd, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT,
+    TIMELINE_RULE_LIMIT, Val, run_scenario, run_scenario_with_hero_values, run_text,
 };
 
 /// `Set Global Variable`, a `Wait(0.5)` and a second write: one entry per
@@ -140,6 +140,74 @@ rule ("init") {
         trace.timeline.entries[TIMELINE_ENTRY_LIMIT - 1].tick,
         TIMELINE_ENTRY_LIMIT as u64 - 1
     );
+}
+
+/// One dense tick can produce more changes than the trace keeps: past
+/// `TIMELINE_CHANGE_LIMIT` they are dropped — inside the tick — and
+/// `truncated` reports the loss.
+#[test]
+fn the_change_cap_truncates_within_a_tick() {
+    let text = r#"
+variables {
+    global:
+        0: a
+}
+
+rule ("init") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        While(True);
+            Set Global Variable(a, 1);
+        End;
+    }
+}
+"#;
+    let trace = run_text(text, athena_sim::Options { seconds: 1.0 }).unwrap();
+    // The loop without a wait runs to the step limit on tick 0.
+    assert!(matches!(trace.outcome, Outcome::NotModeled(_)));
+    assert!(trace.timeline.truncated);
+    let [entry] = trace.timeline.entries.as_slice() else {
+        panic!("expected one entry, got {:?}", trace.timeline.entries);
+    };
+    assert_eq!(entry.changes.len(), TIMELINE_CHANGE_LIMIT);
+}
+
+/// Rule executions are bounded the same way: more runs than
+/// `TIMELINE_RULE_LIMIT` across the trace are dropped and `truncated`
+/// reports it.
+#[test]
+fn the_rule_cap_truncates() {
+    // 100 players resume their `Ongoing - Each Player` instance every
+    // tick; 17 simulated seconds is 1,063 ticks, 106,300 runs in all.
+    let players = (0..100)
+        .map(|index| format!(r#"{{ "id": "p{index}" }}"#))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let scenario = format!(r#"{{ "scenarioVersion": 1, "seconds": 17, "players": [{players}] }}"#);
+    let text = r#"
+rule ("init") {
+    event {
+        Ongoing - Each Player;
+    }
+    actions {
+        While(True);
+            Wait Until(False, 0.016);
+        End;
+    }
+}
+"#;
+    let trace = run_scenario(text, &scenario).unwrap();
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert!(trace.timeline.truncated);
+    let recorded: usize = trace
+        .timeline
+        .entries
+        .iter()
+        .map(|entry| entry.rules.len())
+        .sum();
+    assert_eq!(recorded, TIMELINE_RULE_LIMIT);
 }
 
 /// One tick's `changes` hold every modeled state change in execution

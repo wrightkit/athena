@@ -46,8 +46,9 @@ pub(crate) struct World {
     pub players: BTreeMap<String, Player>,
     pub logs: Vec<LogEntry>,
     pub hud: Hud,
-    /// The rule executions of the tick in progress, in execution order;
-    /// `tick_loop` drains them into the tick's timeline entry.
+    /// The rule executions of the tick in progress — started, resumed or
+    /// ended — in execution order; `tick_loop` drains them into the
+    /// tick's timeline entry.
     pub runs: Vec<RuleRun>,
     /// The state changes of the tick in progress, in execution order;
     /// `tick_loop` drains them into the tick's timeline entry.

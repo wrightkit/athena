@@ -264,7 +264,7 @@ pub struct HudElement {
     pub args: HudArgs,
 }
 
-/// One rule execution that started or resumed on a tick.
+/// One rule execution that started, resumed or ended on a tick.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleRun {
@@ -288,8 +288,9 @@ pub struct RuleRun {
 pub enum RunEnd {
     /// The execution stepped past its last action.
     Finished,
-    /// A `Wait`/`Wait Until` suspended it; `wake` is the earliest tick it
-    /// can resume.
+    /// A `Wait`/`Wait Until` suspended it; `wake` is the tick the wait
+    /// expires: the resume tick for `Wait`, the timeout tick for
+    /// `Wait Until`, whose condition can resume it earlier.
     Waiting { wake: u64 },
     /// It was killed: by the run's stop (`not_modeled`, `missing_input`,
     /// the step limit) or by an `Abort When False` wait going false.
@@ -338,8 +339,8 @@ pub enum Change {
 }
 
 /// One timeline entry: the activity of one tick. `rules` lists the rule
-/// executions that started or resumed on the tick, `changes` the state
-/// changes they made, both in execution order.
+/// executions that started, resumed or ended on the tick, `changes` the
+/// state changes they made, both in execution order.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TimelineEntry {
     pub tick: u64,
@@ -350,17 +351,28 @@ pub struct TimelineEntry {
 }
 
 /// The per-tick timeline of a run: one entry per tick that had activity, in
-/// order. A run that stops early still returns the timeline up to the stop.
+/// order. The bounds below keep a long or dense run from growing it
+/// without limit. A run that stops early still returns the timeline up to
+/// the stop.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct Timeline {
     pub entries: Vec<TimelineEntry>,
-    /// `true` once `entries` reached the cap of
-    /// [`TIMELINE_ENTRY_LIMIT`]; later ticks are dropped.
+    /// `true` once a bound dropped records: `entries` past
+    /// [`TIMELINE_ENTRY_LIMIT`], `rules` past [`TIMELINE_RULE_LIMIT`] or
+    /// `changes` past [`TIMELINE_CHANGE_LIMIT`].
     pub truncated: bool,
 }
 
 /// The most ticks with activity a trace's `timeline` keeps.
 pub const TIMELINE_ENTRY_LIMIT: usize = 10_000;
+
+/// The most rule executions a trace's `timeline` keeps across all
+/// entries; past it they are dropped and `truncated` is set.
+pub const TIMELINE_RULE_LIMIT: usize = 100_000;
+
+/// The most state changes a trace's `timeline` keeps across all
+/// entries; past it they are dropped and `truncated` is set.
+pub const TIMELINE_CHANGE_LIMIT: usize = 100_000;
 
 /// What a run produced. `logs`, `globals`, `players` and `hud` describe the
 /// state when the run ended: after the last tick for `Complete`, at the stop

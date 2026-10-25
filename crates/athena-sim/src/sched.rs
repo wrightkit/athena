@@ -12,8 +12,8 @@ use crate::state::{self, WorldSlot};
 use crate::step::{World, flag, run_instance};
 use crate::{
     ExpectationResult, ExpectationStatus, MissingInput, MissingInputKind, NotModeled, Options,
-    Outcome, PlayerState, RuleRun, RunEnd, Stop, TIMELINE_ENTRY_LIMIT, Timeline, TimelineEntry,
-    Trace, Val,
+    Outcome, PlayerState, RuleRun, RunEnd, Stop, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT,
+    TIMELINE_RULE_LIMIT, Timeline, TimelineEntry, Trace, Val,
 };
 
 /// One server tick (P0, P1).
@@ -232,12 +232,29 @@ fn tick_loop(
     events: &BTreeMap<u64, Vec<EventCtx>>,
 ) -> Result<(), Stop> {
     let ticks = (options.seconds / TICK_S).floor() as u64 + 1;
+    // `rules` and `changes` are bounded across the whole trace, so a
+    // dense tick cannot grow the JSON without limit: past a bound the
+    // records are dropped and `truncated` reports the loss.
+    let mut rules_recorded = 0;
+    let mut changes_recorded = 0;
     for tick in 0..ticks {
         let now = START_OFFSET_S + tick as f64 * TICK_S;
         let result = run_tick(&mut loaded, world, events, tick, now);
         // A tick that stopped the run still records what it did.
-        let rules = std::mem::take(&mut world.runs);
-        let changes = std::mem::take(&mut world.changes);
+        let mut rules = std::mem::take(&mut world.runs);
+        let mut changes = std::mem::take(&mut world.changes);
+        let keep = TIMELINE_RULE_LIMIT.saturating_sub(rules_recorded);
+        if rules.len() > keep {
+            rules.truncate(keep);
+            world.timeline.truncated = true;
+        }
+        rules_recorded += rules.len();
+        let keep = TIMELINE_CHANGE_LIMIT.saturating_sub(changes_recorded);
+        if changes.len() > keep {
+            changes.truncate(keep);
+            world.timeline.truncated = true;
+        }
+        changes_recorded += changes.len();
         if !rules.is_empty() || !changes.is_empty() {
             if world.timeline.entries.len() == TIMELINE_ENTRY_LIMIT {
                 world.timeline.truncated = true;

@@ -107,7 +107,9 @@ HUD behavior is **modeled** with these limits:
 
 ### Timeline
 
-`timeline` holds one `entries` element per tick that had activity — a rule execution or a state change — in order; ticks without activity are omitted. A run that ends `not_modeled` or `missing_input` still returns the entries up to and including the stop tick. `truncated` is `true` once `entries` reached the cap of 10 000 (`TIMELINE_ENTRY_LIMIT`); later ticks are dropped.
+`timeline` holds one `entries` element per tick that had activity — a rule execution or a state change — in order; ticks without activity are omitted. A run that ends `not_modeled` or `missing_input` still returns the entries up to and including the stop tick.
+
+The timeline is bounded so a long or dense run cannot blow up the JSON: `entries` stops at 10 000 (`TIMELINE_ENTRY_LIMIT`), and across all entries `rules` stops at 100 000 (`TIMELINE_RULE_LIMIT`) and `changes` at 100 000 (`TIMELINE_CHANGE_LIMIT`). Records past a bound are dropped — also inside a tick — and `truncated` is `true` once any bound dropped something.
 
 Each entry:
 
@@ -115,7 +117,7 @@ Each entry:
 | --- | --- |
 | `tick` | The tick. |
 | `time` | The tick's `Total Time Elapsed` in milliseconds: 15 + tick·16. |
-| `rules` | The rule executions that started or resumed on the tick, in execution order. See below. |
+| `rules` | The rule executions that started, resumed or ended on the tick, in execution order. See below. |
 | `changes` | The state changes the executions made, in execution order across rules. See below. |
 
 Each `rules` element:
@@ -125,7 +127,7 @@ Each `rules` element:
 | `rule` | The rule's index among the program's enabled rules, in file order. |
 | `name` | The rule's name. |
 | `eventPlayer` | The scenario `id` of the run's `Event Player`: an injected event's `eventPlayer`, or the player an `Ongoing - Each Player` run is bound to; `null` for `Ongoing - Global` runs and events without one. |
-| `ended` | How the execution ended on the tick: `finished` (stepped past its last action), `waiting` with `wake` (suspended; `wake` is the earliest tick it can resume) or `aborted` (killed by the run's stop, or by an `Abort When False` wait going false). |
+| `ended` | How the execution ended on the tick: `finished` (stepped past its last action), `waiting` with `wake` (suspended; `wake` is the tick the wait expires — the resume tick for `Wait`, the timeout tick for `Wait Until`, whose condition can resume it earlier) or `aborted` (killed by the run's stop, or by an `Abort When False` wait going false). |
 
 Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as the `Val` form:
 
