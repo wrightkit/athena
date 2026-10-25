@@ -28,9 +28,52 @@ P7 把英雄池限制为 Ana（`enabledHeroes`），开局后正常选英雄出�
 
 1. 新建自定义游戏，选 Workshop 模式，打开 Workshop Inspector 和 Inspector 记录；确认没有开 Slow Motion。
 2. 粘贴一个 `.zh-CN.ow`（中文客户端；`probe.workshop` 是可读源码，不用于粘贴），一次只跑一个探针，开始游戏，不要操作角色。每个探针开头都有 `Wait(3)`，无需手动操作（P5 需要主机玩家出生，见上方探针清单）。
-3. 约 3 秒后日志开始出现；见到该探针最后一行（见下表）后，复制整个 Inspector 内容（变量块加 log，不要只复制 log），存成该探针目录下的 `capture.txt`。变量块是复制时的末态，用来核对循环是否跑完、`runs` 等计数，不用来判断时序。
-4. 重复两次，每次一份独立日志，依次存成 `capture-2.txt`、`capture-3.txt`。
-5. 按 [capture-convention.md](capture-convention.md) 写 `capture.json`，`result` 只能填 `match`、`mismatch`、`inconclusive` 之一。
+3. 约 3 秒后日志开始出现；见到该探针最后一行（见下表，即 `expect.json` 的 `end`）后，取出 Inspector 内容，存成一份独立的日志文件。变量块是复制时的末态，用来核对循环是否跑完、`runs` 等计数，不用来判断时序；`athena ingest` 只读 log 行。
+4. 重复两次，每次一份独立日志、不同的文件名。
+5. 用 `athena ingest probes/<id> <日志文件>` 记录每次运行（见 [capture-convention.md](capture-convention.md#ingesting-a-log)）；它按 `expect.json` 判定，并更新 `capture.json`。`result` 只能是 `match`、`mismatch`、`inconclusive` 之一。
+
+### Agent 执行
+
+本节供用 computer use 驱动客户端的 agent 使用。流程见 workspace skill `wrightkit-run-workshop-probe`。agent 只负责操作客户端并取回日志；判定由 `athena ingest` 完成。
+
+**前提**
+
+- 客户端在远程 Windows 机器上，agent 通过 macOS 上的远程桌面窗口操作。客户端是中文界面，探针文件是 `.zh-CN.ow`。
+- 需要对远程桌面应用的 computer use 权限。不要输入账号或密码；需要登录时停下来问用户。
+- 不在 Windows 上安装或配置任何东西。文件传输、复制粘贴用远程桌面自带的功能，由 agent 选能用的方式。
+- 一次只跑一个探针，同一时间只有一个 agent 写某个探针目录。
+
+**把探针送进客户端**
+
+1. 把 `probes/<id>/probe.zh-CN.ow` 的内容原样送到 Windows：剪贴板同步、文件传输或在记事本里输入，哪种能用就用哪种。中文变成乱码时，换一种方式。
+2. 在 Workshop 编辑器里清空已有规则，再用编辑器的“从剪贴板粘贴”功能粘贴。
+3. 粘贴后核对规则数量；规则数量或设置块明显不对时，停下来报告，不要继续。
+
+**每个探针的额外操作**
+
+| 探针 | 额外操作 |
+|---|---|
+| P0 到 P4、P6 | 无。开局后不要操作角色。 |
+| P5 | 开局后选英雄并出生，前方要有约 3 秒的跑道；脚本最长等 10 分钟。不要在观战状态下跑。`P5 start` 行的 `spawned` 为假或 `pos` 为 0，本次作废。 |
+| P7 | 开局后选 Ana 并出生。`P7 max_health` 等行显示 0 或缺行，说明读取时玩家未出生，本次作废，重跑。 |
+
+**取回日志**
+
+- 客户端把日志写在 Windows 的 `文档\Overwatch\Workshop\Log-<日期>.txt`，例如 `Log-2026-10-19-12-45-59.txt`。
+- 用远程桌面能用的任何方式把文本取回 macOS：文件传输、剪贴板同步，或从 Inspector 复制。内容必须原样。
+- 一次运行一份文件，文件名每次不同（`sources` 按文件名去重）。放在 `athena/.wright/runs/`，这个目录已被 Git 忽略。复制客户端日志文件时保留它的原文件名。
+- P6 还要导出变量块，核对 `endAbort` 为 0（`P6 counts` 行里没有它）。
+- **待验证**：日志文件的编码（UTF-8、带 BOM 或 UTF-16）和换行符；重开一局是否生成新的 `Log-*.txt`（同一文件里同一探针只记第一次完整运行）。第一次执行的 agent 验证后，把结果和可用的传输方式写在这里。
+
+**作废规则**
+
+- 日志缺少 `end` 行、被截断、混入其他探针的行，或前面带着上一个探针的残留：丢弃这次运行，重来。不要补全，不要整理。
+- `athena ingest` 拒绝日志时不会写入任何东西；先修原因，不要手改 `capture.json`。
+- 出现不能确认的界面（弹窗、语言不同、找不到按钮）：停下来，附截图报告，不要猜着点。
+
+**客户端版本**
+
+`capture.json` 的 `client.version` 从客户端选项菜单读取，不要猜。
 
 ### 每个探针应得到什么
 

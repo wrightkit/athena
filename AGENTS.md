@@ -48,8 +48,9 @@ The capture rules (verbatim captures, three result values, a mismatch wins, stal
 ## Running a probe
 
 Follow the workspace skill `.agents/skills/wrightkit-run-workshop-probe/SKILL.md`.
-Driving the game client is a human step: the agent prepares the file and judges the
-result; the user pastes into the client and copies the Inspector back.
+The client is driven by the user or by an agent through computer use ("Agent 执行" in
+`docs/procedure.zh-CN.md`). The driver returns the verbatim Inspector log; `athena ingest`
+judges it and writes the capture.
 
 ## Verification and delivery
 
