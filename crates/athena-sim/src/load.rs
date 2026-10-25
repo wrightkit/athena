@@ -1,0 +1,152 @@
+//! Program loading: enabled rules become `Instance`s — one per matching
+//! scenario player for `Ongoing - Each Player` — with their block maps and
+//! the subroutine table.
+
+use std::collections::{BTreeMap, VecDeque};
+
+use workshop_rs::{Event, EventTarget, EventTeam, Program, Rule};
+
+use crate::blocks::{Blocks, block_maps};
+use crate::scenario::{EventCtx, Player, Team};
+use crate::{NotModeled, Stop};
+
+fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
+    Err(Stop::NotModeled(NotModeled::new(what)))
+}
+
+/// The position of a rule execution in progress: the rule whose actions the
+/// program counter reads. A `Call Subroutine` action pushes a frame.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct Frame {
+    pub rule_idx: usize,
+    pub pc: usize,
+}
+
+/// What ends or cancels the suspension of a rule run besides its wake tick.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum WaitMode {
+    Ignore,
+    AbortWhenFalse,
+    RestartWhenTrue,
+    /// A `Wait Until`; the frame points at that action, whose condition is
+    /// checked every tick.
+    Until(Frame),
+}
+
+pub(crate) struct Instance<'a> {
+    pub rule: &'a Rule,
+    pub rule_idx: usize,
+    /// The player an `Ongoing - Each Player` instance runs for; `Event
+    /// Player` binds it. `None` for every other event.
+    pub each_player: Option<String>,
+    pub frames: Vec<Frame>,
+    pub wake: Option<u64>,
+    pub wait_mode: WaitMode,
+    pub prev: bool,
+    /// Injected events that triggered this rule and wait for it to be idle.
+    pub pending: VecDeque<EventCtx>,
+    /// The injected event the current run executes for, if event-triggered.
+    pub event: Option<EventCtx>,
+    /// Set when control jumped to a clause head on a false condition, so the
+    /// head evaluates rather than exits the chain.
+    pub clause_jump: bool,
+}
+
+pub(crate) struct Loaded<'a> {
+    pub rules: Vec<&'a Rule>,
+    pub blocks: Vec<Blocks>,
+    /// Subroutine name → rule index.
+    pub subroutines: BTreeMap<String, usize>,
+    pub instances: Vec<Instance<'a>>,
+}
+
+/// Whether a scenario player satisfies a rule event's `team`/`target`
+/// filters: `Team 1`/`Team 2` match the declared `team`, a hero name matches
+/// the catalog member the declared `hero` resolves to, and `All` imposes no
+/// constraint. `Slot N` names a lobby position the scenario format cannot
+/// express, so reaching it while matching a player is not modeled; a
+/// filter the `team` arm rejects first is never evaluated.
+pub(crate) fn player_matches(
+    rule: &Rule,
+    team: EventTeam,
+    target: &EventTarget,
+    player: &Player,
+) -> Result<bool, Stop> {
+    let matches = match team {
+        EventTeam::All => true,
+        EventTeam::Team1 => player.team == Some(Team::Team1),
+        EventTeam::Team2 => player.team == Some(Team::Team2),
+    };
+    if !matches {
+        return Ok(false);
+    }
+    match target {
+        EventTarget::All => Ok(true),
+        EventTarget::Hero(hero) => Ok(player.hero_member.as_deref() == Some(hero.as_str())),
+        EventTarget::Slot(slot) => {
+            unsupported(format!("rule `{}`: event player slot {slot}", rule.name))
+        }
+    }
+}
+
+pub(crate) fn load<'a>(
+    program: &'a Program,
+    players: &BTreeMap<String, Player>,
+) -> Result<Loaded<'a>, Stop> {
+    let mut rules = Vec::new();
+    let mut blocks = Vec::new();
+    let mut subroutines = BTreeMap::new();
+    let mut instances = Vec::new();
+    for (rule_idx, rule) in program
+        .rules
+        .iter()
+        .filter(|rule| !rule.disabled)
+        .enumerate()
+    {
+        // An `Ongoing - Each Player` rule becomes one instance per matching
+        // scenario player; a filter matching nobody yields no instance, so
+        // the rule never fires. Every other event gets a single instance.
+        let each_players: Vec<Option<String>> = match &rule.event {
+            Event::Global | Event::Player { .. } | Event::Subroutine(_) => vec![None],
+            Event::EachPlayer | Event::EachPlayerWithFilters { .. } => {
+                let (team, target) = match &rule.event {
+                    Event::EachPlayer => (EventTeam::All, &EventTarget::All),
+                    Event::EachPlayerWithFilters { team, target } => (*team, target),
+                    _ => unreachable!(),
+                };
+                let mut bound = Vec::new();
+                for (id, player) in players {
+                    if player_matches(rule, team, target, player)? {
+                        bound.push(Some(id.clone()));
+                    }
+                }
+                bound
+            }
+        };
+        if let Event::Subroutine(name) = &rule.event {
+            subroutines.insert(name.clone(), rule_idx);
+        }
+        rules.push(rule);
+        blocks.push(block_maps(&rule.actions)?);
+        for each_player in each_players {
+            instances.push(Instance {
+                rule,
+                rule_idx,
+                each_player,
+                frames: Vec::new(),
+                wake: None,
+                wait_mode: WaitMode::Ignore,
+                prev: false,
+                pending: VecDeque::new(),
+                event: None,
+                clause_jump: false,
+            });
+        }
+    }
+    Ok(Loaded {
+        rules,
+        blocks,
+        subroutines,
+        instances,
+    })
+}

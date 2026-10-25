@@ -36,6 +36,10 @@ pub(crate) struct Player {
     /// Hero name; the program may read it, and a missing one is a missing
     /// input.
     pub hero: Option<String>,
+    /// The catalog `Hero` member id `hero` names (for example `DVA` for
+    /// `D.Va`); the hero filter of a rule event matches on it. `None` when
+    /// `hero` is absent.
+    pub hero_member: Option<String>,
     /// The en-US spellings of the catalog member `hero` names, used to find
     /// the hero in the gameplay dataset for the hero values catalog. Empty
     /// when `hero` is absent.
@@ -249,16 +253,18 @@ fn expectation(index: usize, value: &serde_json::Value) -> Result<Expectation, S
 /// Every hero name a scenario may give, from the `workshop-rs` catalog: the
 /// canonical `Hero` member id (such as `JUNKER_QUEEN`) or an en-US spelling
 /// (such as `Junker Queen`), matched case-insensitively. Each accepted name
-/// maps to the member's en-US spellings, which the gameplay dataset shares.
-fn hero_names(catalog: &Catalog) -> BTreeMap<String, Vec<String>> {
+/// maps to the member id and the member's en-US spellings, which the
+/// gameplay dataset shares.
+fn hero_names(catalog: &Catalog) -> BTreeMap<String, (String, Vec<String>)> {
     let en_us = Locale::new("en-US");
     let mut names = BTreeMap::new();
     if let Some(domain) = catalog.enum_domain("Hero") {
         for member in &domain.members {
             let spellings = member.spellings(&en_us).to_vec();
-            names.insert(member.member.to_lowercase(), spellings.clone());
+            let entry = || (member.member.clone(), spellings.clone());
+            names.insert(member.member.to_lowercase(), entry());
             for spelling in &spellings {
-                names.insert(spelling.to_lowercase(), spellings.clone());
+                names.insert(spelling.to_lowercase(), entry());
             }
         }
     }
@@ -293,13 +299,17 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         if player.id.is_empty() {
             return format_error("a player `id` must not be empty");
         }
+        let mut hero_member = None;
         let mut hero_spellings = Vec::new();
         if let Some(hero) = &player.hero {
             if hero.is_empty() {
                 return format_error(format!("player `{}` has an empty hero", player.id));
             }
             match heroes.get(&hero.to_lowercase()) {
-                Some(spellings) => hero_spellings = spellings.clone(),
+                Some((member, spellings)) => {
+                    hero_member = Some(member.clone());
+                    hero_spellings = spellings.clone();
+                }
                 None => {
                     return load_error(format!("player `{}` has unknown hero `{hero}`", player.id));
                 }
@@ -311,6 +321,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         }
         let loaded = Player {
             hero: player.hero,
+            hero_member,
             hero_spellings,
             team: player.team.map(|team| match team {
                 TeamDoc::Team1 => Team::Team1,

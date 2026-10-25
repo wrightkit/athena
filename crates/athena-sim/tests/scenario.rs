@@ -550,32 +550,6 @@ fn the_loader_checks_what_the_schema_cannot() {
     }
 }
 
-#[test]
-fn a_filtered_event_rule_is_not_modeled() {
-    let text = r#"
-rule ("filtered") {
-    event {
-        Player Dealt Final Blow;
-        Team 1;
-        All;
-    }
-    actions {
-        Wait(0, Ignore Condition);
-    }
-}
-"#;
-    let trace = run(
-        text,
-        r#"{ "scenarioVersion": 1, "seconds": 1,
-            "players": [{ "id": "p1", "hero": "ana", "team": "team1" }] }"#,
-    );
-    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
-        panic!("expected NotModeled, got {:?}", trace.outcome);
-    };
-    assert!(not_modeled.construct.contains("filter"));
-    assert_eq!(not_modeled.tick, None);
-}
-
 // ----- Player state table: hero values, Damage and Heal (athena#9) -----
 
 /// A test-only hero-values set, loaded through `workshop_rs::hero_values::load`.
