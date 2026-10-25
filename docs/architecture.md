@@ -37,7 +37,7 @@ The simulator should consume the public `Program` model of `workshop-rs`. The ar
 
 ## Simulator scope (first layer)
 
-Only what P0 to P4 fixtures need:
+Only what the P0–P7 fixtures need:
 
 - tick loop with a 16 ms tick;
 - rule instances, Ongoing edge triggering, Wait rounded up to ticks;
@@ -72,7 +72,7 @@ The simulator makes these choices only to stay deterministic; each needs a probe
   - `Has Spawned` and `Is Alive` of a scenario player with a `hero` are true from tick 0; respawn and death dynamics are not modeled. A player without a `hero` stops the run as `not_modeled`.
   - `Host Player` returns the scenario player marked `"host": true`, a rule the project owner decided; the first player is not an implicit host. Without a marked player the run stops as `not_modeled`; two marked players fail the load.
   - `Wait Until(condition, timeout)` re-checks the condition on every tick after the one it starts on, and continues on the first tick it holds; P4 measures only constant conditions. `Wait Until(false, 0)` is `not_modeled`.
-  - `Abort When False` and `Restart When True` apply only in rules with a `Global` event; in an event-triggered rule they stop the run as `not_modeled`. A restart reruns the rule from its first action (P6: `nRestart` counts both starts). When a wake and a behavior trigger fall on one tick, the wake wins.
+  - `Wait Until`, `Abort When False` and `Restart When True` apply only in rules with a `Global` event; in an event-triggered rule they stop the run as `not_modeled`. A restart reruns the rule from its first action (P6: `nRestart` counts both starts). When a wake and a behavior trigger fall on one tick, the wake wins.
 - HUD recipient groups resolve from the declared `team`s: a player without a `team` is in `All Teams` but in no `Team 1`/`Team 2`, and a `Null` `Visible To` resolves to no recipients.
 - `Last Text ID` yields the `id` of the newest element a destroy action can target (`hudText`, `progressBarHud`) or `null`; a destroy affects only its own kind and ignores an unknown, already-destroyed or `null` id.
 - A new `setObjectiveDescription` replaces earlier objective descriptions per recipient; an element left with no recipient gets `destroyedTick`.
