@@ -1,15 +1,49 @@
 {
   "probe": "p3-same-tick-rule-order",
   "client": {
-    "version": "2.25.0.0 - 154461.1",
-    "date": "2026-10-19",
+    "version": "2.25.0.1 - 154504.1",
+    "date": "2026-10-25",
     "locale": "zh-CN"
   },
-  "runs": 0,
+  "runs": 1,
   "probe_sha256": "4f44ca68b56a968434cdefb919c2923a7784fd87c5612e78a671803779fa720e",
   "hypothesis": "rules whose conditions become true on the same tick run in file order; the second batch logs D1, D3, D2",
-  "observed": [],
+  "observed": [
+    {
+      "run": 1,
+      "first_batch": [
+        {
+          "rule": "A",
+          "t_ms": 0
+        },
+        {
+          "rule": "B",
+          "t_ms": 0
+        },
+        {
+          "rule": "C",
+          "t_ms": 0
+        }
+      ],
+      "second_batch": [
+        {
+          "rule": "D1",
+          "t_ms": 1008
+        },
+        {
+          "rule": "D3",
+          "t_ms": 1024
+        },
+        {
+          "rule": "D2",
+          "t_ms": 1040
+        }
+      ]
+    }
+  ],
   "result": "inconclusive",
-  "notes": "previously match at sha 43b747117552d118d8178235a072cb8315e84b79179d907a548df51c773fe8d9; captures moved to stale/ after the end line became the unique token P3a done",
-  "sources": []
+  "notes": "previously match at sha 43b747117552d118d8178235a072cb8315e84b79179d907a548df51c773fe8d9; captures moved to stale/ after the end line became the unique token P3a done; Client version read from the options menu. Original log transferred with UU file transfer; ASCII bytes (valid UTF-8), no BOM, LF. Slow Motion setting was not independently confirmed for the trial. [ingest: provisional, 1/3 runs agree]",
+  "sources": [
+    "Log-2026-10-25-14-52-21.txt"
+  ]
 }
