@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/wrightkit/athena/compare/v0.3.0...v0.4.0) (2026-10-25)
+
+
+### Features
+
+* **sim:** simulate Wait Until, Wait Behavior and spawn state (layer 3) ([1d06477](https://github.com/wrightkit/athena/commit/1d06477a92e83de0a415eca54644bbc1419e0bfc)), closes [#42](https://github.com/wrightkit/athena/issues/42)
+
+
+### Bug Fixes
+
+* **probes:** make P7 importable and wait for spawn ([1263c9c](https://github.com/wrightkit/athena/commit/1263c9c5286ba40f08ced2a46cbedec4f44b90b7)), closes [#30](https://github.com/wrightkit/athena/issues/30) [#42](https://github.com/wrightkit/athena/issues/42)
+
 ## [0.3.0](https://github.com/wrightkit/athena/compare/v0.2.0...v0.3.0) (2026-10-25)
 
 
