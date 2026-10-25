@@ -263,6 +263,26 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 None => unsupported("Host Player: the scenario marks no host player"),
             }
         }
+        // Modeled, not measured: the simulator runs one lobby whose settings
+        // nobody edits, so a Workshop Setting yields its declared `default`
+        // argument. `min`/`max`, `options` and `sortOrder` are authoring
+        // metadata the running rules never see; the scenario format has no
+        // settings overrides.
+        "createWorkshopSettingFloat"
+        | "workshopSettingInteger"
+        | "workshopSettingToggle"
+        | "workshopSettingCombo"
+        | "createWorkshopSettingHero" => {
+            let [_, _, default, ..] = args else {
+                return unsupported(format!("{name} with {} arguments", args.len()));
+            };
+            match default {
+                // A hero setting's default is a `Hero` literal; it yields the
+                // catalog member id as text, as `Hero Of` yields the hero name.
+                Value::Enum { value, .. } => Ok(Val::Text(value.clone())),
+                _ => eval(default, env),
+            }
+        }
         // Modeled, not measured: a player with a hero is spawned and alive.
         "hasSpawned" | "isAlive" => {
             let [player] = arguments::<1>(name, args)?;

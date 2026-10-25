@@ -68,6 +68,10 @@ The `team` and player (`target`) filters of a rule event resolve against the sce
 - An `Ongoing - Each Player` rule becomes one instance per matching scenario player, ordered by scenario `id`. Each instance binds `Event Player` to its player — also inside a subroutine it calls — and has its own condition edge, `Wait`/`Wait Until` and wait-behavior state. A filter matching nobody yields no instance: the rule never fires and is not an error.
 - A player event rule (`Player Died`, `Player Joined Match`, …) runs for an injected event only when the event's `eventPlayer` satisfies the filters. An event that names no `eventPlayer` satisfies only `All`/`All`; evaluating a filtered rule against it is a `missing_input` of kind `eventPlayer`.
 
+### Workshop settings
+
+A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` — evaluates to its declared `default` argument: the simulator runs one lobby and no player edits settings. `min`/`max`, `options` and `sortOrder` are authoring metadata the running rules never see. A `Hero` setting yields its `Hero` literal's catalog member id as text, as `Hero Of` yields the hero name. The scenario format has no place for setting overrides, so a run always sees the authored defaults.
+
 ### HUD elements
 
 The first HUD layer models `createHudText`, `progressBarHud`, `bigMessage`, `smallMessage`, `setObjectiveDescription`, the destroy actions `destroyHudText`, `destroyAllHudText`, `destroyProgressBarHud` and `destroyAllProgressBarHudText`, and `enableMessages`/`disableMessages`. Any other HUD-related action or value stops the run as `not_modeled`, like any unmodeled construct.
