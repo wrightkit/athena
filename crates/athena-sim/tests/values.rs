@@ -236,6 +236,31 @@ fn evaluate_once_evaluates_its_operand() {
     assert_eq!(global(&trace), &Val::Null);
 }
 
+/// Inside an element-context operand the operand site is re-read once
+/// per element, so `Evaluate Once` does not pin there; the run stops.
+#[test]
+fn evaluate_once_inside_an_element_context_is_not_modeled() {
+    for value in [
+        "Filtered Array(Array(1, 2), Compare(Evaluate Once(Current Array Element), >, 1))",
+        "Sorted Array(Array(1, 2), Evaluate Once(Current Array Index))",
+        "Is True For All(Array(1, 2), Evaluate Once(True))",
+        "Is True For Any(Array(1, 2, 3), Compare(Evaluate Once(Current Array Index), ==, 2))",
+        // The element context reaches through an operand's own values.
+        "Is True For Any(Array(1), Is True For Any(Array(2), Evaluate Once(True)))",
+    ] {
+        let trace = run(&set_global(value));
+        let Outcome::NotModeled(stop) = &trace.outcome else {
+            panic!("{value}: {:?}", trace.outcome);
+        };
+        assert!(
+            stop.construct
+                .contains("evaluateOnce inside an element context"),
+            "{value}: {}",
+            stop.construct
+        );
+    }
+}
+
 #[test]
 fn filtered_array_keeps_the_elements_the_condition_holds_for() {
     let trace = run(&set_global(

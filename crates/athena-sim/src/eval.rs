@@ -459,10 +459,16 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 other => unsupported(format!("valueInArray on {other:?}")),
             }
         }
-        // `Evaluate Once` pins its operand against re-evaluation; the
-        // simulator never re-reads a value site, so a plain read is the
-        // whole model.
+        // `Evaluate Once` pins its operand against re-evaluation. Outside
+        // an element context the simulator never re-reads a value site,
+        // so a plain read is the whole model. Inside an element-context
+        // operand the site is re-read once per element with `Current
+        // Array Element`/`Current Array Index` rebound; whether the
+        // client's pin survives that is unmeasured, so it stops.
         "evaluateOnce" => {
+            if env.element.is_some() {
+                return unsupported("evaluateOnce inside an element context");
+            }
             let [value] = arguments::<1>(name, args)?;
             eval(value, env)
         }
