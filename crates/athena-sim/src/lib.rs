@@ -293,7 +293,8 @@ pub enum RunEnd {
     /// `Wait Until`, whose condition can resume it earlier.
     Waiting { wake: u64 },
     /// It was killed: by the run's stop (`not_modeled`, `missing_input`,
-    /// the step limit) or by an `Abort When False` wait going false.
+    /// the step limit), by an `Abort When False` wait going false, or by
+    /// an `Abort`/`Abort If` action.
     Aborted,
 }
 

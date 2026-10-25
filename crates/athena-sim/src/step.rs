@@ -449,24 +449,22 @@ pub(crate) fn run_instance(
                     }
                 }
                 "skip" | "skipIf" => {
-                    let count = match args.as_slice() {
-                        [count] if name == "skip" => Some(count),
+                    let (fire, count) = match args.as_slice() {
+                        [count] if name == "skip" => (true, count),
                         [condition, count] if name == "skipIf" => {
-                            if flag(eval(condition, &env)?)? {
-                                Some(count)
-                            } else {
-                                None
-                            }
+                            (flag(eval(condition, &env)?)?, count)
                         }
                         _ => return unsupported(format!("{name} arguments")),
                     };
+                    // The client reads action arguments left to right, so a
+                    // `Skip If` count that cannot be evaluated stops the run
+                    // even when the condition is false.
+                    let count = skip_count(&eval(count, &env)?)?;
                     // A skip is positional: it can land inside a block the
                     // jump never entered, and the actions there run raw.
+                    let skip = if fire { count.saturating_add(1) } else { 1 };
                     let frame = inst.frames.last_mut().expect("a running frame");
-                    frame.pc = frame.pc.saturating_add(match count {
-                        Some(count) => skip_count(&eval(count, &env)?)?.saturating_add(1),
-                        None => 1,
-                    });
+                    frame.pc = frame.pc.saturating_add(skip);
                 }
                 "loop" | "loopIf" | "loopIfConditionIsTrue" | "__loopIfConditionIsFalse__" => {
                     let again = match name.as_str() {

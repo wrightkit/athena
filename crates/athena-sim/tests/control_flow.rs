@@ -109,6 +109,25 @@ rule ("t") {
     assert_eq!(trace.globals["c"], Val::Number(3.0));
 }
 
+/// The client reads a `Skip If` count even when the condition is false,
+/// so a count the run cannot evaluate stops it instead of being swallowed.
+#[test]
+fn skip_if_reads_its_count_when_the_condition_is_false() {
+    let text = r#"
+rule ("t") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Skip If(False, Event Damage);
+        Abort;
+    }
+}
+"#;
+    let trace = run(text);
+    assert_eq!(trace.outcome, Outcome::MissingInput);
+}
+
 /// A skip that lands inside an `If` body the jump never entered runs the
 /// actions there raw: the skip is positional, not structural.
 #[test]
