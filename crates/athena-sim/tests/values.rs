@@ -261,6 +261,163 @@ fn evaluate_once_inside_an_element_context_is_not_modeled() {
     }
 }
 
+/// The pin scope is one rule-instance run: a `For`/`While` body
+/// re-reads the site every iteration and gets the first read back.
+#[test]
+fn evaluate_once_pins_within_a_run_across_loop_iterations() {
+    let trace = run(r#"
+variables {
+    global:
+        0: g
+        1: i
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        For Global Variable(i, 0, 3, 1);
+            Set Global Variable(g, Evaluate Once(Global.i));
+        End;
+    }
+}
+"#);
+    assert_eq!(global(&trace), &Val::Number(0.0));
+
+    let trace = run(r#"
+variables {
+    global:
+        0: g
+        1: i
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Global Variable(i, 0);
+        While(Compare(Global.i, <, 3));
+            Set Global Variable(g, Evaluate Once(Global.i));
+            Modify Global Variable(i, Add, 1);
+        End;
+    }
+}
+"#);
+    assert_eq!(global(&trace), &Val::Number(0.0));
+}
+
+/// The pin clears when the instance's next run starts, so a rule that
+/// fires again re-reads the site.
+#[test]
+fn evaluate_once_repins_when_the_rule_fires_again() {
+    let trace = run(r#"
+variables {
+    global:
+        0: g
+        1: c
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    conditions {
+        Compare(Global.c, >, 0);
+    }
+    actions {
+        Set Global Variable(g, Evaluate Once(Global.c));
+        Set Global Variable(c, 0);
+    }
+}
+
+rule ("bump") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait(0.2, Abort When False);
+        Set Global Variable(c, 1);
+        Wait(0.2, Abort When False);
+        Set Global Variable(c, 2);
+    }
+}
+"#);
+    assert_eq!(global(&trace), &Val::Number(2.0));
+}
+
+/// A rule-condition check is its own scope: the site re-reads every
+/// pass, so a condition can edge when the pinned variable changes.
+#[test]
+fn evaluate_once_in_a_rule_condition_repins_each_check() {
+    let trace = run(r#"
+variables {
+    global:
+        0: g
+        1: n
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    conditions {
+        Evaluate Once(Global.n) == 5;
+    }
+    actions {
+        Set Global Variable(g, 1);
+    }
+}
+
+rule ("bump") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait(0.2, Abort When False);
+        Set Global Variable(n, 5);
+    }
+}
+"#);
+    assert_eq!(global(&trace), &Val::Number(1.0));
+}
+
+/// A `Wait Until` call is one scope: its per-tick re-checks read the
+/// first check's pin, so the wait never releases here.
+#[test]
+fn evaluate_once_in_wait_until_pins_across_its_rechecks() {
+    let trace = run(r#"
+variables {
+    global:
+        0: g
+        1: n
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait Until(Evaluate Once(Global.n) == 5, 999);
+        Set Global Variable(g, 1);
+    }
+}
+
+rule ("bump") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait(0.2, Abort When False);
+        Set Global Variable(n, 5);
+    }
+}
+"#);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["g"], Val::Null);
+}
+
 #[test]
 fn filtered_array_keeps_the_elements_the_condition_holds_for() {
     let trace = run(&set_global(

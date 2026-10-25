@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use workshop_rs::Value;
@@ -21,6 +22,12 @@ pub(crate) struct Env<'a> {
     /// read; an element-context array value binds it per element of its
     /// array argument. `None` outside one.
     pub element: Option<(&'a Val, u64)>,
+    /// The `Evaluate Once` pins of the scope this env belongs to, keyed
+    /// by the value's site in the parsed program. A rule-instance run
+    /// shares its table for the whole run, a rule-condition check gets
+    /// a fresh table per pass, and one `Wait Until` call shares a table
+    /// across its per-tick re-checks.
+    pub once: &'a RefCell<BTreeMap<usize, Val>>,
     pub now: f64,
 }
 
@@ -247,6 +254,27 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
                 "value eventPlayer",
             ),
         },
+        // `Evaluate Once` pins its operand's first read for the rest of
+        // the env's scope, keyed by the site: a `For`/`While`/`Loop`
+        // body, a restarted frame or a `Wait Until` re-check reads the
+        // site again and gets the pin, while each rule-condition check
+        // is a fresh scope. Inside an element-context operand the site
+        // is re-read once per element with `Current Array Element`/
+        // `Current Array Index` rebound; whether the client's pin
+        // survives that is unmeasured, so it stops.
+        Value::Call { name, args } if name == "evaluateOnce" => {
+            if env.element.is_some() {
+                return unsupported("evaluateOnce inside an element context");
+            }
+            let [operand] = arguments::<1>(name, args)?;
+            let site = value as *const Value as usize;
+            if let Some(pinned) = env.once.borrow().get(&site) {
+                return Ok(pinned.clone());
+            }
+            let pinned = eval(operand, env)?;
+            env.once.borrow_mut().insert(site, pinned.clone());
+            Ok(pinned)
+        }
         Value::Call { name, args } => call(name, args, env),
         other => unsupported(format!("value {other:?}")),
     }
@@ -458,19 +486,6 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 Val::Array(_) => Ok(Val::Null),
                 other => unsupported(format!("valueInArray on {other:?}")),
             }
-        }
-        // `Evaluate Once` pins its operand against re-evaluation. Outside
-        // an element context the simulator never re-reads a value site,
-        // so a plain read is the whole model. Inside an element-context
-        // operand the site is re-read once per element with `Current
-        // Array Element`/`Current Array Index` rebound; whether the
-        // client's pin survives that is unmeasured, so it stops.
-        "evaluateOnce" => {
-            if env.element.is_some() {
-                return unsupported("evaluateOnce inside an element context");
-            }
-            let [value] = arguments::<1>(name, args)?;
-            eval(value, env)
         }
         "currentArrayElement" | "currentArrayIndex" => {
             let [] = arguments::<0>(name, args)?;

@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use workshop_rs::hero_values::HeroValues;
@@ -329,6 +330,9 @@ fn run_tick(
                 // (P2). An `Ongoing - Each Player` instance runs this same
                 // ongoing logic with `Event Player` bound to its player.
                 let each_player = instance.each_player.clone();
+                // One condition check is a pass: `Evaluate Once` sites
+                // in the conditions re-pin every check.
+                let pass = RefCell::new(BTreeMap::new());
                 let env = Env {
                     globals: &world.globals,
                     players: &world.players,
@@ -336,6 +340,7 @@ fn run_tick(
                     each_player: each_player.as_deref(),
                     last_text_id: world.hud.last_text_id,
                     element: None,
+                    once: &pass,
                     now,
                 };
                 let holds = conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))?;
@@ -361,6 +366,10 @@ fn run_tick(
                         }
                         WaitMode::RestartWhenTrue => {
                             if edge {
+                                // A restart is a new run: the
+                                // `Evaluate Once` pins of the old one
+                                // die with it.
+                                instance.once.get_mut().clear();
                                 instance.frames.clear();
                                 instance.frames.push(Frame {
                                     rule_idx: instance.rule_idx,
@@ -370,7 +379,13 @@ fn run_tick(
                             }
                         }
                         WaitMode::Until(frame) => {
-                            if until_holds(rule_list, frame, &env).map_err(|e| e.at(tick))? {
+                            // The re-check shares the pins the `Wait
+                            // Until` call's first check made.
+                            let until_env = Env {
+                                once: &instance.until_once,
+                                ..env
+                            };
+                            if until_holds(rule_list, frame, &until_env).map_err(|e| e.at(tick))? {
                                 instance.wake = Some(tick);
                             }
                         }
@@ -381,6 +396,9 @@ fn run_tick(
                     Some(_) => false,
                     None => {
                         if edge && instance.frames.is_empty() {
+                            // A new run gets fresh `Evaluate Once`
+                            // pins.
+                            instance.once.get_mut().clear();
                             instance.frames.push(Frame {
                                 rule_idx: instance.rule_idx,
                                 pc: 0,
@@ -407,6 +425,9 @@ fn run_tick(
                         break;
                     };
                     instance.event = Some(ctx);
+                    // Each pending event's condition check is its own
+                    // `Evaluate Once` pass.
+                    let pass = RefCell::new(BTreeMap::new());
                     let env = Env {
                         globals: &world.globals,
                         players: &world.players,
@@ -414,9 +435,11 @@ fn run_tick(
                         each_player: None,
                         last_text_id: world.hud.last_text_id,
                         element: None,
+                        once: &pass,
                         now,
                     };
                     if conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))? {
+                        instance.once.get_mut().clear();
                         instance.frames.push(Frame {
                             rule_idx: instance.rule_idx,
                             pc: 0,

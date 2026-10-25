@@ -3,6 +3,7 @@
 //! the `World` it reads and writes, recording the state changes in
 //! `world.changes` for the tick's timeline entry.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use workshop_rs::{Action, Rule, Value};
@@ -150,6 +151,7 @@ pub(crate) fn run_instance(
             each_player: inst.each_player.as_deref(),
             last_text_id: world.hud.last_text_id,
             element: None,
+            once: &inst.once,
             now,
         };
         match action {
@@ -472,8 +474,17 @@ pub(crate) fn run_instance(
                             };
                             flag(eval(condition, &env)?)?
                         }
-                        "loopIfConditionIsTrue" => conditions_hold(rule, &env)?,
-                        _ => !conditions_hold(rule, &env)?,
+                        "loopIfConditionIsTrue" => {
+                            // A condition re-check is its own
+                            // `Evaluate Once` scope, like the
+                            // scheduler's per-tick check.
+                            let pass = RefCell::new(BTreeMap::new());
+                            conditions_hold(rule, &Env { once: &pass, ..env })?
+                        }
+                        _ => {
+                            let pass = RefCell::new(BTreeMap::new());
+                            !conditions_hold(rule, &Env { once: &pass, ..env })?
+                        }
                     };
                     // The restarts jump to the head of the action list the
                     // frame executes — inside a `Call Subroutine`, the
@@ -538,8 +549,17 @@ pub(crate) fn run_instance(
                     if inst.event.is_some() {
                         return unsupported("Wait Until in an event-triggered rule");
                     }
+                    // One `Wait Until` call is an `Evaluate Once`
+                    // scope: the per-tick re-checks the scheduler runs
+                    // while the run is suspended share this first
+                    // check's pins.
+                    inst.until_once.get_mut().clear();
+                    let until_env = Env {
+                        once: &inst.until_once,
+                        ..env
+                    };
                     // A true condition continues in the same tick (P4).
-                    if flag(eval(condition, &env)?)? {
+                    if flag(eval(condition, &until_env)?)? {
                         advance(inst);
                         continue;
                     }
