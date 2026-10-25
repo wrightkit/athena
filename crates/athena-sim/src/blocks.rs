@@ -16,6 +16,9 @@ pub(crate) struct Blocks {
     pub next_clause: Vec<Option<usize>>,
     /// `ElseIf`/`Else` → the `End` of the chain, where fall-through exits.
     pub chain_end: Vec<Option<usize>>,
+    /// The innermost `While`/`For` head each action sits inside; `Break`
+    /// lands past its `End`, `Continue` lands on it.
+    pub enclosing: Vec<Option<usize>>,
 }
 
 /// A block that stays open until its `End` line.
@@ -32,8 +35,13 @@ pub(crate) fn block_maps(actions: &[Action]) -> Result<Blocks, Stop> {
     let mut pairs = vec![None; actions.len()];
     let mut next_clause = vec![None; actions.len()];
     let mut chain_end = vec![None; actions.len()];
+    let mut enclosing = vec![None; actions.len()];
     let mut stack: Vec<Open> = Vec::new();
     for (index, action) in actions.iter().enumerate() {
+        enclosing[index] = stack.iter().rev().find_map(|open| match open {
+            Open::While(open) | Open::For(open) => Some(*open),
+            Open::If { .. } => None,
+        });
         match action {
             Action::While { .. } => stack.push(Open::While(index)),
             Action::ForGlobalVariable { .. } | Action::ForPlayerVariable { .. } => {
@@ -80,6 +88,7 @@ pub(crate) fn block_maps(actions: &[Action]) -> Result<Blocks, Stop> {
             pairs,
             next_clause,
             chain_end,
+            enclosing,
         }),
     }
 }

@@ -9,7 +9,7 @@ use crate::hud::Hud;
 use crate::load::{Frame, Instance, Loaded, WaitMode, load, player_matches};
 use crate::scenario::{EventCtx, Expectation, Scenario};
 use crate::state::{self, WorldSlot};
-use crate::step::{World, flag, run_instance};
+use crate::step::{World, conditions_hold, flag, run_instance};
 use crate::{
     ExpectationResult, ExpectationStatus, MissingInput, MissingInputKind, NotModeled, Options,
     Outcome, PlayerState, RuleRun, RunEnd, Stop, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT,
@@ -21,19 +21,6 @@ const TICK_S: f64 = 0.016;
 /// `Total Time Elapsed` on the first tick. After `Wait(3)` (188 ticks) every
 /// capture reads t0 = 3.023.
 const START_OFFSET_S: f64 = 0.015;
-
-fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, Stop> {
-    for condition in rule
-        .conditions
-        .iter()
-        .filter(|condition| !condition.disabled)
-    {
-        if !flag(eval(&condition.value, env)?)? {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
 
 /// The condition of the `Wait Until` action the frame points at.
 fn until_holds(rules: &[&Rule], frame: Frame, env: &Env) -> Result<bool, Stop> {
@@ -208,9 +195,12 @@ fn run_and_record(
     tick: u64,
     now: f64,
 ) -> Result<(), Stop> {
+    // A flag left by an earlier `Abort` would mislabel the next run.
+    inst.aborted = false;
     let result = run_instance(inst, rule_list, blocks, subroutines, world, tick, now);
     let ended = match &result {
         Err(_) => RunEnd::Aborted,
+        Ok(()) if inst.aborted => RunEnd::Aborted,
         Ok(()) => match inst.wake {
             Some(wake) => RunEnd::Waiting { wake },
             None => RunEnd::Finished,

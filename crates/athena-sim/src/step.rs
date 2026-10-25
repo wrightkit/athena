@@ -90,6 +90,34 @@ pub(crate) fn flag(value: Val) -> Result<bool, Stop> {
     }
 }
 
+/// Whether a rule's enabled conditions all hold under `env`, evaluated in
+/// order. `Loop If Condition Is True`/`False` re-check this mid-run, the
+/// same way the scheduler checks it for the run start.
+pub(crate) fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, Stop> {
+    for condition in rule
+        .conditions
+        .iter()
+        .filter(|condition| !condition.disabled)
+    {
+        if !flag(eval(&condition.value, env)?)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// The `Number|Boolean` count argument of `Skip`/`Skip If`: `True` counts
+/// one action, `False` and `Null` count none, a negative count skips
+/// nothing.
+fn skip_count(value: &Val) -> Result<usize, Stop> {
+    match value {
+        Val::Number(n) => Ok(n.max(0.0) as usize),
+        Val::Bool(b) => Ok(*b as usize),
+        Val::Null => Ok(0),
+        other => unsupported(format!("skip count {other:?}")),
+    }
+}
+
 /// The step at which `pc` moves past the frame's last action.
 fn advance(inst: &mut Instance<'_>) {
     inst.frames.last_mut().expect("a running frame").pc += 1;
@@ -395,6 +423,87 @@ pub(crate) fn run_instance(
                 });
             }
             Action::Call { name, args } => match name.as_str() {
+                "abort" | "abortIf" => {
+                    let fire = match name.as_str() {
+                        "abort" => {
+                            let [] = args.as_slice() else {
+                                return unsupported("abort arguments");
+                            };
+                            true
+                        }
+                        _ => {
+                            let [condition] = args.as_slice() else {
+                                return unsupported("abortIf arguments");
+                            };
+                            flag(eval(condition, &env)?)?
+                        }
+                    };
+                    // `Abort` kills the whole run, subroutine frames
+                    // included; the run records `aborted`, not `finished`.
+                    if fire {
+                        inst.frames.clear();
+                        inst.clause_jump = None;
+                        inst.aborted = true;
+                    } else {
+                        advance(inst);
+                    }
+                }
+                "skip" | "skipIf" => {
+                    let count = match args.as_slice() {
+                        [count] if name == "skip" => Some(count),
+                        [condition, count] if name == "skipIf" => {
+                            if flag(eval(condition, &env)?)? {
+                                Some(count)
+                            } else {
+                                None
+                            }
+                        }
+                        _ => return unsupported(format!("{name} arguments")),
+                    };
+                    // A skip is positional: it can land inside a block the
+                    // jump never entered, and the actions there run raw.
+                    let frame = inst.frames.last_mut().expect("a running frame");
+                    frame.pc = frame.pc.saturating_add(match count {
+                        Some(count) => skip_count(&eval(count, &env)?)?.saturating_add(1),
+                        None => 1,
+                    });
+                }
+                "loop" | "loopIf" | "loopIfConditionIsTrue" | "__loopIfConditionIsFalse__" => {
+                    let again = match name.as_str() {
+                        "loop" => {
+                            let [] = args.as_slice() else {
+                                return unsupported("loop arguments");
+                            };
+                            true
+                        }
+                        "loopIf" => {
+                            let [condition] = args.as_slice() else {
+                                return unsupported("loopIf arguments");
+                            };
+                            flag(eval(condition, &env)?)?
+                        }
+                        "loopIfConditionIsTrue" => conditions_hold(rule, &env)?,
+                        _ => !conditions_hold(rule, &env)?,
+                    };
+                    // The restarts jump to the head of the action list the
+                    // frame executes — inside a `Call Subroutine`, the
+                    // subroutine's own.
+                    inst.frames.last_mut().expect("a running frame").pc =
+                        if again { 0 } else { pc + 1 };
+                }
+                "break" | "continue" => {
+                    let [] = args.as_slice() else {
+                        return unsupported(format!("{name} arguments"));
+                    };
+                    let Some(open) = map.enclosing[pc] else {
+                        return unsupported(format!("{name} outside a loop"));
+                    };
+                    let end = map.pairs[open].expect("paired at load");
+                    // `Continue` lands on the `End`, which steps a `For` or
+                    // re-enters a `While` head; `Break` lands past it.
+                    inst.frames.last_mut().expect("a running frame").pc =
+                        if name == "break" { end + 1 } else { end };
+                }
                 "logToInspector" => {
                     let [message] = args.as_slice() else {
                         return unsupported("logToInspector arguments");
