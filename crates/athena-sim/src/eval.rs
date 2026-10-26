@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use workshop_rs::Value;
@@ -17,6 +18,16 @@ pub(crate) struct Env<'a> {
     /// The `id` of the newest `hudText`/`progressBarHud` element; what
     /// `Last Text ID` reads. `None` before the first one is created.
     pub last_text_id: Option<u64>,
+    /// The element and place `Current Array Element`/`Current Array Index`
+    /// read; an element-context array value binds it per element of its
+    /// array argument. `None` outside one.
+    pub element: Option<(&'a Val, u64)>,
+    /// The `Evaluate Once` pins of the scope this env belongs to, keyed
+    /// by the value's site in the parsed program. A rule-instance run
+    /// shares its table for the whole run, a rule-condition check gets
+    /// a fresh table per pass, and one `Wait Until` call shares a table
+    /// across its per-tick re-checks.
+    pub once: &'a RefCell<BTreeMap<usize, Val>>,
     pub now: f64,
 }
 
@@ -191,6 +202,15 @@ fn render(value: &Val) -> Result<String, Stop> {
     }
 }
 
+/// The `Env` an element-context array value's per-element operand sees:
+/// the caller's `env` with `element` bound to the element and its index.
+fn element_env<'a>(env: &Env<'a>, element: &'a Val, index: usize) -> Env<'a> {
+    Env {
+        element: Some((element, index as u64)),
+        ..*env
+    }
+}
+
 fn arguments<'a, const N: usize>(name: &str, args: &'a [Value]) -> Result<&'a [Value; N], Stop> {
     args.try_into()
         .or_else(|_| unsupported(format!("{name} with {} arguments", args.len())))
@@ -234,6 +254,27 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
                 "value eventPlayer",
             ),
         },
+        // `Evaluate Once` pins its operand's first read for the rest of
+        // the env's scope, keyed by the site: a `For`/`While`/`Loop`
+        // body, a restarted frame or a `Wait Until` re-check reads the
+        // site again and gets the pin, while each rule-condition check
+        // is a fresh scope. Inside an element-context operand the site
+        // is re-read once per element with `Current Array Element`/
+        // `Current Array Index` rebound; whether the client's pin
+        // survives that is unmeasured, so it stops.
+        Value::Call { name, args } if name == "evaluateOnce" => {
+            if env.element.is_some() {
+                return unsupported("evaluateOnce inside an element context");
+            }
+            let [operand] = arguments::<1>(name, args)?;
+            let site = value as *const Value as usize;
+            if let Some(pinned) = env.once.borrow().get(&site) {
+                return Ok(pinned.clone());
+            }
+            let pinned = eval(operand, env)?;
+            env.once.borrow_mut().insert(site, pinned.clone());
+            Ok(pinned)
+        }
         Value::Call { name, args } => call(name, args, env),
         other => unsupported(format!("value {other:?}")),
     }
@@ -444,6 +485,59 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 }
                 Val::Array(_) => Ok(Val::Null),
                 other => unsupported(format!("valueInArray on {other:?}")),
+            }
+        }
+        "currentArrayElement" | "currentArrayIndex" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.element {
+                Some((element, index)) => Ok(if name == "currentArrayElement" {
+                    element.clone()
+                } else {
+                    Val::Number(index as f64)
+                }),
+                None => unsupported(format!("{name} outside an element context")),
+            }
+        }
+        // The element-context array values read the array once, then the
+        // operand once per element with `Current Array Element`/`Current
+        // Array Index` bound. `Null` reads as the empty array.
+        "filteredArray" | "sortedArray" | "isTrueForAll" | "isTrueForAny" => {
+            let [array, operand] = arguments::<2>(name, args)?;
+            let items = items(eval(array, env)?, name)?;
+            match name {
+                "filteredArray" => {
+                    let mut kept = Vec::new();
+                    for (index, item) in items.iter().enumerate() {
+                        if truthy(&eval(operand, &element_env(env, item, index))?)? {
+                            kept.push(item.clone());
+                        }
+                    }
+                    Ok(Val::Array(kept))
+                }
+                "sortedArray" => {
+                    let mut keyed = Vec::with_capacity(items.len());
+                    for (index, item) in items.iter().enumerate() {
+                        let key = number(&eval(operand, &element_env(env, item, index))?)?;
+                        keyed.push((key, item));
+                    }
+                    // Ascending by the key; an equal key keeps the
+                    // element's place.
+                    keyed.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+                    Ok(Val::Array(
+                        keyed.into_iter().map(|(_, item)| item.clone()).collect(),
+                    ))
+                }
+                // `Is True For All`/`Any` stop at the element that decides
+                // them: the first false, the first true.
+                _ => {
+                    let want = name == "isTrueForAny";
+                    for (index, item) in items.iter().enumerate() {
+                        if truthy(&eval(operand, &element_env(env, item, index))?)? == want {
+                            return Ok(Val::Bool(want));
+                        }
+                    }
+                    Ok(Val::Bool(!want))
+                }
             }
         }
         "getHero" | "teamOf" => {

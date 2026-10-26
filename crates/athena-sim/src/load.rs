@@ -2,13 +2,14 @@
 //! scenario player for `Ongoing - Each Player` — with their block maps and
 //! the subroutine table.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 
 use workshop_rs::{Event, EventTarget, EventTeam, Program, Rule};
 
 use crate::blocks::{Blocks, block_maps};
 use crate::scenario::{EventCtx, Player, Team};
-use crate::{NotModeled, Stop};
+use crate::{NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
     Err(Stop::NotModeled(NotModeled::new(what)))
@@ -57,6 +58,16 @@ pub(crate) struct Instance<'a> {
     /// An `Abort`/`Abort If` ended the run in progress; the timeline
     /// records it `aborted` rather than `finished`.
     pub aborted: bool,
+    /// `Evaluate Once` pins of the run in progress, keyed by the value's
+    /// site in the parsed program: a `For`/`While`/`Loop` body or a
+    /// `Loop`-restarted frame re-reads the site and gets the pin, and a
+    /// `Wait` suspension keeps the pins for the resumed run. Cleared
+    /// when a run of this instance starts or restarts.
+    pub once: RefCell<BTreeMap<usize, Val>>,
+    /// `Evaluate Once` pins of the `Wait Until` in progress: one call's
+    /// per-tick condition re-checks share them and reaching the action
+    /// again clears them.
+    pub until_once: RefCell<BTreeMap<usize, Val>>,
 }
 
 pub(crate) struct Loaded<'a> {
@@ -148,6 +159,8 @@ pub(crate) fn load<'a>(
                 event: None,
                 clause_jump: None,
                 aborted: false,
+                once: RefCell::new(BTreeMap::new()),
+                until_once: RefCell::new(BTreeMap::new()),
             });
         }
     }

@@ -3,14 +3,16 @@
 //! the `World` it reads and writes, recording the state changes in
 //! `world.changes` for the tick's timeline entry.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use workshop_rs::{Action, ModifyOp, Rule, Value};
+use workshop_rs::{Action, Rule, Value};
 
 use crate::blocks::Blocks;
-use crate::eval::{Env, button_slot, eval, number, player_id, player_ids, values_equal};
+use crate::eval::{Env, button_slot, eval, number, player_id, player_ids};
 use crate::hud::Hud;
 use crate::load::{Frame, Instance, WaitMode};
+use crate::modify::{apply_modify, modify_at, modify_op, set_at};
 use crate::scenario::Player;
 use crate::state::{self, WorldSlot};
 use crate::{Change, LogEntry, NotModeled, PlayerWorld, RuleRun, Stop, Timeline, Val};
@@ -118,117 +120,6 @@ fn skip_count(value: &Val) -> Result<usize, Stop> {
     }
 }
 
-/// The array a `Modify` array operation reads: an array as itself, `Null`
-/// as the empty array. Anything else is not an array.
-fn array_operand(value: Val) -> Result<Vec<Val>, Stop> {
-    match value {
-        Val::Array(items) => Ok(items),
-        Val::Null => Ok(Vec::new()),
-        other => unsupported(format!("array modify on {other:?}")),
-    }
-}
-
-/// The value a `Modify` operation writes from the variable's `old` value
-/// and the evaluated `operand`: the arithmetic and `Min`/`Max`/`Raise To
-/// Power` operations read both as numbers; the array operations keep
-/// `operand` whole. `Remove From Array By Value` drops every element equal
-/// to `operand`.
-fn apply_modify(old: Val, op: &ModifyOp, operand: Val) -> Result<Val, Stop> {
-    Ok(match op {
-        ModifyOp::Add => Val::Number(number(&old)? + number(&operand)?),
-        ModifyOp::Subtract => Val::Number(number(&old)? - number(&operand)?),
-        ModifyOp::Multiply => Val::Number(number(&old)? * number(&operand)?),
-        ModifyOp::Divide => Val::Number(number(&old)? / number(&operand)?),
-        ModifyOp::Modulo => Val::Number(number(&old)? % number(&operand)?),
-        ModifyOp::Min => Val::Number(number(&old)?.min(number(&operand)?)),
-        ModifyOp::Max => Val::Number(number(&old)?.max(number(&operand)?)),
-        ModifyOp::RaiseToPower => Val::Number(number(&old)?.powf(number(&operand)?)),
-        ModifyOp::AppendToArray => {
-            let mut items = array_operand(old)?;
-            items.push(operand);
-            Val::Array(items)
-        }
-        ModifyOp::RemoveFromArrayByValue => {
-            let mut kept = Vec::new();
-            for item in array_operand(old)? {
-                if !values_equal(&item, &operand)? {
-                    kept.push(item);
-                }
-            }
-            Val::Array(kept)
-        }
-        ModifyOp::RemoveFromArrayByIndex => {
-            let mut items = array_operand(old)?;
-            let index = number(&operand)?;
-            if index >= 0.0 && (index as usize) < items.len() {
-                items.remove(index as usize);
-            }
-            Val::Array(items)
-        }
-        other => return unsupported(format!("modify operation {other:?}")),
-    })
-}
-
-/// Write `value` at `index` of the array `slot` holds — `Null` counts as an
-/// empty array and an index past the end appends; a negative index writes
-/// nothing. Returns the effective index, the element `old` and the stored
-/// `new`, or `None` when nothing was written.
-fn set_at(slot: &mut Val, index: f64, value: Val) -> Result<Option<(u64, Val, Val)>, Stop> {
-    if index < 0.0 {
-        return Ok(None);
-    }
-    let mut items = match slot {
-        Val::Array(items) => std::mem::take(items),
-        Val::Null => Vec::new(),
-        other => return unsupported(format!("array-element write on {other:?}")),
-    };
-    let effective = (index as usize).min(items.len());
-    let old = if effective == items.len() {
-        items.push(value.clone());
-        Val::Null
-    } else {
-        std::mem::replace(&mut items[effective], value.clone())
-    };
-    *slot = Val::Array(items);
-    Ok(Some((effective as u64, old, value)))
-}
-
-/// Apply `op` with `operand` to the element at `index` of the array `slot`
-/// holds; an index outside the array writes nothing. Returns like
-/// [`set_at`].
-fn modify_at(
-    slot: &mut Val,
-    index: f64,
-    op: &ModifyOp,
-    operand: Val,
-) -> Result<Option<(u64, Val, Val)>, Stop> {
-    let items = match slot {
-        Val::Array(items) => items,
-        Val::Null => return Ok(None),
-        other => return unsupported(format!("array-element write on {other:?}")),
-    };
-    if index < 0.0 || index as usize >= items.len() {
-        return Ok(None);
-    }
-    let index = index as usize;
-    let old = std::mem::replace(&mut items[index], Val::Null);
-    let new = apply_modify(old.clone(), op, operand)?;
-    items[index] = new.clone();
-    Ok(Some((index as u64, old, new)))
-}
-
-/// The `Modify` operation a `Modify * At Index` action's operator argument
-/// names — a zero-argument `Value::Call` on an operator catalog id.
-fn modify_op(value: &Value) -> Result<ModifyOp, Stop> {
-    if let Value::Call { name, args } = value
-        && args.is_empty()
-        && let Some(op) = ModifyOp::from_catalog_id(name)
-    {
-        return Ok(op);
-    }
-    unsupported(format!("modify operation {value:?}"))
-}
-
 /// The step at which `pc` moves past the frame's last action.
 fn advance(inst: &mut Instance<'_>) {
     inst.frames.last_mut().expect("a running frame").pc += 1;
@@ -259,6 +150,8 @@ pub(crate) fn run_instance(
             event: inst.event.as_ref(),
             each_player: inst.each_player.as_deref(),
             last_text_id: world.hud.last_text_id,
+            element: None,
+            once: &inst.once,
             now,
         };
         match action {
@@ -581,8 +474,17 @@ pub(crate) fn run_instance(
                             };
                             flag(eval(condition, &env)?)?
                         }
-                        "loopIfConditionIsTrue" => conditions_hold(rule, &env)?,
-                        _ => !conditions_hold(rule, &env)?,
+                        "loopIfConditionIsTrue" => {
+                            // A condition re-check is its own
+                            // `Evaluate Once` scope, like the
+                            // scheduler's per-tick check.
+                            let pass = RefCell::new(BTreeMap::new());
+                            conditions_hold(rule, &Env { once: &pass, ..env })?
+                        }
+                        _ => {
+                            let pass = RefCell::new(BTreeMap::new());
+                            !conditions_hold(rule, &Env { once: &pass, ..env })?
+                        }
                     };
                     // The restarts jump to the head of the action list the
                     // frame executes — inside a `Call Subroutine`, the
@@ -647,8 +549,17 @@ pub(crate) fn run_instance(
                     if inst.event.is_some() {
                         return unsupported("Wait Until in an event-triggered rule");
                     }
+                    // One `Wait Until` call is an `Evaluate Once`
+                    // scope: the per-tick re-checks the scheduler runs
+                    // while the run is suspended share this first
+                    // check's pins.
+                    inst.until_once.get_mut().clear();
+                    let until_env = Env {
+                        once: &inst.until_once,
+                        ..env
+                    };
                     // A true condition continues in the same tick (P4).
-                    if flag(eval(condition, &env)?)? {
+                    if flag(eval(condition, &until_env)?)? {
                         advance(inst);
                         continue;
                     }
