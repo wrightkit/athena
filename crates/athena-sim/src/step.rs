@@ -71,6 +71,8 @@ pub(crate) struct World {
     /// The catalog `Map` member id the scenario's `map` resolved to;
     /// `None` when it supplies none.
     pub map: Option<String>,
+    /// The scenario's `matchPhase`; `None` when it supplies none.
+    pub match_phase: Option<crate::scenario::Phase>,
     /// The scenario's `objectives` positions; `None` when it supplies
     /// none.
     pub objectives: Option<Vec<crate::vector::Vec3>>,
@@ -179,6 +181,7 @@ pub(crate) fn run_instance(
             random: world.random.as_ref(),
             server_load: world.server_load,
             map: world.map.as_deref(),
+            match_phase: world.match_phase,
             objectives: world.objectives.as_deref(),
             rule: rule_idx,
             changes: &world.changes,

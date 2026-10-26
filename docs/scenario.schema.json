@@ -24,6 +24,10 @@
       "minLength": 1,
       "description": "The map Current Map reads: a Map member id of the workshop-rs catalog (for example KINGS_ROW) or its en-US spelling, matched case-insensitively — the same form a player's hero takes. Constant for the run; a Current Map read with no field is a missing input."
     },
+    "matchPhase": {
+      "enum": ["waitingForPlayers", "assemblingHeroes", "setup", "gameInProgress", "betweenRounds", "matchComplete"],
+      "description": "The match phase the phase reads answer: one of the six phases the catalog's phase reads define. Constant for the run; a phase read with no field is a missing input."
+    },
     "objectives": {
       "type": "array",
       "items": { "$ref": "#/$defs/position" },
