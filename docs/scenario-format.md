@@ -41,6 +41,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 | `team` | no | `team1` or `team2`. |
 | `host` | no | `true` marks the player `Host Player` returns. At most one player has it. Default `false`. |
 | `state` | no | Map from player-variable name to start value. A variable not listed starts as `null`. |
+| `buttons` | no | Map from button slot (`jump`, `ability1`, …) to the held state `Is Button Held` reads. A slot not listed is a missing input when the program reads it. |
 
 ### Event
 
@@ -90,10 +91,11 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 - The `team` of a player, when the program reads it and the player has no `team`.
 - The event player, when the program reads it and the event has no `eventPlayer`.
 - An event value, when the program reads it and the event has no such entry in `values`.
+- The held state of a button, when `Is Button Held` reads it and the player's `buttons` does not list the slot.
 
 An input of group 2 is **missing** when the program reads it during the run and the scenario does not supply it. The simulator never fills it in. It stops the run at that read, and the trace names the input.
 
-Modeled reads in version 1: the event player (`Event Player`), a player's hero (`Hero Of`) and team (`Team Of`), a player variable, and the scalar event values `eventDamage`, `eventHealing`, `eventWasCriticalHit`, `eventWasEnvironment` and `eventWasHealthPack` — each looked up in `values` by its catalog name. `Host Player` returns the player marked `host`; without one it stops the run as `not_modeled`. `Has Spawned` and `Is Alive` of a player with a `hero` are true from the first tick (modeled, not measured, [architecture.md](architecture.md#choices-no-capture-covers-yet)); for a player without a `hero` they stop the run as `not_modeled`. Other event-scoped values (`attacker`, `victim`, `eventAbility`, `eventDirection`) are not modeled and stop the run as `not_modeled`. An injected event fires every rule whose event kind matches `kind` and whose `team`/`player` filters the `eventPlayer` satisfies — `All` always matches, `Team 1`/`Team 2` match the declared `team`, a hero name matches the declared `hero`; an event without an `eventPlayer` satisfies only `All`/`All`, and evaluating a filtered rule against it reads the event player, a group 2 missing input. A `Slot N` filter names a lobby position the format cannot express; evaluating it against a scenario player or a matching injected event is `not_modeled`, and a filter no evaluation reaches never fires and is not an error. An `Ongoing - Each Player` rule becomes one instance per matching player with `Event Player` bound to it ([simulator-interface.md](simulator-interface.md#player-scoped-rules)).
+Modeled reads in version 1: the event player (`Event Player`), a player's hero (`Hero Of`) and team (`Team Of`), a player variable, a button's held state (`Is Button Held`, looked up in the player's `buttons` by the evaluated slot), and the scalar event values `eventDamage`, `eventHealing`, `eventWasCriticalHit`, `eventWasEnvironment` and `eventWasHealthPack` — each looked up in `values` by its catalog name. `Host Player` returns the player marked `host`; without one it stops the run as `not_modeled`. `Has Spawned` and `Is Alive` of a player with a `hero` are true from the first tick (modeled, not measured, [architecture.md](architecture.md#choices-no-capture-covers-yet)); for a player without a `hero` they stop the run as `not_modeled`. Other event-scoped values (`attacker`, `victim`, `eventAbility`, `eventDirection`) are not modeled and stop the run as `not_modeled`. An injected event fires every rule whose event kind matches `kind` and whose `team`/`player` filters the `eventPlayer` satisfies — `All` always matches, `Team 1`/`Team 2` match the declared `team`, a hero name matches the declared `hero`; an event without an `eventPlayer` satisfies only `All`/`All`, and evaluating a filtered rule against it reads the event player, a group 2 missing input. A `Slot N` filter names a lobby position the format cannot express; evaluating it against a scenario player or a matching injected event is `not_modeled`, and a filter no evaluation reaches never fires and is not an error. An `Ongoing - Each Player` rule becomes one instance per matching player with `Event Player` bound to it ([simulator-interface.md](simulator-interface.md#player-scoped-rules)).
 
 A malformed scenario is a different case. It is refused and nothing runs ([ADR-0033](https://github.com/wrightkit/wright/blob/main/docs/adr/0033-simulate-operation.md), decision 4). The schema and the loader checks (below) define "malformed". A well-formed scenario that lacks a group 2 input gives a trace.
 
@@ -106,9 +108,9 @@ The trace gains two fields. Adding a field is compatible ([simulator-interface.m
 
 | Field | Meaning |
 | --- | --- |
-| `input` | One of `hero`, `team`, `eventPlayer`, `eventValue`. |
+| `input` | One of `hero`, `team`, `eventPlayer`, `eventValue`, `button`. |
 | `player` | The `id` of the player the input belongs to, or `null` when no player applies (`eventPlayer`, `eventValue`). |
-| `name` | The event-value name for `eventValue`; `null` for the others. |
+| `name` | The event-value name for `eventValue`, the button slot for `button`; `null` for the others. |
 | `tick` | The tick on which the program read it. |
 | `construct` | A short description for people, as in `not_modeled`. Do not match on it. |
 

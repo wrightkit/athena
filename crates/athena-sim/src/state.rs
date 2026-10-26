@@ -6,8 +6,9 @@
 //! settings the program authors (`src/hero_settings.rs`); a hero the
 //! catalog cannot supply — or a hero setting the simulator does not apply —
 //! leaves the row unresolved, and touching that player's world state
-//! (`Damage`, `Heal`, `Set Ability Cooldown`, a `Health`/`Max Health`/
-//! `Ability Cooldown` read) stops the run as `not_modeled`. Pools, cooldown
+//! (`Damage`, `Heal`, `Set Ability Cooldown`, `Set`/`Clear Status`,
+//! `Allow`/`Disallow Button`, a `Health`/`Max Health`/`Ability Cooldown`/
+//! `Has Status` read) stops the run as `not_modeled`. Pools, cooldown
 //! seconds and ultimate cost are never defaulted or invented. No capture
 //! backs the pool rules; `docs/architecture.md` marks them **modeled**.
 
@@ -138,6 +139,8 @@ pub(crate) fn resolve(
             armor,
             cooldowns,
             ultimate: UltimateState { charge: 0.0, cost },
+            statuses: std::collections::BTreeMap::new(),
+            buttons: std::collections::BTreeMap::new(),
         },
         damage_dealt: mods.damage_dealt,
         damage_received: mods.damage_received,

@@ -21,7 +21,11 @@ pub(crate) struct Hud {
 
 /// An action argument that must be a catalog enum member literal; anything
 /// else is un-evaluatable in this layer.
-fn enum_member<'a>(action: &str, param: &str, value: &'a Value) -> Result<&'a str, Stop> {
+pub(crate) fn enum_member<'a>(
+    action: &str,
+    param: &str,
+    value: &'a Value,
+) -> Result<&'a str, Stop> {
     match value {
         Value::Enum { value, .. } => Ok(value.as_str()),
         _ => unsupported(format!("{action} {param}")),

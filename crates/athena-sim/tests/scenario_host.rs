@@ -79,11 +79,13 @@ fn has_spawned_needs_a_hero() {
     assert!(not_modeled.construct.contains("hasSpawned"));
 }
 
+/// `Wait Until` reads its condition every tick; a live input inside it
+/// stops the run as `missing_input`.
 #[test]
-fn wait_until_on_an_unmodeled_value_is_not_modeled() {
+fn wait_until_on_a_missing_input_is_missing_input() {
     let text = global_rule(
         "Wait Until(Is Alive(Host Player) && Is Button Held(Host Player, Ability 1), 1);",
     );
     let trace = run(&text, HOST_SCENARIO);
-    assert!(matches!(trace.outcome, Outcome::NotModeled(_)));
+    assert!(matches!(trace.outcome, Outcome::MissingInput));
 }

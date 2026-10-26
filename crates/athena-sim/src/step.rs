@@ -9,13 +9,14 @@ use std::collections::BTreeMap;
 use workshop_rs::{Action, Rule, Value};
 
 use crate::blocks::Blocks;
-use crate::eval::{Env, button_slot, eval, number, player_id, player_ids};
+use crate::effects::Effects;
+use crate::eval::{Env, eval, number, player_id};
 use crate::hud::Hud;
 use crate::load::{Frame, Instance, WaitMode};
 use crate::modify::{apply_modify, modify_at, modify_op, set_at};
 use crate::scenario::Player;
 use crate::state::{self, WorldSlot};
-use crate::{Change, LogEntry, NotModeled, PlayerWorld, RuleRun, Stop, Timeline, Val};
+use crate::{Change, LogEntry, NotModeled, RuleRun, Stop, Timeline, Val};
 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
@@ -48,6 +49,11 @@ pub(crate) struct World {
     pub players: BTreeMap<String, Player>,
     pub logs: Vec<LogEntry>,
     pub hud: Hud,
+    /// The effect entities of the run so far.
+    pub effects: Effects,
+    /// `Start Rule` requests as `(rule index, restart)`; applied when the
+    /// target's instance is next visited in the tick loop.
+    pub pending_starts: Vec<(usize, bool)>,
     /// The rule executions of the tick in progress — started, resumed or
     /// ended — in execution order; `tick_loop` drains them into the
     /// tick's timeline entry.
@@ -64,7 +70,10 @@ pub(crate) struct World {
 /// reported, never defaulted: touching that player's world state —
 /// `Damage`/`Heal` dealt or received, `Set Ability Cooldown` — stops the
 /// run as `not_modeled`.
-fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Resolved, Stop> {
+pub(crate) fn world_state<'w>(
+    world: &'w mut World,
+    id: &str,
+) -> Result<&'w mut state::Resolved, Stop> {
     let Some(player) = world.players.get_mut(id) else {
         return unsupported(format!("`{id}` is not a scenario player"));
     };
@@ -73,16 +82,6 @@ fn world_state<'w>(world: &'w mut World, id: &str) -> Result<&'w mut state::Reso
         WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
         WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
     }
-}
-
-/// A player's pool `current` points in absorb order, `(field, points)`;
-/// `None` for a pool the player does not have.
-fn pools(world: &PlayerWorld) -> [(&'static str, Option<f64>); 3] {
-    [
-        ("shield", world.shield.as_ref().map(|pool| pool.current)),
-        ("armor", world.armor.as_ref().map(|pool| pool.current)),
-        ("health", Some(world.health.current)),
-    ]
 }
 
 pub(crate) fn flag(value: Val) -> Result<bool, Stop> {
@@ -152,6 +151,7 @@ pub(crate) fn run_instance(
             last_text_id: world.hud.last_text_id,
             element: None,
             once: &inst.once,
+            last_entity: world.effects.last_created,
             now,
         };
         match action {
@@ -572,72 +572,6 @@ pub(crate) fn run_instance(
                     advance(inst);
                     return Ok(());
                 }
-                "damage" => {
-                    let [player, damager, amount] = args.as_slice() else {
-                        return unsupported("damage arguments");
-                    };
-                    // Arguments evaluate left to right. `Null` has no
-                    // dealer scale; a player deals with its `damageDealt%`.
-                    let ids = player_ids(player, &env)?;
-                    let damager = eval(damager, &env)?;
-                    let amount = number(&eval(amount, &env)?)?;
-                    let dealt = match damager {
-                        Val::Null => 1.0,
-                        Val::Player(id) => world_state(world, &id)?.damage_dealt,
-                        other => {
-                            return unsupported(format!("{other:?} where a player is needed"));
-                        }
-                    };
-                    for id in ids {
-                        let target = world_state(world, &id)?;
-                        let before = pools(&target.world);
-                        state::damage(&mut target.world, amount * dealt * target.damage_received);
-                        let after = pools(&target.world);
-                        for ((field, old), (_, new)) in before.into_iter().zip(after) {
-                            if old != new {
-                                world.changes.push(Change::World {
-                                    player: id.clone(),
-                                    field: field.to_string(),
-                                    old: old.map_or(Val::Null, Val::Number),
-                                    new: new.map_or(Val::Null, Val::Number),
-                                });
-                            }
-                        }
-                    }
-                    advance(inst);
-                }
-                "heal" => {
-                    let [player, healer, amount] = args.as_slice() else {
-                        return unsupported("heal arguments");
-                    };
-                    // Same shape as `damage`, with `healingDealt%` and
-                    // `healingReceived%` scales.
-                    let ids = player_ids(player, &env)?;
-                    let healer = eval(healer, &env)?;
-                    let amount = number(&eval(amount, &env)?)?;
-                    let dealt = match healer {
-                        Val::Null => 1.0,
-                        Val::Player(id) => world_state(world, &id)?.healing_dealt,
-                        other => {
-                            return unsupported(format!("{other:?} where a player is needed"));
-                        }
-                    };
-                    for id in ids {
-                        let target = world_state(world, &id)?;
-                        let old = target.world.health.current;
-                        state::heal(&mut target.world, amount * dealt * target.healing_received);
-                        let new = target.world.health.current;
-                        if new != old {
-                            world.changes.push(Change::World {
-                                player: id,
-                                field: "health".to_string(),
-                                old: Val::Number(old),
-                                new: Val::Number(new),
-                            });
-                        }
-                    }
-                    advance(inst);
-                }
                 "setGlobalVariableAtIndex" | "modifyGlobalVariableAtIndex" => {
                     let modify = name.as_str() == "modifyGlobalVariableAtIndex";
                     let [variable, index, rest @ ..] = args.as_slice() else {
@@ -722,43 +656,38 @@ pub(crate) fn run_instance(
                     }
                     advance(inst);
                 }
-                "setAbilityCooldown" => {
-                    let [player, button, cooldown] = args.as_slice() else {
-                        return unsupported("setAbilityCooldown arguments");
-                    };
-                    // `Set Ability Cooldown` writes the reported cooldown for
-                    // the slot literally; whether `abilityCooldown%` also
-                    // scales it is what P7 is for.
-                    let ids = player_ids(player, &env)?;
-                    let slot = button_slot(button)?;
-                    let seconds = number(&eval(cooldown, &env)?)?;
-                    for id in ids {
-                        let target = world_state(world, &id)?;
-                        let old = target.world.cooldowns.get(slot).copied();
-                        target.world.cooldowns.insert(slot.to_string(), seconds);
-                        world.changes.push(Change::World {
-                            player: id,
-                            field: format!("cooldown.{slot}"),
-                            old: old.map_or(Val::Null, Val::Number),
-                            new: Val::Number(seconds),
-                        });
+                other => {
+                    let result = crate::hud::action(
+                        other,
+                        args,
+                        &env,
+                        &mut world.hud,
+                        tick,
+                        &mut world.changes,
+                    )
+                    .or_else(|| {
+                        crate::effects::action(
+                            other,
+                            args,
+                            &env,
+                            &mut world.effects,
+                            tick,
+                            &mut world.changes,
+                        )
+                    });
+                    // `env` shares a borrow of `world.players`, so it ends
+                    // here and the delegated actions take `world` itself.
+                    let result = result.or_else(|| {
+                        crate::actions::action(other, args, world, inst, subroutines, now)
+                    });
+                    match result {
+                        Some(result) => {
+                            result?;
+                            advance(inst);
+                        }
+                        None => return unsupported(format!("action {other}")),
                     }
-                    advance(inst);
                 }
-                other => match crate::hud::action(
-                    other,
-                    args,
-                    &env,
-                    &mut world.hud,
-                    tick,
-                    &mut world.changes,
-                ) {
-                    Some(result) => {
-                        result?;
-                        advance(inst);
-                    }
-                    None => return unsupported(format!("action {other}")),
-                },
             },
             other => return unsupported(format!("action {other:?}")),
         }

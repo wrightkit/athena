@@ -28,6 +28,9 @@ pub(crate) struct Env<'a> {
     /// a fresh table per pass, and one `Wait Until` call shares a table
     /// across its per-tick re-checks.
     pub once: &'a RefCell<BTreeMap<usize, Val>>,
+    /// The `id` of the newest `createEffect` entity; what
+    /// `Last Created Entity` reads. `None` before the first one.
+    pub last_entity: Option<u64>,
     pub now: f64,
 }
 
@@ -117,6 +120,21 @@ fn player_world<'a>(
         WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
     }
 }
+
+/// The slot names a scenario player's `buttons` map may name — the values
+/// [`button_slot`] yields.
+pub(crate) const BUTTON_SLOTS: &[&str] = &[
+    "ability1",
+    "ability2",
+    "secondaryFire",
+    "primaryFire",
+    "ultimate",
+    "crouch",
+    "interact",
+    "jump",
+    "melee",
+    "reload",
+];
 
 /// The `Button` enum member to the cooldown slot name the player-state
 /// table reports it under.
@@ -294,6 +312,15 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let [] = arguments::<0>(name, args)?;
             Ok(env
                 .last_text_id
+                .map_or(Val::Null, |id| Val::Number(id as f64)))
+        }
+        // Modeled, not measured: `Last Created Entity` is the id of the
+        // newest `createEffect` entity; other entity-creating actions are
+        // not modeled.
+        "lastCreatedEntity" => {
+            let [] = arguments::<0>(name, args)?;
+            Ok(env
+                .last_entity
                 .map_or(Val::Null, |id| Val::Number(id as f64)))
         }
         "allPlayers" => {
@@ -592,6 +619,41 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 |pool: &PoolState| pool.max
             };
             Ok(Val::Number(pools.into_iter().flatten().map(pick).sum()))
+        }
+        // Modeled, not measured: a status is held while its `Set Status`
+        // expiry is still ahead.
+        "hasStatus" => {
+            let [player, status] = arguments::<2>(name, args)?;
+            let id = player_id(player, env)?;
+            let Value::Enum { value: status, .. } = status else {
+                return unsupported(format!("{name} status {status:?}"));
+            };
+            let world = player_world(env.players, &id)?;
+            Ok(Val::Bool(
+                world
+                    .statuses
+                    .get(status.as_str())
+                    .is_some_and(|until| *until > env.now),
+            ))
+        }
+        // A live input: the held state comes from the scenario player's
+        // `buttons` map; a button not listed is a missing input.
+        "isButtonHeld" => {
+            let [player, button] = arguments::<2>(name, args)?;
+            let id = player_id(player, env)?;
+            let slot = button_slot(button)?;
+            match env.players.get(&id) {
+                Some(player) => match player.held.get(slot) {
+                    Some(held) => Ok(Val::Bool(*held)),
+                    None => missing(
+                        MissingInputKind::Button,
+                        Some(id),
+                        Some(slot.to_string()),
+                        "value isButtonHeld",
+                    ),
+                },
+                None => unsupported(format!("`{id}` is not a scenario player")),
+            }
         }
         "getAbilityCooldown" => {
             let [player, button] = arguments::<2>(name, args)?;

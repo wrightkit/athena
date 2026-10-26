@@ -33,8 +33,9 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `globals` | Global variables at the end of the run. A declared variable that was never set is `null`. |
 | `players` | The player state table: one entry per scenario player, keyed by its `id`. Empty when the run had no scenario. See below. |
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
+| `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
 | `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
-| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`), `player` (the player `id` the input belongs to, `null` for `eventPlayer` and `eventValue`), `name` (the event-value name, `null` for the others), `tick`, `construct`. |
+| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`), `player` (the player `id` the input belongs to, `null` for `eventPlayer` and `eventValue`), `name` (the event-value name for `eventValue`, the button slot for `button`, `null` for the others), `tick`, `construct`. |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
 `logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
@@ -50,8 +51,10 @@ Each row repeats what the scenario declared — `hero` (the scenario text, `null
 | `armor` | The `armor` pool, same shape; `null` when the catalog records none. |
 | `cooldowns` | Cooldown seconds per ability slot, keyed by `slot` or `slot/variant`; the catalog's recorded slots appear scaled by the program's hero settings, and a `Set Ability Cooldown` action writes a slot's reported seconds literally. |
 | `ultimate` | `{ "charge": ..., "cost": ... }`: charge points toward the catalog's cost. Read-only in version 1. |
+| `statuses` | The status effects `Set Status` applied, keyed by `Status` member id; the value is the `Total Time Elapsed` seconds at which the status ends. `Has Status` reads it as held while its expiry is still ahead. `Clear Status` removes the entry. |
+| `buttons` | The `Allow Button`/`Disallow Button` writes, keyed by button slot (`jump`, `ability1`, …); a slot never written is allowed. |
 
-`world` is `null` when the run could not resolve the player's state — a player without a `hero`, a hero value the file does not have, or a hero setting the program authors but the simulator does not apply. `Damage` or `Heal` on such a player or dealt by such a player, a `Set Ability Cooldown` on such a player, or a `Health`/`Max Health`/`Ability Cooldown` read of such a player, stops the run as `not_modeled`; the row still reports the declared `hero`/`team`.
+`world` is `null` when the run could not resolve the player's state — a player without a `hero`, a hero value the file does not have, or a hero setting the program authors but the simulator does not apply. `Damage` or `Heal` on such a player or dealt by such a player, a `Set Ability Cooldown`, `Set Status`/`Clear Status` or `Allow`/`Disallow Button` on such a player, or a `Health`/`Max Health`/`Ability Cooldown`/`Has Status` read of such a player, stops the run as `not_modeled`; the row still reports the declared `hero`/`team`.
 
 ### Outcome and "not modeled"
 
@@ -117,6 +120,38 @@ HUD behavior is **modeled** with these limits:
 - The objective description is a singleton per player: a new `objectiveDescription` removes its recipients from every present `objectiveDescription` element, which is destroyed (`destroyedTick` set) when no recipient remains.
 - A destroy action affects only elements of its own kind. An unknown, already-destroyed or `null` text id destroys nothing.
 
+### Effect entities
+
+The effect layer models `createEffect`, `playEffect` and `destroyEffect`, recorded like HUD elements but without geometry: the model never represents positions. `effects` holds one entry per entity the run created or played, in creation order — including entities destroyed since:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Stable id in creation order, starting at 0. `lastCreatedEntity` resolves to the `id` of the newest `effect` entity or `null` before the first one; a played effect has no entity id. |
+| `kind` | `effect` (a `createEffect` entity, which `destroyEffect` can target) or `playedEffect` (a `playEffect`, present only on its tick). |
+| `createdTick` | The tick the entity was created or played on. |
+| `destroyedTick` | The tick a `destroyEffect` removed the entity, `null` while it is present; a `playedEffect` records `createdTick` here. |
+| `recipients` | The scenario `id`s of the players the entity is presented to: the evaluated `Visible To` argument. |
+| `construct` | A short description of the creating statement, for people, as in `outcome`. Do not match on it. |
+
+The other fields are the evaluated arguments of the action; only the arguments the action takes are present:
+
+| Field | Kinds | Argument |
+| --- | --- | --- |
+| `effect` | both | the `Effect`/`DynamicEffect` member id of the `Type` argument |
+| `color` | both | the `Color` member id |
+| `position` | both | the evaluated `Position` argument as a `Val`: a player yields `{ "type": "player", "value": "<id>" }` |
+| `radius` | both | the radius |
+| `reevaluation` | `effect` | the `EffectReeval` member id |
+
+A position expression that needs geometry — `Position Of`, a `Vector`, anything unmodeled — stops the run as `not_modeled` before the entity is recorded; no capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing.
+
+### Statuses, buttons and started rules
+
+- `Set Status(player, assister, status, duration)` records the status on each target's `statuses` with an expiry of `now + duration`; the `assister` resolves like `Damage`'s dealer — a player or `Null`. `Has Status(player, status)` reads it as held while the expiry is ahead. `Clear Status` removes the entry. Setting, clearing or reading a status on a player whose `world` did not resolve is a world-state touch and stops the run as `not_modeled`.
+- `Allow Button`/`Disallow Button` write the target's `buttons` map per slot. `Is Button Held(player, button)` reads a live input: the scenario player's `buttons` map supplies the held state per slot, and a slot not listed stops the run as `missing_input` of kind `button`. Whether `Disallow Button` changes a held read has no capture; the read is the scenario's supplied state.
+- `Start Rule(subroutine, ifAlreadyExecuting)` launches the subroutine's own rule instance, applied when the tick loop visits that instance: a subroutine listed later in the program starts on the same tick, an earlier one on the next tick. `Restart Rule` restarts an instance already running or waiting; `Do Nothing` leaves it alone. A started subroutine runs until it finishes or waits; a `Wait` inside resumes on its wake tick. A subroutine rule has no conditions, so `Abort When False`/`Restart When True` do not apply inside it; a `Wait Until` still re-checks its own condition each tick.
+- `Stop Chasing Global/Player Variable` does nothing: the `Chase *` actions are not modeled, so a run never has a chase in progress. The action still resolves its player argument.
+
 ### Timeline
 
 `timeline` holds one `entries` element per tick that had activity — a rule execution or a state change — in order; ticks without activity are omitted. A run that ends `not_modeled` or `missing_input` still returns the entries up to and including the stop tick.
@@ -147,9 +182,11 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 | --- | --- | --- |
 | `globalVariable` | `name`, `index`, `old`, `new` | A `Set`/`Modify Global Variable` write. `index` is the element path a `Set`/`Modify Global Variable At Index` action wrote (`null` for a whole-variable write). |
 | `playerVariable` | `player`, `name`, `index`, `old`, `new` | A `Set`/`Modify Player Variable` write; `player` is the player `id`, `index` the element path an `At Index` action wrote. |
-| `world` | `player`, `field`, `old`, `new` | A change to a player's world state. `field` is `health`, `shield`, `armor`, `cooldown.<slot>` (for example `cooldown.ability1`) or `ultimate.charge`. For pools `old`/`new` are the `current` points; for a cooldown the reported seconds (`null` when the slot had none). Nothing writes `ultimate.charge` in this version. |
+| `world` | `player`, `field`, `old`, `new` | A change to a player's world state. `field` is `health`, `shield`, `armor`, `cooldown.<slot>` (for example `cooldown.ability1`), `status.<member>` (lowercase `Status` member id; `new` is the expiry seconds, `null` for a `Clear Status`), `button.<slot>` (a `bool` for `Allow`/`Disallow Button`) or `ultimate.charge`. For pools `old`/`new` are the `current` points; for a cooldown the reported seconds (`null` when the slot had none). Nothing writes `ultimate.charge` in this version. |
 | `hudCreate` | `id`, `element` | A HUD element was created; `id` indexes `hud`, `element` is its `kind`. |
 | `hudDestroy` | `id`, `element` | A HUD element was destroyed. |
+| `effectCreate` | `id`, `element` | An effect entity was created or played; `id` indexes `effects`, `element` is its `kind`. |
+| `effectDestroy` | `id`, `element` | An effect entity was destroyed. |
 | `log` | `text` | A `Log To Inspector` line. |
 
 ### JSON form
@@ -170,7 +207,9 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
         "shield": { "current": 0.0, "max": 100.0 },
         "armor": null,
         "cooldowns": { "ability1": 10.0, "ability2/secondary": 12.0 },
-        "ultimate": { "charge": 0.0, "cost": 2100.0 }
+        "ultimate": { "charge": 0.0, "cost": 2100.0 },
+        "statuses": { "INVINCIBLE": 3.54 },
+        "buttons": { "jump": false }
       }
     }
   },
@@ -194,6 +233,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
       "specVisibility": "DEFAULT"
     }
   ],
+  "effects": [],
   "timeline": {
     "entries": [
       {
