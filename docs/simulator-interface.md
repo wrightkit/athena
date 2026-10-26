@@ -209,7 +209,7 @@ HUD behavior is **modeled** with these limits:
 
 ### Effect entities
 
-The effect layer models `createEffect`, `playEffect` and `destroyEffect`, recorded like HUD elements but without geometry: the model never represents positions. `effects` holds one entry per entity the run created or played, in creation order — including entities destroyed since:
+The effect layer models `createEffect`, `playEffect`, `destroyEffect` and `destroyAllEffects`, recorded like HUD elements but without geometry: the model never represents positions. `effects` holds one entry per entity the run created or played, in creation order — including entities destroyed since:
 
 | Field | Meaning |
 | --- | --- |
@@ -230,7 +230,11 @@ The other fields are the evaluated arguments of the action; only the arguments t
 | `radius` | both | the radius |
 | `reevaluation` | `effect` | the `EffectReeval` member id |
 
-A position expression that needs unmodeled geometry — anything still unmodeled — stops the run as `not_modeled` before the entity is recorded; under the empty-world model `Nearest Walkable Position` and the raycasts evaluate instead (see [Geometry (empty world)](#geometry-empty-world)). No capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing.
+A position expression that needs unmodeled geometry — anything still unmodeled — stops the run as `not_modeled` before the entity is recorded; under the empty-world model `Nearest Walkable Position` and the raycasts evaluate instead (see [Geometry (empty world)](#geometry-empty-world)). No capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing. `destroyAllEffects` removes every live `effect` entity, the same rule the HUD `Destroy All` actions follow; a played effect is already destroyed on its tick.
+
+### Actions with no readable effect
+
+Actions the catalog ties to no readable value run as no-ops: arguments still evaluate, and nothing is written or recorded (athena#103). The set — inspector recording, announcer, music, HUD/in-world-UI and collision toggles, game-mode flags, camera, forced names, outlines, voice-line pitch, scaling, `preloadHero` — is enumerated in [findings.md](findings.md); **modeled, not measured**.
 
 ### Statuses, buttons and started rules
 

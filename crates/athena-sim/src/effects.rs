@@ -70,6 +70,7 @@ pub(crate) fn action(
         "createEffect" => create_effect(args, env, effects, tick, changes),
         "playEffect" => play_effect(args, env, effects, tick, changes),
         "destroyEffect" => destroy_effect(args, env, effects, tick, changes),
+        "destroyAllEffects" => destroy_all_effects(args, effects, tick, changes),
         _ => return None,
     })
 }
@@ -162,6 +163,30 @@ fn destroy_effect(
             }
         }
         other => return unsupported(format!("destroyEffect of {other:?}")),
+    }
+    Ok(())
+}
+
+/// `Destroy All Effects` removes every live `createEffect` entity, the
+/// same rule the HUD `Destroy All` actions follow. A played effect is
+/// already destroyed on its tick.
+fn destroy_all_effects(
+    args: &[Value],
+    effects: &mut Effects,
+    tick: u64,
+    changes: &RefCell<Vec<Change>>,
+) -> Result<(), Stop> {
+    let [] = args else {
+        return unsupported("destroyAllEffects arguments");
+    };
+    for element in &mut effects.elements {
+        if element.kind == EffectKind::Effect && element.destroyed_tick.is_none() {
+            element.destroyed_tick = Some(tick);
+            changes.borrow_mut().push(Change::EffectDestroy {
+                id: element.id,
+                element: element.kind,
+            });
+        }
     }
     Ok(())
 }
