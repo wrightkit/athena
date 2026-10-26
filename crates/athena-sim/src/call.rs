@@ -403,6 +403,12 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             }
             // A `Min` past `Max` swaps the bounds; unmeasured.
             let (min, max) = if min > max { (max, min) } else { (min, max) };
+            // Finite bounds still overflow the range: `Max - Min` is
+            // `inf` from `-1e308` to `1e308`, and a non-finite value
+            // serializes as `null` in the trace.
+            if !(max - min).is_finite() {
+                return unsupported(format!("{name} on a non-finite range"));
+            }
             let u = draw(env, name)?;
             let value = if name == "randomInteger" {
                 // The bounds floor to integers; the range is inclusive.

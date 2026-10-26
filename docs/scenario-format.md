@@ -173,5 +173,7 @@ The `init` rule's `Create HUD Text` is modeled (athena#10): the full `practice-r
 - `missing-required-field.json`: `seconds` is absent.
 - `wrong-value-type.json`: an event `time` is text.
 - `unknown-team.json`: `team` is not `team1` or `team2`.
+- `random-null.json`: `random` is `null` rather than an object.
+- `seed-too-large.json`: `random.seed` is past the unsigned 64-bit range.
 
 `crates/athena-sim/tests/scenario_schema.rs` checks that every file in `valid/` passes and every invalid example fails. `cargo test` and CI run it.

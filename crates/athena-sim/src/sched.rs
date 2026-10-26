@@ -417,9 +417,12 @@ fn run_tick(
                         }
                         WaitMode::Until(frame) => {
                             // The re-check shares the pins the `Wait
-                            // Until` call's first check made.
+                            // Until` call's first check made; `rule` is
+                            // the frame's own — the subroutine's inside a
+                            // `Call Subroutine`.
                             let until_env = Env {
                                 once: &instance.until_once,
+                                rule: frame.rule_idx,
                                 ..env
                             };
                             if until_holds(rule_list, frame, &until_env).map_err(|e| e.at(tick))? {

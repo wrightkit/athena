@@ -2,7 +2,9 @@
 //! (athena#65): deterministic under one seed, a missing input without a
 //! source, recorded as `randomDraw` changes.
 
-use athena_sim::{Change, MissingInputKind, Outcome, Val, run_scenario, run_text};
+use athena_sim::{
+    Change, MissingInputKind, Outcome, RunError, ScenarioError, Val, run_scenario, run_text,
+};
 
 fn seeded(text: &str, seed: u64) -> athena_sim::Trace {
     let scenario = format!(
@@ -209,4 +211,82 @@ fn a_draw_is_recorded_on_the_tick_changes() {
         "{:?}",
         trace.timeline
     );
+}
+
+/// A `Wait Until` in a `Call Subroutine` frame keeps the subroutine's
+/// rule index on the draws its per-tick re-checks record.
+#[test]
+fn a_wait_until_recheck_records_the_subroutines_rule() {
+    let text = r#"
+subroutines {
+    0: sub
+}
+
+rule ("main") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Call Subroutine(sub);
+    }
+}
+
+rule ("Subroutine sub") {
+    event {
+        Subroutine;
+        sub;
+    }
+    actions {
+        Wait Until(Random Integer(0, 0) > 0, 0.2);
+    }
+}
+"#;
+    let trace = seeded(text, 1);
+    // One draw on tick 0 for the first check, one per re-check tick.
+    let rules: Vec<usize> = trace
+        .timeline
+        .entries
+        .iter()
+        .flat_map(|entry| entry.changes.iter())
+        .filter_map(|change| match change {
+            Change::RandomDraw { rule, .. } => Some(*rule),
+            _ => None,
+        })
+        .collect();
+    assert!(rules.len() > 1, "expected re-checks: {:?}", trace.timeline);
+    assert!(rules.iter().all(|rule| *rule == 1), "{rules:?}");
+}
+
+/// Finite bounds can still span a range `Max - Min` cannot hold: the run
+/// stops `not_modeled`, as for a non-finite bound.
+#[test]
+fn a_non_finite_range_is_not_modeled() {
+    for value in [
+        "Random Integer(Subtract(0, Raise To Power(10, 308)), Raise To Power(10, 308))",
+        "Random Real(Subtract(0, Raise To Power(10, 308)), Raise To Power(10, 308))",
+    ] {
+        let trace = seeded(&set_global(value), 1);
+        assert!(
+            matches!(trace.outcome, Outcome::NotModeled(_)),
+            "{value}: {:?}",
+            trace.outcome
+        );
+    }
+}
+
+/// `seed` is an unsigned 64-bit integer: `u64::MAX` loads, `null` is not
+/// "absent" and `2^64` is past the range.
+#[test]
+fn the_seed_is_an_unsigned_64_bit_integer() {
+    let text = set_global("Random Integer(0, 9)");
+    assert_eq!(seeded(&text, u64::MAX).outcome, Outcome::Complete);
+    for random in ["null", r#"{ "seed": 18446744073709551616 }"#] {
+        let scenario = format!(
+            r#"{{ "scenarioVersion": 1, "seconds": 1, "players": [], "random": {random} }}"#
+        );
+        match run_scenario(&text, &scenario) {
+            Err(RunError::Scenario(ScenarioError::Format(_))) => {}
+            other => panic!("random {random}: {other:?}"),
+        }
+    }
 }

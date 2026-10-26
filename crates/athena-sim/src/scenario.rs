@@ -144,7 +144,7 @@ struct ScenarioDoc {
     events: Vec<EventDoc>,
     #[serde(default)]
     expect: Vec<serde_json::Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "object_or_absent")]
     random: Option<RandomDoc>,
 }
 
@@ -152,6 +152,15 @@ struct ScenarioDoc {
 #[serde(deny_unknown_fields)]
 struct RandomDoc {
     seed: u64,
+}
+
+/// An `Option` field alone reads `null` as absent; `random` is an
+/// object, as `events` and `expect` are lists.
+fn object_or_absent<'de, D>(deserializer: D) -> Result<Option<RandomDoc>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    RandomDoc::deserialize(deserializer).map(Some)
 }
 
 #[derive(Deserialize)]
