@@ -21,7 +21,12 @@
       "items": { "$ref": "#/$defs/expectation" }
     },
     "random": { "$ref": "#/$defs/random" },
-    "serverLoad": { "$ref": "#/$defs/serverLoad" }
+    "serverLoad": { "$ref": "#/$defs/serverLoad" },
+    "map": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The map Current Map reads: a Map member id of the workshop-rs catalog (for example KINGS_ROW) or its en-US spelling, matched case-insensitively — the same form a player's hero takes. Constant for the run; a Current Map read with no field is a missing input."
+    }
   },
   "$defs": {
     "id": { "type": "string", "minLength": 1 },

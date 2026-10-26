@@ -70,6 +70,7 @@ fn run(
         last_entity: world.effects.last_created,
         random: world.random.as_ref(),
         server_load: world.server_load,
+        map: world.map.as_deref(),
         rule: rule_idx,
         changes: &world.changes,
         now,

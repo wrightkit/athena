@@ -68,6 +68,9 @@ pub(crate) struct World {
     pub random: Option<RefCell<Random>>,
     /// The scenario's `serverLoad` numbers; `None` when it supplies none.
     pub server_load: Option<ServerLoad>,
+    /// The catalog `Map` member id the scenario's `map` resolved to;
+    /// `None` when it supplies none.
+    pub map: Option<String>,
     /// The recorded timeline.
     pub timeline: Timeline,
 }
@@ -161,6 +164,7 @@ pub(crate) fn run_instance(
             last_entity: world.effects.last_created,
             random: world.random.as_ref(),
             server_load: world.server_load,
+            map: world.map.as_deref(),
             rule: rule_idx,
             changes: &world.changes,
             now,

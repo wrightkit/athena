@@ -146,6 +146,9 @@ pub(crate) struct Scenario {
     /// The `serverLoad` numbers; `None` when the scenario supplies none,
     /// so a `Server Load *` read is a missing input.
     pub server_load: Option<ServerLoad>,
+    /// The catalog `Map` member id the `map` field names; `None` when the
+    /// scenario supplies none, so a `Current Map` read is a missing input.
+    pub map: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -166,6 +169,7 @@ struct ScenarioDoc {
     random: Option<RandomDoc>,
     #[serde(default, rename = "serverLoad", deserialize_with = "object_or_absent")]
     server_load: Option<ServerLoad>,
+    map: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -330,6 +334,24 @@ fn hero_names(catalog: &Catalog) -> BTreeMap<String, (String, Vec<String>)> {
     names
 }
 
+/// Every map name a scenario may give, from the `workshop-rs` catalog: the
+/// canonical `Map` member id (such as `KINGS_ROW`) or an en-US spelling
+/// (such as `King's Row`), matched case-insensitively — the same form
+/// `hero` accepts. Each accepted name maps to the member id.
+fn map_names(catalog: &Catalog) -> BTreeMap<String, String> {
+    let en_us = Locale::new("en-US");
+    let mut names = BTreeMap::new();
+    if let Some(domain) = catalog.enum_domain("Map") {
+        for member in &domain.members {
+            names.insert(member.member.to_lowercase(), member.member.clone());
+            for spelling in member.spellings(&en_us) {
+                names.insert(spelling.to_lowercase(), member.member.clone());
+            }
+        }
+    }
+    names
+}
+
 /// Load a scenario JSON document, checking `scenarioVersion` before any
 /// other field is read.
 pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioError> {
@@ -408,6 +430,15 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         return load_error("more than one player is marked `host`");
     }
 
+    let map = match &doc.map {
+        Some(map) if map.is_empty() => return format_error("`map` must not be empty"),
+        Some(map) => match map_names(catalog).get(&map.to_lowercase()) {
+            Some(member) => Some(member.clone()),
+            None => return load_error(format!("unknown map `{map}`")),
+        },
+        None => None,
+    };
+
     let mut events = Vec::new();
     for event in doc.events {
         if event.kind.is_empty() {
@@ -454,5 +485,6 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         expect,
         random: doc.random.map(|random| random.seed),
         server_load: doc.server_load,
+        map,
     })
 }

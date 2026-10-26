@@ -210,6 +210,24 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 ),
             }
         }
+        // Modeled, not measured: the lobby chooses the map outside the
+        // script, so the scenario's `map` supplies it as a constant — the
+        // catalog `Map` member id as text, the same form a `Map` literal
+        // yields. The field is optional but there is no default; a read
+        // without it is a missing input, and a mid-run change is not
+        // modeled.
+        "currentMap" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.map {
+                Some(map) => Ok(Val::Text(map.to_string())),
+                None => missing(
+                    MissingInputKind::Map,
+                    None,
+                    Some("map".to_string()),
+                    format!("value {name}"),
+                ),
+            }
+        }
         "lastTextId" => {
             let [] = arguments::<0>(name, args)?;
             Ok(env
