@@ -410,6 +410,35 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             array.push(value);
             Ok(Val::Array(array))
         }
+        // `Remove From Array` drops every element equal to the operand —
+        // "one or more values removed (if found)", the same removal
+        // `Remove From Array By Value` performs. An array operand drops
+        // every element equal to any element it holds — "each matching
+        // element is removed".
+        "removeFromArray" => {
+            let [array, wanted] = arguments::<2>(name, args)?;
+            let (array, wanted) = (items(eval(array, env)?, name)?, eval(wanted, env)?);
+            let mut kept = Vec::new();
+            for item in array {
+                let removed = match &wanted {
+                    Val::Array(removals) => {
+                        let mut removed = false;
+                        for removal in removals {
+                            if values_equal(&item, removal)? {
+                                removed = true;
+                                break;
+                            }
+                        }
+                        removed
+                    }
+                    wanted => values_equal(&item, wanted)?,
+                };
+                if !removed {
+                    kept.push(item);
+                }
+            }
+            Ok(Val::Array(kept))
+        }
         "arrayContains" | "indexOfArrayValue" => {
             let [array, wanted] = arguments::<2>(name, args)?;
             let (array, wanted) = (eval(array, env)?, eval(wanted, env)?);
