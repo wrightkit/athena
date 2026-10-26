@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 use workshop_rs::Value;
 
+use crate::ambiguous;
 use crate::eval::{Env, arguments, button_slot, eval, number, player_id, values_equal};
 use crate::scenario::{Player, ServerLoad, Team};
 use crate::state::WorldSlot;
@@ -179,6 +180,11 @@ fn drawn(env: &Env, construct: &str, value: Val) -> Val {
 }
 
 pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
+    // `__ambiguous_enum` arguments resolve to their `Vector` member in a
+    // vector or number operand position; elsewhere they stay sentinels
+    // and evaluation stops at them naming the spelling.
+    let resolved = ambiguous::resolve_args(name, args);
+    let args: &[Value] = &resolved;
     let binary = |op: fn(f64, f64) -> f64| -> Result<Val, Stop> {
         let [a, b] = arguments::<2>(name, args)?;
         Ok(Val::Number(op(
@@ -187,6 +193,10 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         )))
     };
     match name {
+        // Evaluation reached a sentinel no operand position resolved —
+        // a rule condition, an action argument or a non-operand call
+        // argument — so the run stops naming the spelling.
+        ambiguous::CALL => ambiguous::unresolved(args),
         "getTotalTimeElapsed" => Ok(Val::Number(env.now)),
         // Modeled, not measured: the client measures load per tick; the
         // simulator reads the scenario's `serverLoad` constants. The

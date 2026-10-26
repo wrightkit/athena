@@ -91,6 +91,45 @@ impl From<Vec3> for Val {
     }
 }
 
+/// The `Vector` enum's members: the six directional constants of the
+/// documented frame (`x` left, `y` up, `z` forward). The catalog records
+/// the members but not their components, so the table stands here once.
+pub(crate) fn constant(member: &str) -> Option<Vec3> {
+    Some(match member {
+        "LEFT" => Vec3 {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        "RIGHT" => Vec3 {
+            x: -1.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        "UP" => Vec3 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        "DOWN" => Vec3 {
+            x: 0.0,
+            y: -1.0,
+            z: 0.0,
+        },
+        "FORWARD" => Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        },
+        "BACKWARD" => Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: -1.0,
+        },
+        _ => return None,
+    })
+}
+
 fn vec(value: &Val, construct: &str) -> Result<Vec3, Stop> {
     match value {
         Val::Vector { x, y, z } => Ok(Vec3 {
