@@ -285,6 +285,57 @@ fn record_stop(runs: &mut Vec<RuleRun>, run: RuleRun, at: Option<StopIndex>, sto
     stop.stopped_at(location)
 }
 
+/// A suspended `Wait`/`Wait Until` whose wake fires under a non-100
+/// `Set Slow Motion` factor would resume on the schedule the suspend
+/// computed at 100% — the same unmeasured seconds-to-ticks mapping the
+/// `wait`/`waitUntil` arms stop on, so the wake stops the run naming
+/// the construct. `live` marks a `Wait Until` wake its own condition
+/// re-check set this tick, which encodes no schedule.
+fn stale_wake(
+    instance: &Instance<'_>,
+    rule_list: &[&Rule],
+    world: &mut World,
+    live: bool,
+    tick: u64,
+) -> Result<(), Stop> {
+    if live || world.clock.slow_motion == 100.0 {
+        return Ok(());
+    }
+    // A `Wait Until` frame names its action; a `Wait`'s suspending
+    // frame sits one past it.
+    let (rule, at, construct) = match instance.wait_mode {
+        WaitMode::Until(frame) => (
+            frame.rule_idx,
+            Some(StopIndex::Action(frame.pc)),
+            "waitUntil",
+        ),
+        _ => match instance.frames.last() {
+            Some(frame) => (
+                frame.rule_idx,
+                Some(StopIndex::Action(frame.pc - 1)),
+                "wait",
+            ),
+            None => (instance.rule_idx, None, "wait"),
+        },
+    };
+    Err(record_stop(
+        &mut world.runs,
+        RuleRun {
+            rule,
+            name: rule_list[rule].name.clone(),
+            event_player: event_player(instance),
+            ended: RunEnd::Stopped,
+        },
+        at,
+        NotModeled::new(format!(
+            "action {construct} under a {}% simulation rate",
+            world.clock.slow_motion
+        ))
+        .at(tick)
+        .into(),
+    ))
+}
+
 fn tick_loop(
     mut loaded: Loaded<'_>,
     world: &mut World,
@@ -485,6 +536,7 @@ fn run_tick(
                 let edge = holds && !instance.prev;
                 instance.prev = holds;
                 // A wake due this tick wins over the wait behavior.
+                let mut until_live = false;
                 if instance.wake.is_some_and(|wake| wake > tick) {
                     match instance.wait_mode {
                         WaitMode::Ignore => {}
@@ -540,12 +592,16 @@ fn run_tick(
                                 )
                             })? {
                                 instance.wake = Some(tick);
+                                until_live = true;
                             }
                         }
                     }
                 }
                 let start = match instance.wake {
-                    Some(wake) if wake <= tick => true,
+                    Some(wake) if wake <= tick => {
+                        stale_wake(instance, rule_list, world, until_live, tick)?;
+                        true
+                    }
                     Some(_) => false,
                     None => {
                         if edge && instance.frames.is_empty() {
@@ -569,6 +625,10 @@ fn run_tick(
             }
             Event::Player { .. } => {
                 if instance.wake.is_some_and(|wake| wake <= tick) {
+                    // Event rules suspend only on `Wait(.., Ignore
+                    // Condition)`, so a wake here is always the stale
+                    // schedule `stale_wake` gates.
+                    stale_wake(instance, rule_list, world, false, tick)?;
                     instance.wake = None;
                     run_and_record(instance, rule_list, blocks, subroutines, world, tick, now)
                         .map_err(|e| e.at(tick))?;
@@ -631,6 +691,7 @@ fn run_tick(
                 // pushed onto it. A subroutine rule has no conditions, so
                 // the wait behaviors that read them do not apply; a
                 // `Wait Until` still re-checks its own condition.
+                let mut until_live = false;
                 if instance.wake.is_some_and(|wake| wake > tick)
                     && let WaitMode::Until(frame) = instance.wait_mode
                 {
@@ -668,9 +729,11 @@ fn run_tick(
                         )
                     })? {
                         instance.wake = Some(tick);
+                        until_live = true;
                     }
                 }
                 if instance.wake.is_some_and(|wake| wake <= tick) {
+                    stale_wake(instance, rule_list, world, until_live, tick)?;
                     instance.wake = None;
                 }
                 if instance.wake.is_none() && !instance.frames.is_empty() {

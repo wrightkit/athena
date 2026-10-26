@@ -5,7 +5,7 @@
 //! under a non-100 factor stops `not_modeled`, the seconds-to-ticks
 //! mapping there being unmeasured.
 
-use athena_sim::{Change, Outcome, RunEnd, StopIndex, Val, run_text};
+use athena_sim::{Change, Outcome, RunEnd, StopIndex, Val, run_scenario, run_text};
 
 /// A global rule `clock` whose actions `body` spells, with `g`/`t0`/
 /// `t1`/`m` declared for reads to land in.
@@ -273,6 +273,205 @@ fn a_true_wait_until_under_a_non_100_factor_still_passes() {
     );
     assert_eq!(trace.outcome, Outcome::Complete);
     assert_eq!(trace.globals["g"], Val::Number(1.0));
+}
+
+#[test]
+fn a_wait_suspended_before_the_factor_change_stops_at_its_wake() {
+    // `A` suspends at the 100% rate; `slow` then sets 50%, so the wake
+    // tick encodes the same unmeasured seconds-to-ticks mapping — the
+    // run stops there rather than resume on it.
+    let text = r#"
+variables {
+    global:
+        0: g
+}
+
+rule ("A") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait(0.048, Ignore Condition);
+        Set Global Variable(g, Total Time Elapsed);
+    }
+}
+
+rule ("slow") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Slow Motion(50);
+    }
+}
+"#;
+    let trace = run_text(text, athena_sim::Options { seconds: 1.0 }).unwrap();
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "action wait under a 50% simulation rate"
+    );
+    assert_eq!(not_modeled.tick, Some(3));
+    let Some(location) = &not_modeled.location else {
+        panic!("expected a stop location");
+    };
+    assert_eq!(
+        (location.rule, location.at),
+        (0, Some(StopIndex::Action(0)))
+    );
+}
+
+#[test]
+fn a_wait_until_timeout_expiring_under_a_non_100_factor_is_not_modeled() {
+    // The suspended `Wait Until`'s timeout is the same stale schedule:
+    // the condition stays false and the expiry fires under 50%.
+    let text = r#"
+rule ("u") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait Until(False, 0.048);
+    }
+}
+
+rule ("slow") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Slow Motion(50);
+    }
+}
+"#;
+    let trace = run_text(text, athena_sim::Options { seconds: 1.0 }).unwrap();
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "action waitUntil under a 50% simulation rate"
+    );
+    assert_eq!(not_modeled.tick, Some(3));
+    let Some(location) = &not_modeled.location else {
+        panic!("expected a stop location");
+    };
+    assert_eq!(
+        (location.rule, location.at),
+        (0, Some(StopIndex::Action(0)))
+    );
+}
+
+#[test]
+fn an_event_rule_wait_suspended_before_the_factor_change_stops() {
+    // The event-rule resume path gates the same way: the `Player Died`
+    // run suspends at 100%, `slow` sets 50%, the wake tick is stale.
+    let text = r#"
+rule ("died") {
+    event {
+        Player Died;
+        All;
+        All;
+    }
+    actions {
+        Wait(0.032, Ignore Condition);
+    }
+}
+
+rule ("slow") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Slow Motion(50);
+    }
+}
+"#;
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "hero": "ana", "team": "team1" }],
+        "events": [{ "kind": "playerDied", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "action wait under a 50% simulation rate"
+    );
+    assert_eq!(not_modeled.tick, Some(2));
+    let Some(location) = &not_modeled.location else {
+        panic!("expected a stop location");
+    };
+    assert_eq!(
+        (location.rule, location.at, location.event_player.as_deref()),
+        (0, Some(StopIndex::Action(0)), Some("p1"))
+    );
+}
+
+#[test]
+fn a_subroutine_wait_suspended_before_the_factor_change_stops() {
+    // `Start Rule` puts the subroutine's run on its own instance; a
+    // `Wait` it suspends on gates the same at its wake.
+    let text = r#"
+variables {
+    global:
+        0: g
+}
+
+subroutines {
+    0: sub
+}
+
+rule ("start") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Start Rule(sub, Do Nothing);
+    }
+}
+
+rule ("Subroutine sub") {
+    event {
+        Subroutine;
+        sub;
+    }
+    actions {
+        Wait(0.032, Ignore Condition);
+        Set Global Variable(g, 1);
+    }
+}
+
+rule ("slow") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Slow Motion(50);
+    }
+}
+"#;
+    let trace = run_text(text, athena_sim::Options { seconds: 1.0 }).unwrap();
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "action wait under a 50% simulation rate"
+    );
+    assert_eq!(not_modeled.tick, Some(2));
+    let Some(location) = &not_modeled.location else {
+        panic!("expected a stop location");
+    };
+    assert_eq!(
+        (location.rule, location.at),
+        (1, Some(StopIndex::Action(0)))
+    );
 }
 
 #[test]
