@@ -207,21 +207,37 @@ fn custom_string_leaves_missing_placeholders_literal() {
     assert_eq!(global(&trace), &text("RELOAD"));
 }
 
-/// The display-only strings render client-localized glyphs — icon
-/// pictures, ability icons, per-player key names — which no capture or
-/// documented placeholder text defines; the run stops.
+/// A `Custom String` holding an opaque display value is itself display:
+/// the rendered text would carry the client token's content, so the
+/// produced value keeps the producer and the evaluated arguments —
+/// template first (athena#113).
 #[test]
-fn display_only_strings_are_not_modeled() {
-    for value in [
-        "Icon String(Bolt)",
-        "Ability Icon String(Hero(Ana), Button(Ability 1))",
-        "Input Binding String(Button(Jump))",
-        "Hero Icon String(Hero(Ana))",
-        "Custom String(\"{0}\", Icon String(Bolt))",
-    ] {
-        let trace = run(&set_global(value));
-        let Outcome::NotModeled(_) = &trace.outcome else {
-            panic!("{value}: {:?}", trace.outcome);
-        };
-    }
+fn a_custom_string_on_a_display_value_is_display() {
+    let trace = run(&set_global(
+        "Custom String(\"{0} heal\", Icon String(Bolt))",
+    ));
+    assert_eq!(
+        global(&trace),
+        &Val::Display {
+            producer: "customString".into(),
+            args: vec![
+                Val::Text("{0} heal".into()),
+                Val::Display {
+                    producer: "iconString".into(),
+                    args: vec![Val::Text("BOLT".into())],
+                },
+            ],
+        }
+    );
+}
+
+/// Reading a display value as a string stops the run — `Char In String`
+/// needs the token's text, which the model does not carry.
+#[test]
+fn a_string_read_on_a_display_value_is_not_modeled() {
+    let trace = run(&set_global("Char In String(Icon String(Bolt), 0)"));
+    let Outcome::NotModeled(stop) = &trace.outcome else {
+        panic!("{:?}", trace.outcome);
+    };
+    assert!(stop.construct.contains("display"), "{}", stop.construct);
 }

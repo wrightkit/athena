@@ -48,7 +48,7 @@ fn a_hud_text_visible_to_one_team_lists_only_its_members() {
     assert_eq!(hud.args.subheader, Some(Val::Null));
     assert_eq!(hud.args.location.as_deref(), Some("LEFT"));
     assert_eq!(hud.args.sort_order, Some(Val::Number(0.0)));
-    assert_eq!(hud.args.header_color.as_deref(), Some("WHITE"));
+    assert_eq!(hud.args.header_color, Some(Val::Text("WHITE".into())));
     assert_eq!(
         hud.args.reevaluation.as_deref(),
         Some("VISIBILITY_AND_STRING")
@@ -126,8 +126,11 @@ fn a_progress_bar_records_its_arguments() {
     assert_eq!(bar.args.text, Some(Val::Text("boss".into())));
     assert_eq!(bar.args.location.as_deref(), Some("TOP"));
     assert_eq!(bar.args.sort_order, Some(Val::Number(1.0)));
-    assert_eq!(bar.args.progress_bar_color.as_deref(), Some("YELLOW"));
-    assert_eq!(bar.args.text_color.as_deref(), Some("RED"));
+    assert_eq!(
+        bar.args.progress_bar_color,
+        Some(Val::Text("YELLOW".into()))
+    );
+    assert_eq!(bar.args.text_color, Some(Val::Text("RED".into())));
     assert_eq!(bar.args.reevaluation.as_deref(), Some("NONE"));
     assert_eq!(bar.args.spec_visibility.as_deref(), Some("VISIBLE_ALWAYS"));
     // `Last Text ID` was the progress bar; the kind-scoped destroy hit it.

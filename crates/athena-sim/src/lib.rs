@@ -41,6 +41,12 @@ pub enum Val {
         y: f64,
         z: f64,
     },
+    /// An opaque display value — the client rendering token a display-only
+    /// producer yields: `producer` id + evaluated `args`, never the content.
+    Display {
+        producer: String,
+        args: Vec<Val>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -308,21 +314,34 @@ pub enum EffectKind {
     PlayedEffect,
 }
 
-/// The evaluated arguments an effect entity records. A field is present
-/// only when the action takes that argument. Value arguments serialize as
-/// [`Val`]; enum arguments (effect type, color, reevaluation) serialize as
-/// the catalog member id. `position` is the evaluated argument: the model
-/// has no geometry, so it is whatever the expression evaluated to — an
-/// expression that needs geometry stops the run as `not_modeled` before
-/// the element is recorded.
+/// Serialize a member-id text bare (`"WHITE"`), anything else as [`Val`].
+fn member_or_val<S: serde::Serializer>(
+    value: &Option<Val>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        Some(Val::Text(member)) => serializer.serialize_str(member),
+        _ => value.serialize(serializer),
+    }
+}
+
+/// The evaluated arguments an effect entity records, present only when the
+/// action takes the argument. [`Val`]s serialize as values; enum arguments
+/// (effect type, color, reevaluation) as the catalog member id — a `color`
+/// holding no member id takes the [`Val`] form, for example an opaque
+/// `display` value. `position` is whatever the expression evaluated to — the
+/// model has no geometry, and needing it is `not_modeled`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectArgs {
     /// The `Effect`/`DynamicEffect` member id of the `Type` argument.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effect: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "member_or_val"
+    )]
+    pub color: Option<Val>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<Val>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -359,10 +378,10 @@ pub struct EffectElement {
     pub args: EffectArgs,
 }
 
-/// The evaluated arguments a HUD element records. A field is present only
-/// when the creating action takes that argument. Value arguments serialize
-/// as [`Val`]; enum arguments (location, colors, reevaluation, spectator
-/// visibility) serialize as the catalog member id.
+/// The evaluated arguments a HUD element records, present only when the action
+/// takes the argument. [`Val`]s serialize as values; enum arguments (location,
+/// reevaluation, spectator visibility) as the catalog member id — a color holding
+/// no member id takes the [`Val`] form, for example an opaque `display` value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HudArgs {
@@ -378,14 +397,26 @@ pub struct HudArgs {
     pub location: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_order: Option<Val>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub header_color: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subheader_color: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_color: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub progress_bar_color: Option<String>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "member_or_val"
+    )]
+    pub header_color: Option<Val>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "member_or_val"
+    )]
+    pub subheader_color: Option<Val>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "member_or_val"
+    )]
+    pub text_color: Option<Val>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "member_or_val"
+    )]
+    pub progress_bar_color: Option<Val>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reevaluation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

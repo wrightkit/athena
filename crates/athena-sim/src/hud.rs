@@ -118,11 +118,9 @@ fn create_hud_text(
         text: Some(eval(text, env)?),
         location: Some(enum_member("createHudText", "location", location)?.to_string()),
         sort_order: Some(eval(sort_order, env)?),
-        header_color: Some(enum_member("createHudText", "headerColor", header_color)?.to_string()),
-        subheader_color: Some(
-            enum_member("createHudText", "subheaderColor", subheader_color)?.to_string(),
-        ),
-        text_color: Some(enum_member("createHudText", "textColor", text_color)?.to_string()),
+        header_color: Some(eval(header_color, env)?),
+        subheader_color: Some(eval(subheader_color, env)?),
+        text_color: Some(eval(text_color, env)?),
         reevaluation: Some(enum_member("createHudText", "reevaluation", reevaluation)?.to_string()),
         spec_visibility: Some(enum_member("createHudText", "spectators", spectators)?.to_string()),
         ..HudArgs::default()
@@ -166,10 +164,8 @@ fn progress_bar_hud(
         text: Some(eval(text, env)?),
         location: Some(enum_member("progressBarHud", "location", location)?.to_string()),
         sort_order: Some(eval(sort_order, env)?),
-        progress_bar_color: Some(
-            enum_member("progressBarHud", "progressBarColor", bar_color)?.to_string(),
-        ),
-        text_color: Some(enum_member("progressBarHud", "textColor", text_color)?.to_string()),
+        progress_bar_color: Some(eval(bar_color, env)?),
+        text_color: Some(eval(text_color, env)?),
         reevaluation: Some(
             enum_member("progressBarHud", "reevaluation", reevaluation)?.to_string(),
         ),

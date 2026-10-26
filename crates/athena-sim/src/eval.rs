@@ -173,6 +173,11 @@ pub(crate) fn number(value: &Val) -> Result<f64, Stop> {
 /// `Null` by number coercion (`Null` and `False` equal `0`), text by text,
 /// players by scenario `id`, arrays by element-wise equality, vectors by
 /// component equality. Values of different types are never equal.
+///
+/// Two opaque display values answer true only on identical producer and
+/// arguments; any other pairing — two differing ones, or one against
+/// anything else — has no answer the model can give without the token's
+/// content, so the run stops (athena#113).
 pub(crate) fn values_equal(a: &Val, b: &Val) -> Result<bool, Stop> {
     Ok(match (a, b) {
         (Val::Array(a), Val::Array(b)) => {
@@ -187,6 +192,17 @@ pub(crate) fn values_equal(a: &Val, b: &Val) -> Result<bool, Stop> {
         (Val::Text(a), Val::Text(b)) => a == b,
         (Val::Player(a), Val::Player(b)) => a == b,
         (Val::Vector { .. }, Val::Vector { .. }) => a == b,
+        // A `customString` display value's content is the rendered text,
+        // not its producer record — comparing it never has an answer.
+        (Val::Display { producer, .. }, _) | (_, Val::Display { producer, .. })
+            if producer == "customString" =>
+        {
+            return unsupported(format!("comparison of {a:?} and {b:?}"));
+        }
+        (Val::Display { .. }, Val::Display { .. }) if a == b => true,
+        (Val::Display { .. }, _) | (_, Val::Display { .. }) => {
+            return unsupported(format!("comparison of {a:?} and {b:?}"));
+        }
         _ => false,
     })
 }
