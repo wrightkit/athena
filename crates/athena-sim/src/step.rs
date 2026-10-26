@@ -49,9 +49,13 @@ pub(crate) struct World {
     pub globals: BTreeMap<String, Val>,
     pub players: BTreeMap<String, Player>,
     pub logs: Vec<LogEntry>,
-    pub hud: Hud,
-    /// The effect entities of the run so far.
-    pub effects: Effects,
+    /// The display elements of the run so far; a `RefCell` so an `Env`
+    /// — which borrows it for `Last Text ID`/`Text Count` — can coexist
+    /// with the action that mutates it, like `changes`.
+    pub hud: RefCell<Hud>,
+    /// The entities of the run so far; a `RefCell` for `Last Created
+    /// Entity`/`Entity Exists`/`Entity Count`, like `hud`.
+    pub effects: RefCell<Effects>,
     /// `Start Rule` requests as `(rule index, restart)`; applied when the
     /// target's instance is next visited in the tick loop.
     pub pending_starts: Vec<(usize, bool)>,
@@ -177,10 +181,10 @@ pub(crate) fn run_instance(
             players: &world.players,
             event: inst.event.as_ref(),
             each_player: inst.each_player.as_deref(),
-            last_text_id: world.hud.last_text_id,
+            hud: &world.hud,
             element: None,
             once: &inst.once,
-            last_entity: world.effects.last_created,
+            effects: &world.effects,
             random: world.random.as_ref(),
             server_load: world.server_load,
             map: world.map.as_deref(),
@@ -709,13 +713,13 @@ pub(crate) fn run_instance(
                 }
                 other => {
                     let result =
-                        crate::hud::action(other, args, &env, &mut world.hud, tick, &world.changes)
+                        crate::hud::action(other, args, &env, &world.hud, tick, &world.changes)
                             .or_else(|| {
                                 crate::effects::action(
                                     other,
                                     args,
                                     &env,
-                                    &mut world.effects,
+                                    &world.effects,
                                     tick,
                                     &world.changes,
                                 )
