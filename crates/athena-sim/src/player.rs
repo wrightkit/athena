@@ -138,6 +138,7 @@ const NAMES: &[&str] = &[
     "isAlive",
     "getHero",
     "teamOf",
+    "getSlot",
     "isHeroBeingPlayed",
     "getPlayersOnHero",
     "getHealth",
@@ -249,6 +250,25 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     None,
                     format!("value {name}"),
                 ),
+            }
+        }
+        // A live input: `Slot Of` reads the player's declared `slot`;
+        // the lobby assigns slots outside the script, so the simulator
+        // never derives one from roster order.
+        "getSlot" => {
+            let [player] = arguments::<1>(name, args)?;
+            let id = player_id(player, env)?;
+            match env.players.get(&id) {
+                Some(player) => match player.slot {
+                    Some(slot) => Ok(Val::Number(f64::from(slot))),
+                    None => missing(
+                        MissingInputKind::Slot,
+                        Some(id),
+                        Some("slot".to_string()),
+                        format!("value {name}"),
+                    ),
+                },
+                None => unsupported(format!("`{id}` is not a scenario player")),
             }
         }
         // Modeled, not measured: the declared `hero` stands in for the

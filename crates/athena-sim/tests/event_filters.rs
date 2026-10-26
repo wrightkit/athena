@@ -209,8 +209,13 @@ fn a_filtered_event_rule_reads_the_event_player_to_match() {
 }
 
 #[test]
-fn a_slot_target_filter_is_not_modeled() {
+fn a_slot_filter_binds_only_the_player_on_that_slot() {
     let text = r#"
+variables {
+    player:
+        0: marker
+}
+
 rule ("slotted") {
     event {
         Ongoing - Each Player;
@@ -218,18 +223,34 @@ rule ("slotted") {
         Slot 3;
     }
     actions {
-        Wait(0, Ignore Condition);
+        Set Player Variable(Event Player, marker, 1);
     }
 }
 "#;
-    let trace = run(
-        text,
-        r#"{ "scenarioVersion": 1, "seconds": 1,
-            "players": [{ "id": "p1", "hero": "ana", "team": "team1" }] }"#,
+    // `Slot 3` matches the declared `slot`: p2 declares another slot and
+    // p3 declares none, so neither binds an instance.
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [
+            { "id": "p1", "hero": "ana", "team": "team1", "slot": 3 },
+            { "id": "p2", "hero": "reaper", "team": "team2", "slot": 4 },
+            { "id": "p3", "hero": "dva", "team": "team2" }
+        ],
+        "expect": [
+            { "kind": "playerVariable", "player": "p1", "name": "marker", "value": 1 },
+            { "kind": "playerVariable", "player": "p2", "name": "marker", "value": null },
+            { "kind": "playerVariable", "player": "p3", "name": "marker", "value": null }
+        ]
+    }"#;
+    let trace = run(text, scenario);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert!(
+        trace
+            .expectations
+            .iter()
+            .all(|result| result.status == ExpectationStatus::Pass),
+        "{:?}",
+        trace.expectations
     );
-    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
-        panic!("expected NotModeled, got {:?}", trace.outcome);
-    };
-    assert!(not_modeled.construct.contains("slot"));
-    assert_eq!(not_modeled.tick, None);
 }

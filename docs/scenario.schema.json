@@ -93,6 +93,12 @@
       },
       "description": "The player's facing the facing-reading values use: horizontal and vertical degrees, horizontal 0 forward (+z) increasing left, vertical 0 level increasing downward. Supply it whole or not at all: a partial object is malformed, and a read with no field is a missing input."
     },
+    "slot": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 11,
+      "description": "The player's lobby slot: what Slot Of reads and a Slot N rule-event filter matches, unique among the players. Write it as an integer literal: the loader rejects a decimal point or exponent, so 1.0 and 1e3 fail although 'integer' admits integral-valued numbers. A Slot Of read with no field is a missing input."
+    },
     "stateVector": {
       "type": "object",
       "required": ["x", "y", "z"],
@@ -149,7 +155,8 @@
           "additionalProperties": { "type": "boolean" }
         },
         "position": { "$ref": "#/$defs/position" },
-        "facing": { "$ref": "#/$defs/facing" }
+        "facing": { "$ref": "#/$defs/facing" },
+        "slot": { "$ref": "#/$defs/slot" }
       }
     },
     "playerV2": {
@@ -168,7 +175,8 @@
           "additionalProperties": { "type": "boolean" }
         },
         "position": { "$ref": "#/$defs/position" },
-        "facing": { "$ref": "#/$defs/facing" }
+        "facing": { "$ref": "#/$defs/facing" },
+        "slot": { "$ref": "#/$defs/slot" }
       }
     },
     "event": {

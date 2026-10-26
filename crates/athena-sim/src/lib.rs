@@ -4,6 +4,7 @@ mod blocks;
 mod call;
 mod effects;
 mod eval;
+mod expect;
 mod geometry;
 mod hero_settings;
 mod hud;
@@ -136,6 +137,8 @@ pub enum MissingInputKind {
     Objectives,
     /// An entry of a scenario player's `state` map.
     State,
+    /// The `slot` of a scenario player.
+    Slot,
 }
 
 /// A live input the program read but the scenario did not supply. The run

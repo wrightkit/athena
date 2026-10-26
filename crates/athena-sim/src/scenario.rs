@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use workshop_rs::catalog::{Catalog, Locale};
 
+use crate::expect::Expectation;
 use crate::{ScenarioError, Val};
 
 /// The `scenarioVersion` values this simulator runs: version 1 keeps
@@ -234,6 +235,11 @@ pub(crate) struct Player {
     /// The `facing` direction as horizontal/vertical degrees; `None`
     /// when the scenario omits it, so a facing read is a `missing_input`.
     pub facing: Option<crate::vector::Facing>,
+    /// The `slot` lobby position `Slot Of` reads and a `Slot N` rule-event
+    /// filter matches; `None` when the scenario omits it, so a `Slot Of`
+    /// read is a `missing_input`. The loader checks the range and that no
+    /// two players share a slot.
+    pub slot: Option<u8>,
     /// The player's catalog-derived world state, resolved when the run
     /// starts.
     pub world: crate::state::WorldSlot,
@@ -261,24 +267,6 @@ pub(crate) struct InjectedEvent {
     pub event_player: Option<String>,
     /// Event values by event-value name.
     pub values: BTreeMap<String, Val>,
-}
-
-/// One expected observation checked at the end of a complete run.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Expectation {
-    Global {
-        name: String,
-        value: Val,
-    },
-    PlayerVariable {
-        player: String,
-        name: String,
-        value: Val,
-    },
-    Log {
-        tick: u64,
-        text: String,
-    },
 }
 
 /// The server-load numbers a scenario's `serverLoad` supplies: what
@@ -391,6 +379,8 @@ struct PlayerDoc {
     /// degrees, supplied whole or not at all.
     #[serde(default, deserialize_with = "object_or_absent")]
     facing: Option<FacingDoc>,
+    /// The player's lobby slot, an integer from 0 to 11.
+    slot: Option<u8>,
 }
 
 #[derive(Deserialize)]
@@ -426,7 +416,7 @@ struct EventDoc {
     values: BTreeMap<String, serde_json::Value>,
 }
 
-fn format_error<T>(message: impl Into<String>) -> Result<T, ScenarioError> {
+pub(crate) fn format_error<T>(message: impl Into<String>) -> Result<T, ScenarioError> {
     Err(ScenarioError::Format(message.into()))
 }
 
@@ -477,7 +467,7 @@ fn state_value(
     })
 }
 
-fn value_to_val(value: &serde_json::Value) -> Result<Val, ScenarioError> {
+pub(crate) fn value_to_val(value: &serde_json::Value) -> Result<Val, ScenarioError> {
     Ok(match value {
         serde_json::Value::Null => Val::Null,
         serde_json::Value::Bool(b) => Val::Bool(*b),
@@ -493,73 +483,6 @@ fn value_to_val(value: &serde_json::Value) -> Result<Val, ScenarioError> {
             return format_error(format!("{value} is not a scenario value"));
         }
     })
-}
-
-fn named_id(
-    object: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-) -> Result<String, ScenarioError> {
-    match object.get(key).and_then(|value| value.as_str()) {
-        Some(text) if !text.is_empty() => Ok(text.to_string()),
-        Some(_) => format_error(format!("`{key}` must not be empty")),
-        None => format_error(format!("`{key}` is missing or not a text")),
-    }
-}
-
-fn expectation(index: usize, value: &serde_json::Value) -> Result<Expectation, ScenarioError> {
-    let Some(object) = value.as_object() else {
-        return format_error(format!("expect[{index}] is not an object"));
-    };
-    let kind = object.get("kind").and_then(|kind| kind.as_str());
-    let allowed: &[&str] = match kind {
-        Some("global") => &["kind", "name", "value"],
-        Some("playerVariable") => &["kind", "player", "name", "value"],
-        Some("log") => &["kind", "tick", "text"],
-        other => {
-            return format_error(format!(
-                "expect[{index}].kind is {other:?}, expected `global`, `playerVariable` or `log`"
-            ));
-        }
-    };
-    for key in object.keys() {
-        if !allowed.contains(&key.as_str()) {
-            return format_error(format!("expect[{index}] has an unknown field `{key}`"));
-        }
-    }
-    match kind {
-        Some("global") => Ok(Expectation::Global {
-            name: named_id(object, "name")?,
-            value: value_to_val(
-                object
-                    .get("value")
-                    .ok_or_else(|| ScenarioError::Format("expect value is missing".into()))?,
-            )?,
-        }),
-        Some("playerVariable") => Ok(Expectation::PlayerVariable {
-            player: named_id(object, "player")?,
-            name: named_id(object, "name")?,
-            value: value_to_val(
-                object
-                    .get("value")
-                    .ok_or_else(|| ScenarioError::Format("expect value is missing".into()))?,
-            )?,
-        }),
-        _ => {
-            let Some(serde_json::Value::Number(tick)) = object.get("tick") else {
-                return format_error(format!("expect[{index}].tick is missing or not an integer"));
-            };
-            let Some(tick) = tick.as_u64() else {
-                return format_error(format!("expect[{index}].tick is missing or not an integer"));
-            };
-            match object.get("text").and_then(|text| text.as_str()) {
-                Some(text) => Ok(Expectation::Log {
-                    tick,
-                    text: text.to_string(),
-                }),
-                None => format_error(format!("expect[{index}].text is missing or not a text")),
-            }
-        }
-    }
 }
 
 /// Every hero name a scenario may give, from the `workshop-rs` catalog: the
@@ -624,6 +547,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
     }
     let heroes = hero_names(catalog);
     let mut players = BTreeMap::new();
+    let mut slots = BTreeMap::new();
     for player in doc.players {
         if player.id.is_empty() {
             return format_error("a player `id` must not be empty");
@@ -684,6 +608,20 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
                 ));
             }
         }
+        if let Some(slot) = player.slot {
+            if slot > 11 {
+                return format_error(format!(
+                    "player `{}` `slot` must be from 0 to 11",
+                    player.id
+                ));
+            }
+            if let Some(first) = slots.insert(slot, player.id.clone()) {
+                return load_error(format!(
+                    "players `{first}` and `{}` both declare `slot` {slot}",
+                    player.id
+                ));
+            }
+        }
         let loaded = Player {
             hero: player.hero,
             hero_member,
@@ -705,6 +643,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
                 horizontal: facing.horizontal,
                 vertical: facing.vertical,
             }),
+            slot: player.slot,
             world: crate::state::WorldSlot::Unresolved,
         };
         if players.insert(player.id.clone(), loaded).is_some() {
@@ -755,7 +694,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
 
     let mut expect = Vec::new();
     for (index, value) in doc.expect.iter().enumerate() {
-        let expectation = expectation(index, value)?;
+        let expectation = crate::expect::expectation(index, value)?;
         if let Expectation::PlayerVariable { player, .. } = &expectation
             && !players.contains_key(player)
         {

@@ -9,11 +9,7 @@ use workshop_rs::{Event, EventTarget, EventTeam, Program, Rule};
 
 use crate::blocks::{Blocks, block_maps};
 use crate::scenario::{EventCtx, Player, Team};
-use crate::{NotModeled, Stop, StopLocation, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::{Stop, StopLocation, Val};
 
 /// The position of a rule execution in progress: the rule whose actions the
 /// program counter reads. A `Call Subroutine` action pushes a frame.
@@ -80,12 +76,11 @@ pub(crate) struct Loaded<'a> {
 
 /// Whether a scenario player satisfies a rule event's `team`/`target`
 /// filters: `Team 1`/`Team 2` match the declared `team`, a hero name matches
-/// the catalog member the declared `hero` resolves to, and `All` imposes no
-/// constraint. `Slot N` names a lobby position the scenario format cannot
-/// express, so reaching it while matching a player is not modeled; a
-/// filter the `team` arm rejects first is never evaluated.
+/// the catalog member the declared `hero` resolves to, `Slot N` matches the
+/// declared `slot`, and `All` imposes no constraint. A player that does not
+/// declare the read field does not match; a filter the `team` arm rejects
+/// first is never evaluated.
 pub(crate) fn player_matches(
-    rule: &Rule,
     team: EventTeam,
     target: &EventTarget,
     player: &Player,
@@ -101,9 +96,7 @@ pub(crate) fn player_matches(
     match target {
         EventTarget::All => Ok(true),
         EventTarget::Hero(hero) => Ok(player.hero_member.as_deref() == Some(hero.as_str())),
-        EventTarget::Slot(slot) => {
-            unsupported(format!("rule `{}`: event player slot {slot}", rule.name))
-        }
+        EventTarget::Slot(slot) => Ok(player.slot == Some(*slot)),
     }
 }
 
@@ -134,7 +127,7 @@ pub(crate) fn load<'a>(
                 };
                 let mut bound = Vec::new();
                 for (id, player) in players {
-                    if player_matches(rule, team, target, player).map_err(|stop| {
+                    if player_matches(team, target, player).map_err(|stop| {
                         stop.stopped_at(StopLocation {
                             rule: rule_idx,
                             name: rule.name.clone(),
