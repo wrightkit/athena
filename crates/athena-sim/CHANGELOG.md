@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.0](https://github.com/wrightkit/athena/compare/v0.7.0...v0.8.0) (2026-10-26)
+
+
+### Features
+
+* **sim:** answer match-phase reads from a declared matchPhase ([b96e3d5](https://github.com/wrightkit/athena/commit/b96e3d58ed32212a08d8aff64130e58c8775f106)), closes [#101](https://github.com/wrightkit/athena/issues/101)
+* **sim:** answer Slot Of from a declared scenario slot ([44cd278](https://github.com/wrightkit/athena/commit/44cd278839288f34e21542798c8422efe0646584)), closes [#99](https://github.com/wrightkit/athena/issues/99)
+* **sim:** answer Value In Array on a non-array operand as a missing element ([9c0eb32](https://github.com/wrightkit/athena/commit/9c0eb3265d6ee169ecfba8eed45fcd111e39b6a5)), closes [#97](https://github.com/wrightkit/athena/issues/97)
+* **sim:** model Players On Hero from scenario players ([#87](https://github.com/wrightkit/athena/issues/87)) ([568bdf0](https://github.com/wrightkit/athena/commit/568bdf0f14a1421de2f7c6eec03d87ea627377c4)), closes [#86](https://github.com/wrightkit/athena/issues/86)
+* **sim:** name the stopping rule and location in trace outcomes ([#94](https://github.com/wrightkit/athena/issues/94)) ([9498b8d](https://github.com/wrightkit/athena/commit/9498b8d688d76679b2ca85bbd83f53cad5c3d20d)), closes [#93](https://github.com/wrightkit/athena/issues/93)
+* **sim:** read player state from a version-2 scenario state map ([#90](https://github.com/wrightkit/athena/issues/90)) ([f1efc21](https://github.com/wrightkit/athena/commit/f1efc2149f2d726c01bce37d5f9f44012016d345)), closes [#89](https://github.com/wrightkit/athena/issues/89)
+* **sim:** skip unapplied hero settings the scenario state covers ([#92](https://github.com/wrightkit/athena/issues/92)) ([7c8927e](https://github.com/wrightkit/athena/commit/7c8927eee9aa2979e13b2fd8a8fd7e973fb2f0ec)), closes [#91](https://github.com/wrightkit/athena/issues/91)
+
+
+### Dependencies
+
+* **sim:** bump workshop-rs to 1.26 for the populated hero-values file ([#96](https://github.com/wrightkit/athena/issues/96)) ([4a4ca80](https://github.com/wrightkit/athena/commit/4a4ca80db2d8d798793ab83f5d3f9a69a97e0d9b)), closes [#95](https://github.com/wrightkit/athena/issues/95)
+
 ## [0.7.0](https://github.com/wrightkit/athena/compare/v0.6.0...v0.7.0) (2026-10-26)
 
 
