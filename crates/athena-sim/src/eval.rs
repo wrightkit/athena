@@ -37,6 +37,10 @@ pub(crate) struct Env<'a> {
     /// The scenario's `serverLoad` numbers; `None` when the scenario
     /// supplies none, so a `Server Load *` value is a missing input.
     pub server_load: Option<ServerLoad>,
+    /// The catalog `Map` member id the scenario's `map` resolves to;
+    /// `None` when the scenario supplies none, so a `Current Map` value
+    /// is a missing input.
+    pub map: Option<&'a str>,
     /// The index of the rule the evaluated value belongs to — inside a
     /// `Call Subroutine`, the subroutine's own. Recorded on each
     /// `randomDraw` change.

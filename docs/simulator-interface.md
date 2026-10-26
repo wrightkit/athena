@@ -35,7 +35,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
 | `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
-| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random` and `serverLoad`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random` and `serverLoad` for `serverLoad`, `null` for the others), `tick`, `construct`. |
+| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad` and `map`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad` and `map` for `map`, `null` for the others), `tick`, `construct`. |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
 `logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
@@ -93,7 +93,7 @@ None of these has a client capture; all are **modeled, not measured**.
 
 Whether the client still caps a produced string at 511 bytes is unmeasured — the sources conflict on whether the limit was removed — so a string a value produces over 511 bytes, a `String Split` part included, is `not_modeled`.
 
-The display-only strings — `Icon String`, `Hero Icon String`, `Ability Icon String`, `Input Binding String` — render client-localized glyphs or per-player key names no capture or documented placeholder text defines; they stay `not_modeled`, as does `Current Map` while the scenario format names no map.
+The display-only strings — `Icon String`, `Hero Icon String`, `Ability Icon String`, `Input Binding String` — render client-localized glyphs or per-player key names no capture or documented placeholder text defines; they stay `not_modeled`.
 
 None of these has a client capture; all are **modeled, not measured**.
 
@@ -113,6 +113,12 @@ A bound that is not finite is `not_modeled`. No capture covers the client's gene
 `Server Load`, `Server Load Average` and `Server Load Peak` are modeled. Server load is a client-measured quantity the simulator does not guess, so the values read the scenario's `serverLoad` — `{ "serverLoad": { "average": n, "peak": n, "current": n } }` — constant for the whole run: `Server Load` reads `current`, `Server Load Average` reads `average`, `Server Load Peak` reads `peak`. A `Server Load *` value in a run without `serverLoad` is a `missing_input` of kind `serverLoad`. A read records no change; the field is an input, not a draw.
 
 Real load varies per tick and no capture covers it; this is **modeled, not measured**.
+
+### Map value
+
+`Current Map` is modeled. The lobby chooses the map outside the Workshop script, and the simulator does not guess it, so the value reads the scenario's `map` — `{ "map": "KINGS_ROW" }`, a `Map` member id of the `workshop-rs` catalog or its en-US spelling — and yields the member id as text: the same form a `Map` literal yields, so the two compare equal. The map is constant for the run; a mid-run change is not modeled. A `Current Map` value in a run without `map` is a `missing_input` of kind `map`. Other map-derived values (`Current Game Mode`, …) are not modeled — the catalog records no map-to-mode mapping. A read records no change; the field is an input, not a draw.
+
+No capture covers the lobby's map choice; this is **modeled, not measured**.
 
 ### Workshop settings
 

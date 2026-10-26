@@ -107,3 +107,5 @@ The simulator makes these choices only to stay deterministic; each needs a probe
   - `Stop Chasing Global/Player Variable` is a no-op — `Chase *` is not modeled, so nothing is ever chasing. The player argument still resolves.
 - **Modeled, not measured** — `All Heroes` (athena#69); no capture covers the element order:
   - `All Heroes` yields the catalog's `Hero` members in catalog order, as the member-id texts `Hero Of` and a `Hero` literal yield, so an element compares equal to both. The client's element order is unmeasured; the catalog order is the modeled order.
+- **Modeled, not measured** — `Current Map` (athena#71); no capture covers the lobby's map choice:
+  - `Current Map` reads the scenario's `map`, resolved like `hero` to a catalog `Map` member id, and yields that member id as text — the form a `Map` literal yields, so the two compare equal. The map is a scenario constant; a mid-run change is not modeled. A read without `map` is a `missing_input`; other map-derived values stay `not_modeled` unless they read the same field and the catalog.

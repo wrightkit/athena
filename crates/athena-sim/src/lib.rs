@@ -77,6 +77,8 @@ pub enum MissingInputKind {
     Random,
     /// The scenario's `serverLoad` numbers.
     ServerLoad,
+    /// The scenario's `map`.
+    Map,
 }
 
 /// A live input the program read but the scenario did not supply. The run

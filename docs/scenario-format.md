@@ -23,6 +23,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 13. **A scenario is a mock: what it does not declare takes the default value, which is `null`.** This is the owner's rule. The repository does not establish it as game behavior. No probe capture and no `workshop-rs` document records what an undeclared variable holds in the real client. The value `null` is what `athena` already uses for a global variable that was never set (`simulator-interface.md`, and `Null` reads as `0` in a number context, `architecture.md`). It is therefore a **modeled** choice, not a **measured** one. A probe is needed before it counts as measured.
 14. **Randomness is a seed, supplied by the scenario.** The client's generator is unmeasured, and the simulator must stay deterministic, so `random` carries a `seed` that drives a splitmix64 stream the `Random *` values consume in evaluation order (athena#65). The mapping from draws to values is **modeled, not measured** — no client capture records the distribution. A `Random *` value in a run without `random` is a group 2 missing input. The alternative — an explicit sequence of draws — can come later; a `random` object leaves room for it.
 15. **Server load is a constant, supplied by the scenario.** Server load is a client-measured quantity, and the simulator must not guess it, so `serverLoad` carries the three numbers `Server Load`, `Server Load Average` and `Server Load Peak` read — `{ "average": n, "peak": n, "current": n }`, constant for the run (athena#67). The constant is **modeled, not measured**: real load varies per tick. A `Server Load *` value in a run without `serverLoad` is a group 2 missing input; a partial object is malformed, because a field that exists only sometimes is easier to miswrite than to read.
+16. **The map is a constant, supplied by the scenario.** The lobby chooses the map outside the Workshop script, and the simulator must not guess it, so `map` carries the name `Current Map` reads — a `Map` member id of the `workshop-rs` catalog, in the same form `hero` takes (athena#71). The constant is **modeled, not measured**: a mid-run map change is not modeled. A `Current Map` value in a run without `map` is a group 2 missing input. Other map-derived values stay `not_modeled` unless they read the same field and the catalog.
 
 ## Top-level shape
 
@@ -35,6 +36,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 | `expect` | no | Observations the author expects at the end of the run. |
 | `random` | no | The source `Random *` values draw from: `{ "seed": n }`, `n` an unsigned 64-bit integer. Write `n` as an integer literal: the loader rejects a decimal point or exponent, so `1.0` and `1e3` fail although the schema admits them. |
 | `serverLoad` | no | The numbers `Server Load`, `Server Load Average` and `Server Load Peak` read: `{ "average": n, "peak": n, "current": n }`, constant for the run. |
+| `map` | no | The map `Current Map` reads: a `Map` member id of the `workshop-rs` catalog (for example `KINGS_ROW`) or its en-US spelling (`King's Row`), matched case-insensitively — the same form `hero` takes. |
 
 ### Player
 
@@ -75,6 +77,7 @@ JSON Schema cannot express some rules. The `athena` loader must check them and r
 - Player `id` values are unique.
 - Every `eventPlayer` and every expectation `player` is the `id` of a player in the file.
 - Every `hero` is a hero name known to `workshop-rs` (decision 3): the canonical `Hero` member id of the catalog (for example `JUNKER_QUEEN`) or its en-US spelling (`Junker Queen`), matched case-insensitively.
+- `map`, when present, is a map name known to `workshop-rs`: the canonical `Map` member id of the catalog (for example `KINGS_ROW`) or its en-US spelling (`King's Row`), matched case-insensitively.
 - At most one player has `"host": true`.
 - `scenarioVersion` is checked first (see Version).
 
@@ -98,10 +101,11 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 - The held state of a button, when `Is Button Held` reads it and the player's `buttons` does not list the slot.
 - The random source, when a `Random *` value reads it and the scenario has no `random`.
 - The server load, when a `Server Load`, `Server Load Average` or `Server Load Peak` value reads it and the scenario has no `serverLoad`.
+- The map, when a `Current Map` value reads it and the scenario has no `map`.
 
 An input of group 2 is **missing** when the program reads it during the run and the scenario does not supply it. The simulator never fills it in. It stops the run at that read, and the trace names the input.
 
-Modeled reads in version 1: the event player (`Event Player`), a player's hero (`Hero Of`) and team (`Team Of`), a player variable, a button's held state (`Is Button Held`, looked up in the player's `buttons` by the evaluated slot), the server load (`Server Load`, `Server Load Average` and `Server Load Peak`, read from `serverLoad`), and the scalar event values `eventDamage`, `eventHealing`, `eventWasCriticalHit`, `eventWasEnvironment` and `eventWasHealthPack` — each looked up in `values` by its catalog name. `Host Player` returns the player marked `host`; without one it stops the run as `not_modeled`. `Has Spawned` and `Is Alive` of a player with a `hero` are true from the first tick (modeled, not measured, [architecture.md](architecture.md#choices-no-capture-covers-yet)); for a player without a `hero` they stop the run as `not_modeled`. Other event-scoped values (`attacker`, `victim`, `eventAbility`, `eventDirection`) are not modeled and stop the run as `not_modeled`. An injected event fires every rule whose event kind matches `kind` and whose `team`/`player` filters the `eventPlayer` satisfies — `All` always matches, `Team 1`/`Team 2` match the declared `team`, a hero name matches the declared `hero`; an event without an `eventPlayer` satisfies only `All`/`All`, and evaluating a filtered rule against it reads the event player, a group 2 missing input. A `Slot N` filter names a lobby position the format cannot express; evaluating it against a scenario player or a matching injected event is `not_modeled`, and a filter no evaluation reaches never fires and is not an error. An `Ongoing - Each Player` rule becomes one instance per matching player with `Event Player` bound to it ([simulator-interface.md](simulator-interface.md#player-scoped-rules)).
+Modeled reads in version 1: the event player (`Event Player`), a player's hero (`Hero Of`) and team (`Team Of`), a player variable, a button's held state (`Is Button Held`, looked up in the player's `buttons` by the evaluated slot), the server load (`Server Load`, `Server Load Average` and `Server Load Peak`, read from `serverLoad`), the map (`Current Map`, read from `map`, yielding the catalog `Map` member id as text — the form a `Map` literal yields, so the two compare equal), and the scalar event values `eventDamage`, `eventHealing`, `eventWasCriticalHit`, `eventWasEnvironment` and `eventWasHealthPack` — each looked up in `values` by its catalog name. `Host Player` returns the player marked `host`; without one it stops the run as `not_modeled`. `Has Spawned` and `Is Alive` of a player with a `hero` are true from the first tick (modeled, not measured, [architecture.md](architecture.md#choices-no-capture-covers-yet)); for a player without a `hero` they stop the run as `not_modeled`. Other event-scoped values (`attacker`, `victim`, `eventAbility`, `eventDirection`) are not modeled and stop the run as `not_modeled`. An injected event fires every rule whose event kind matches `kind` and whose `team`/`player` filters the `eventPlayer` satisfies — `All` always matches, `Team 1`/`Team 2` match the declared `team`, a hero name matches the declared `hero`; an event without an `eventPlayer` satisfies only `All`/`All`, and evaluating a filtered rule against it reads the event player, a group 2 missing input. A `Slot N` filter names a lobby position the format cannot express; evaluating it against a scenario player or a matching injected event is `not_modeled`, and a filter no evaluation reaches never fires and is not an error. An `Ongoing - Each Player` rule becomes one instance per matching player with `Event Player` bound to it ([simulator-interface.md](simulator-interface.md#player-scoped-rules)).
 
 A malformed scenario is a different case. It is refused and nothing runs ([ADR-0033](https://github.com/wrightkit/wright/blob/main/docs/adr/0033-simulate-operation.md), decision 4). The schema and the loader checks (below) define "malformed". A well-formed scenario that lacks a group 2 input gives a trace.
 
@@ -114,9 +118,9 @@ The trace gains two fields. Adding a field is compatible ([simulator-interface.m
 
 | Field | Meaning |
 | --- | --- |
-| `input` | One of `hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`. |
-| `player` | The `id` of the player the input belongs to, or `null` when no player applies (`eventPlayer`, `eventValue`, `random`, `serverLoad`). |
-| `name` | The event-value name for `eventValue`, the button slot for `button`, the field `random` for `random` and `serverLoad` for `serverLoad`; `null` for the others. |
+| `input` | One of `hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`. |
+| `player` | The `id` of the player the input belongs to, or `null` when no player applies (`eventPlayer`, `eventValue`, `random`, `serverLoad`, `map`). |
+| `name` | The event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad` and `map` for `map`; `null` for the others. |
 | `tick` | The tick on which the program read it. |
 | `construct` | A short description for people, as in `not_modeled`. Do not match on it. |
 
@@ -179,5 +183,6 @@ The `init` rule's `Create HUD Text` is modeled (athena#10): the full `practice-r
 - `random-null.json`: `random` is `null` rather than an object.
 - `seed-too-large.json`: `random.seed` is past the unsigned 64-bit range.
 - `server-load-missing-peak.json`: `serverLoad` lacks `peak`.
+- `map-empty.json`: `map` is the empty text.
 
 `crates/athena-sim/tests/scenario_schema.rs` checks that every file in `valid/` passes and every invalid example fails. `cargo test` and CI run it.
