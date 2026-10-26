@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/wrightkit/athena/compare/v0.8.0...v0.9.0) (2026-10-26)
+
+
+### Features
+
+* **sim:** model Current Game Mode and the remaining Bastion value reads ([56a9996](https://github.com/wrightkit/athena/commit/56a9996490bb0cd3607ee0856890887e20300d3a)), closes [#105](https://github.com/wrightkit/athena/issues/105)
+* **sim:** model presentation and game-mode actions as no-ops ([9a027c4](https://github.com/wrightkit/athena/commit/9a027c49879bd2dafc6cc9aa92add308a6aa1c74)), closes [#103](https://github.com/wrightkit/athena/issues/103)
+
 ## [0.8.0](https://github.com/wrightkit/athena/compare/v0.7.0...v0.8.0) (2026-10-26)
 
 
