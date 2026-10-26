@@ -276,6 +276,7 @@ rule ("init") {
             Change::RandomDraw { .. } => "randomDraw",
             Change::State { .. } => "state",
             Change::Modifier { .. } => "modifier",
+            Change::MatchClock { .. } => "matchClock",
         })
         .collect();
     assert_eq!(

@@ -176,6 +176,16 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // argument — so the run stops naming the spelling.
         ambiguous::CALL => ambiguous::unresolved(args),
         "getTotalTimeElapsed" => Ok(Val::Number(env.now)),
+        // The clock `Set Match Time` writes; the lobby's phase limit is
+        // no input the scenario format carries, so a read before any
+        // write is unanswerable — `not_modeled`, not a guessed default.
+        "getMatchTime" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.match_time {
+                Some(remaining) => Ok(Val::Number(remaining)),
+                None => unsupported(format!("value {name} before a Set Match Time")),
+            }
+        }
         // Modeled, not measured: the client measures load per tick; the
         // simulator reads the scenario's `serverLoad` constants. The
         // field is optional in the format but there is no default —

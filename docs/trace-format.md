@@ -13,7 +13,7 @@ Each entry:
 | Field | Meaning |
 | --- | --- |
 | `tick` | The tick. |
-| `time` | The tick's `Total Time Elapsed` in milliseconds: 15 + tick·16. |
+| `time` | The tick's `Total Time Elapsed` in milliseconds: 15 + the run's elapsed game time (tick·16 at the normal rate). The match clock drives it — `Pause Match Time` holds it and `Set Slow Motion` scales its advance — so a paused or slowed clock repeats values across ticks. |
 | `rules` | The rule executions that started, resumed or ended on the tick, in execution order. See below. |
 | `changes` | The state changes the executions made, in execution order across rules. See below. |
 
@@ -41,6 +41,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 | `randomDraw` | `rule`, `construct`, `value` | A `Random *` value drew from the scenario's `random` source: `rule` is the index of the rule the value belongs to (as in `rules`; inside `Call Subroutine`, the subroutine's own), `construct` the value id, `value` the produced value. |
 | `state` | `player`, `key`, `old`, `new` | A state-cell write (see State-cell writes in [simulator-interface.md](simulator-interface.md#state-cell-writes-and-stored-modifiers)): `key` is the `state` key (`ultCharge`, `health`, `isDead`, …); `old` is what the key read before the write — the earlier write, the declared `state` entry or the established fallback — `null` when nothing answered it. |
 | `modifier` | `player`, `action`, `args` | A stored-modifier action applied to a player: `action` is the action id, `args` the evaluated non-target arguments. The modifier changes no readable value. |
+| `matchClock` | `action`, `field`, `old`, `new` | A match-clock write: `action` is the action id, `field` is `paused` (`Pause`/`Unpause Match Time`), `matchTime` (`Set Match Time`; `old` is `null` until a first write) or `slowMotion` (`Set Slow Motion`). |
 
 ## JSON form
 

@@ -89,6 +89,16 @@ pub enum Change {
     EffectCreate { id: u64, element: EffectKind },
     /// An effect entity was destroyed.
     EffectDestroy { id: u64, element: EffectKind },
+    /// A match-clock write (athena#120): `Pause`/`Unpause Match Time`
+    /// writes `paused`, `Set Match Time` writes `matchTime` (`old` is
+    /// `null` until a first write), `Set Slow Motion` writes
+    /// `slowMotion`. `action` is the action id.
+    MatchClock {
+        action: String,
+        field: String,
+        old: Val,
+        new: Val,
+    },
     /// A `Log To Inspector` line.
     Log { text: String },
     /// A `Random *` value drew from the scenario's `random` source.
@@ -130,7 +140,9 @@ pub enum Change {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TimelineEntry {
     pub tick: u64,
-    /// The tick's `Total Time Elapsed` in milliseconds: 15 + tick·16.
+    /// The tick's `Total Time Elapsed` in milliseconds: 15 + the
+    /// elapsed game-time seconds. The match clock drives it, so a
+    /// paused or slowed clock repeats values across ticks.
     pub time: f64,
     pub rules: Vec<RuleRun>,
     pub changes: Vec<Change>,

@@ -61,7 +61,12 @@ pub(crate) struct Env<'a> {
     pub rule: usize,
     /// The tick's recorded changes; a `Random *` value appends its draw.
     pub changes: &'a RefCell<Vec<Change>>,
+    /// The `Total Time Elapsed` seconds: the start offset plus the
+    /// match clock's elapsed game time.
     pub now: f64,
+    /// The seconds `Match Time` reports; `None` until a `Set Match
+    /// Time` writes the clock's countdown, so the read is `not_modeled`.
+    pub match_time: Option<f64>,
 }
 
 impl Env<'_> {
