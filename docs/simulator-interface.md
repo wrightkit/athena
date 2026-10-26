@@ -29,6 +29,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | Field | Meaning |
 | --- | --- |
 | `outcome` | How the run ended. Check it before using the other fields. |
+| `geometry` | The geometry model the run answered spatial queries with: `emptyWorld` — the world has no map geometry, so raycasts never hit, line of sight always holds and every position is walkable and on the ground. **Empty world, modeled not measured**; a viewer should warn that geometry-dependent results are not real. See [Geometry (empty world)](#geometry-empty-world). |
 | `logs` | `Log To Inspector` lines in order, each with the `tick` it was written on. |
 | `globals` | Global variables at the end of the run. A declared variable that was never set is `null`. |
 | `players` | The player state table: one entry per scenario player, keyed by its `id`. Empty when the run had no scenario. See below. |
@@ -126,11 +127,22 @@ No capture covers the lobby's map choice; this is **modeled, not measured**.
 
 A `Player` operand in a position place — `Distance Between`, `Vector Towards`, `Direction Towards`, the arithmetic four, and the `Modify` operations of the same names — reads the player's `position`, and `Position Of` returns it. `Facing Direction Of` returns the unit vector of the player's `facing`. `Local Vector Of`/`World Vector Of` take the `Transform` members the catalog declares — `ROTATION` (reads `facing`) and `ROTATION_AND_TRANSLATION` (reads `facing` and `position`); any other transform is `not_modeled`. A `position`/`facing` the scenario omits is a `missing_input` naming the field on the player.
 
-Two edges stop rather than guess, the client's answers being unmeasured: `Normalize` and `Direction Towards` on a zero-length vector, and `Angle Between Vectors` on one. A produced value with a non-finite component — a division by zero among them — is `not_modeled` for the same reason. `Eye Position` adds a hero eye height the catalog does not record, and raycasts, `Is In Line of Sight`, `Nearest Walkable Position`, `Is On Ground` need map geometry the goal document excludes; `Teleport`/`Apply Impulse` move a player nothing models — all stay `not_modeled`.
+Two edges stop rather than guess, the client's answers being unmeasured: `Normalize` and `Direction Towards` on a zero-length vector, and `Angle Between Vectors` on one. A produced value with a non-finite component — a division by zero among them — is `not_modeled` for the same reason. `Eye Position` adds a hero eye height the catalog does not record and stays `not_modeled`.
 
 A vector serializes as `{ "type": "vector", "value": { "x": n, "y": n, "z": n } }`. Vectors compare equal by component and are not strings, conditions, sort keys or array elements the string/array coercions reach; a vector in a `Custom String` argument is `not_modeled`, its client render unmeasured.
 
 None of these has a client capture; all are **modeled, not measured**.
+
+### Geometry (empty world)
+
+The run has no map geometry — the goal excludes physics and hit detection, and the owner picked "empty world" as the default (`athena#75`). Every geometry read answers for an empty world, marked `geometry: "emptyWorld"` in the trace so the viewer can warn that geometry-dependent results are not real. **Empty world, modeled not measured**; no capture covers any of it.
+
+- A raycast never hits, and the answer follows the catalog's documented no-hit return: `Ray Cast Hit Position` yields the end position, `Ray Cast Hit Player` yields `Null`, and `Ray Cast Hit Normal` yields the direction from the end position back to the start — a zero-length cast has no direction and is `not_modeled`. A `Player` start or end resolves to the position two meters above the player's feet, as the catalog documents. The include/exclude player arguments still evaluate but decide nothing.
+- `Is In Line of Sight` is true, with the same two-meters-above-the-feet resolution for a `Player` start or end; `Nearest Walkable Position` yields its input.
+- `Is On Ground` is true; `Is In Air`, `Is On Wall` and `Is In Spawn Room` are false — an empty world has none of what they ask about. The motion queries `Is Moving` and `Is Standing` ask about a speed the model does not carry and stay `not_modeled`.
+- `Teleport` writes the player's scenario `position` to the evaluated destination — `Null` is the origin, the catalog's `zeroAsNull` coercion — and records a `world` change with `field` `position`; `Position Of` reads the new value. `Apply Impulse` changes velocity, which needs physics, and stays `not_modeled`.
+
+The geometry answers do not depend on which player they name, but a player the scenario did not declare is reported as `not_modeled` like everywhere else, and a `Player` in a position place still reads the scenario `position` — an omitted field is a `missing_input`.
 
 ### Workshop settings
 
@@ -196,7 +208,7 @@ The other fields are the evaluated arguments of the action; only the arguments t
 | `radius` | both | the radius |
 | `reevaluation` | `effect` | the `EffectReeval` member id |
 
-A position expression that needs geometry — `Nearest Walkable Position`, a raycast, anything unmodeled — stops the run as `not_modeled` before the entity is recorded; no capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing.
+A position expression that needs unmodeled geometry — `Eye Position`, anything still unmodeled — stops the run as `not_modeled` before the entity is recorded; under the empty-world model `Nearest Walkable Position` and the raycasts evaluate instead (see [Geometry (empty world)](#geometry-empty-world)). No capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing.
 
 ### Statuses, buttons and started rules
 
@@ -235,7 +247,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 | --- | --- | --- |
 | `globalVariable` | `name`, `index`, `old`, `new` | A `Set`/`Modify Global Variable` write. `index` is the element path a `Set`/`Modify Global Variable At Index` action wrote (`null` for a whole-variable write). |
 | `playerVariable` | `player`, `name`, `index`, `old`, `new` | A `Set`/`Modify Player Variable` write; `player` is the player `id`, `index` the element path an `At Index` action wrote. |
-| `world` | `player`, `field`, `old`, `new` | A change to a player's world state. `field` is `health`, `shield`, `armor`, `cooldown.<slot>` (for example `cooldown.ability1`), `status.<member>` (lowercase `Status` member id; `new` is the expiry seconds, `null` for a `Clear Status`), `button.<slot>` (a `bool` for `Allow`/`Disallow Button`) or `ultimate.charge`. For pools `old`/`new` are the `current` points; for a cooldown the reported seconds (`null` when the slot had none). Nothing writes `ultimate.charge` in this version. |
+| `world` | `player`, `field`, `old`, `new` | A change to a player's world state or scenario `position`. `field` is `health`, `shield`, `armor`, `cooldown.<slot>` (for example `cooldown.ability1`), `status.<member>` (lowercase `Status` member id; `new` is the expiry seconds, `null` for a `Clear Status`), `button.<slot>` (a `bool` for `Allow`/`Disallow Button`), `position` (a `Teleport` write; `old`/`new` are vectors, `null` when the player had no `position`) or `ultimate.charge`. For pools `old`/`new` are the `current` points; for a cooldown the reported seconds (`null` when the slot had none). Nothing writes `ultimate.charge` in this version. |
 | `hudCreate` | `id`, `element` | A HUD element was created; `id` indexes `hud`, `element` is its `kind`. |
 | `hudDestroy` | `id`, `element` | A HUD element was destroyed. |
 | `effectCreate` | `id`, `element` | An effect entity was created or played; `id` indexes `effects`, `element` is its `kind`. |
@@ -250,6 +262,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 ```json
 {
   "outcome": { "status": "not_modeled", "construct": "value getPosition", "tick": 0 },
+  "geometry": "emptyWorld",
   "logs": [{ "tick": 3, "text": "t0=3.023" }],
   "globals": { "a": { "type": "number", "value": 1.0 }, "b": { "type": "null" } },
   "players": {

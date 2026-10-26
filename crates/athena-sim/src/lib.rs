@@ -3,6 +3,7 @@ mod blocks;
 mod call;
 mod effects;
 mod eval;
+mod geometry;
 mod hero_settings;
 mod hud;
 mod load;
@@ -413,12 +414,17 @@ pub enum Change {
         old: Val,
         new: Val,
     },
-    /// A change to a player's catalog-derived world state. `field` is
-    /// `health`, `shield`, `armor`, `cooldown.<slot>` (for example
-    /// `cooldown.ability1`) or `ultimate.charge`; for pools `old`/`new` are
-    /// the `current` points, for a cooldown the reported seconds (`null`
-    /// when the slot had none), and nothing writes `ultimate.charge` in
-    /// this version.
+    /// A change to a player's catalog-derived world state — or to the
+    /// scenario `position` a `Teleport` writes. `field` is `health`,
+    /// `shield`, `armor`, `cooldown.<slot>` (for example
+    /// `cooldown.ability1`), `status.<member>` (lowercase `Status`
+    /// member id), `button.<slot>`, `ultimate.charge` or `position`;
+    /// for pools `old`/`new` are the `current` points, for a cooldown
+    /// the reported seconds (`null` when the slot had none), for
+    /// `status.<member>` the expiry seconds (`null` on a `Clear
+    /// Status`), for `button.<slot>` a bool, for `position` the
+    /// vectors (`null` when the player had no `position`), and nothing
+    /// writes `ultimate.charge` in this version.
     World {
         player: String,
         field: String,
@@ -482,6 +488,17 @@ pub const TIMELINE_RULE_LIMIT: usize = 100_000;
 /// entries; past it they are dropped and `truncated` is set.
 pub const TIMELINE_CHANGE_LIMIT: usize = 100_000;
 
+/// The geometry model a run answers spatial queries with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Geometry {
+    /// No map geometry: raycasts never hit, line of sight always holds,
+    /// every position is walkable, on the ground and in no spawn room.
+    /// Modeled, not measured — a viewer should warn that
+    /// geometry-dependent results are not real.
+    EmptyWorld,
+}
+
 /// What a run produced. `logs`, `globals`, `players` and `hud` describe the
 /// state when the run ended: after the last tick for `Complete`, at the stop
 /// for `NotModeled` and `MissingInput`. `timeline` records what happened on
@@ -490,6 +507,9 @@ pub const TIMELINE_CHANGE_LIMIT: usize = 100_000;
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Trace {
     pub outcome: Outcome,
+    /// The geometry model the run answered spatial queries with —
+    /// `emptyWorld` in this version.
+    pub geometry: Geometry,
     pub logs: Vec<LogEntry>,
     pub globals: BTreeMap<String, Val>,
     /// The player state table: one row per scenario player. Empty when the

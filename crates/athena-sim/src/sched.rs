@@ -103,6 +103,7 @@ pub(crate) fn run(
     Trace {
         expectations: expectations(&expect, &world, &outcome),
         outcome,
+        geometry: crate::Geometry::EmptyWorld,
         logs: world.logs,
         globals: world.globals,
         players: world

@@ -1,8 +1,9 @@
 //! Actions that write a player's world state or steer rule flow:
 //! `Damage`, `Heal`, `Set Ability Cooldown`, the athena#58 remainder
 //! `Set Status`/`Clear Status`, `Allow Button`/`Disallow Button`,
-//! `Start Rule` and `Stop Chasing * Variable`. All modeled, not
-//! measured — no capture covers them (`docs/architecture.md`).
+//! `Teleport` of the empty-world model, `Start Rule` and `Stop Chasing
+//! * Variable`. All modeled, not measured — no capture covers them
+//! (`docs/architecture.md`).
 
 use std::collections::BTreeMap;
 
@@ -38,6 +39,7 @@ pub(crate) fn action(
             | "clearStatusEffect"
             | "allowButton"
             | "disallowButton"
+            | "teleport"
             | "startRule"
             | "stopChasingGlobalVariable"
             | "stopChasingPlayerVariable"
@@ -220,6 +222,37 @@ fn run(
                     field: format!("button.{slot}"),
                     old: old.map_or(Val::Null, Val::Bool),
                     new: Val::Bool(allowed),
+                });
+            }
+        }
+        "teleport" => {
+            let [player, position] = args else {
+                return unsupported("teleport arguments");
+            };
+            // The empty world has no physics: a teleport writes the
+            // scenario `position` state, and `Position Of` reads it
+            // back. `Null` is the catalog's `zeroAsNull` coercion — a
+            // teleport to the origin.
+            let ids = player_ids(player, &env)?;
+            let destination = match eval(position, &env)? {
+                Val::Null => crate::vector::Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                other => crate::vector::position_value(other, &world.players, name)?,
+            };
+            for id in ids {
+                let Some(target) = world.players.get_mut(&id) else {
+                    return unsupported(format!("`{id}` is not a scenario player"));
+                };
+                let old = target.position.map_or(Val::Null, Val::from);
+                target.position = Some(destination);
+                world.changes.borrow_mut().push(Change::World {
+                    player: id,
+                    field: "position".to_string(),
+                    old,
+                    new: destination.into(),
                 });
             }
         }
