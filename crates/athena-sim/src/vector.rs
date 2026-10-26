@@ -167,6 +167,26 @@ pub(crate) fn position_value(
     }
 }
 
+/// A raycast or line-of-sight start/end argument: as `position_value`,
+/// except the catalog resolves a `Player` to the position two meters
+/// above the player's feet.
+pub(crate) fn raycast_position_value(
+    value: Val,
+    players: &BTreeMap<String, Player>,
+    construct: &str,
+) -> Result<Vec3, Stop> {
+    match value {
+        Val::Player(id) => {
+            let feet = position(players, &id, &format!("value {construct}"))?;
+            Ok(Vec3 {
+                y: feet.y + 2.0,
+                ..feet
+            })
+        }
+        other => vec(&other, construct),
+    }
+}
+
 /// An operand of `Add`/`Subtract`/`Multiply`/`Divide`: a number, boolean
 /// or `Null` under the number coercion; a vector as itself; a player as
 /// its `position`.

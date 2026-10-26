@@ -28,8 +28,8 @@ fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
 fn raycast(name: &str, args: &[Value], env: &Env) -> Result<(Vec3, Vec3), Stop> {
     let [start, end, include, exclude, owned] = arguments::<5>(name, args)?;
     let (start, end) = (
-        vector::position_value(eval(start, env)?, env.players, name)?,
-        vector::position_value(eval(end, env)?, env.players, name)?,
+        vector::raycast_position_value(eval(start, env)?, env.players, name)?,
+        vector::raycast_position_value(eval(end, env)?, env.players, name)?,
     );
     eval(include, env)?;
     eval(exclude, env)?;
@@ -62,12 +62,14 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             }
             vector::produced(back.map(|c| c / magnitude), name)
         }
-        // Line of sight always holds; the positions still resolve, and
-        // the `BarrierLos` argument is read for its side effects.
+        // Line of sight always holds; the positions still resolve —
+        // a `Player` two meters above the feet, as the catalog
+        // documents — and the `BarrierLos` argument is read for its
+        // side effects.
         "isInLoS" => {
             let [start, end, barriers] = arguments::<3>(name, args)?;
-            vector::position_value(eval(start, env)?, env.players, name)?;
-            vector::position_value(eval(end, env)?, env.players, name)?;
+            vector::raycast_position_value(eval(start, env)?, env.players, name)?;
+            vector::raycast_position_value(eval(end, env)?, env.players, name)?;
             eval(barriers, env)?;
             Ok(Val::Bool(true))
         }

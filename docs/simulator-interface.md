@@ -137,8 +137,8 @@ None of these has a client capture; all are **modeled, not measured**.
 
 The run has no map geometry — the goal excludes physics and hit detection, and the owner picked "empty world" as the default (`athena#75`). Every geometry read answers for an empty world, marked `geometry: "emptyWorld"` in the trace so the viewer can warn that geometry-dependent results are not real. **Empty world, modeled not measured**; no capture covers any of it.
 
-- A raycast never hits, and the answer follows the catalog's documented no-hit return: `Ray Cast Hit Position` yields the end position, `Ray Cast Hit Player` yields `Null`, and `Ray Cast Hit Normal` yields the direction from the end position back to the start — a zero-length cast has no direction and is `not_modeled`. The include/exclude player arguments still evaluate but decide nothing.
-- `Is In Line of Sight` is true; `Nearest Walkable Position` yields its input.
+- A raycast never hits, and the answer follows the catalog's documented no-hit return: `Ray Cast Hit Position` yields the end position, `Ray Cast Hit Player` yields `Null`, and `Ray Cast Hit Normal` yields the direction from the end position back to the start — a zero-length cast has no direction and is `not_modeled`. A `Player` start or end resolves to the position two meters above the player's feet, as the catalog documents. The include/exclude player arguments still evaluate but decide nothing.
+- `Is In Line of Sight` is true, with the same two-meters-above-the-feet resolution for a `Player` start or end; `Nearest Walkable Position` yields its input.
 - `Is On Ground` is true; `Is In Air`, `Is On Wall` and `Is In Spawn Room` are false — an empty world has none of what they ask about. The motion queries `Is Moving` and `Is Standing` ask about a speed the model does not carry and stay `not_modeled`.
 - `Teleport` writes the player's scenario `position` to the evaluated destination — `Null` is the origin, the catalog's `zeroAsNull` coercion — and records a `world` change with `field` `position`; `Position Of` reads the new value. `Apply Impulse` changes velocity, which needs physics, and stays `not_modeled`.
 

@@ -179,6 +179,40 @@ fn a_raycast_start_or_end_can_be_a_player_position() {
 }
 
 #[test]
+fn a_player_raycast_end_resolves_two_meters_above_the_feet() {
+    // The catalog: "If a player is provided, a position 2 meters above
+    // the player's feet is used" — the no-hit return is that resolved
+    // end position.
+    let players = r#"{ "id": "p1", "host": true, "position": { "x": 5, "y": 0, "z": 10 } }"#;
+    let trace = run_with(
+        &set_global("Ray Cast Hit Position(Vector(0, 0, 0), Host Player, Null, Null, False)"),
+        players,
+    );
+    assert_eq!(
+        global(&trace),
+        &Val::Vector {
+            x: 5.0,
+            y: 2.0,
+            z: 10.0
+        }
+    );
+    // The normal's back-to-the-start direction follows the same shift:
+    // the start (0, 0, 0) minus the resolved end (0, 2, 0).
+    let trace = run_with(
+        &set_global("Ray Cast Hit Normal(Vector(0, 0, 0), Host Player, Null, Null, False)"),
+        r#"{ "id": "p1", "host": true, "position": { "x": 0, "y": 0, "z": 0 } }"#,
+    );
+    assert_eq!(
+        global(&trace),
+        &Val::Vector {
+            x: 0.0,
+            y: -1.0,
+            z: 0.0
+        }
+    );
+}
+
+#[test]
 fn teleport_writes_the_position_and_records_a_world_change() {
     let text = r#"
 variables {
