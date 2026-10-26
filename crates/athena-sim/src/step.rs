@@ -15,7 +15,7 @@ use crate::eval::{Env, eval, number, player_id};
 use crate::hud::Hud;
 use crate::load::{Frame, Instance, WaitMode};
 use crate::modify::{apply_modify, modify_at, modify_op, set_at};
-use crate::scenario::Player;
+use crate::scenario::{Player, ServerLoad};
 use crate::state::{self, WorldSlot};
 use crate::{Change, LogEntry, NotModeled, RuleRun, Stop, Timeline, Val};
 
@@ -66,6 +66,8 @@ pub(crate) struct World {
     pub changes: RefCell<Vec<Change>>,
     /// The scenario's `random` source; `None` when it supplies none.
     pub random: Option<RefCell<Random>>,
+    /// The scenario's `serverLoad` numbers; `None` when it supplies none.
+    pub server_load: Option<ServerLoad>,
     /// The recorded timeline.
     pub timeline: Timeline,
 }
@@ -158,6 +160,7 @@ pub(crate) fn run_instance(
             once: &inst.once,
             last_entity: world.effects.last_created,
             random: world.random.as_ref(),
+            server_load: world.server_load,
             rule: rule_idx,
             changes: &world.changes,
             now,

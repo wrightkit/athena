@@ -113,6 +113,21 @@ pub(crate) enum Expectation {
     },
 }
 
+/// The server-load numbers a scenario's `serverLoad` supplies: what
+/// `Server Load`, `Server Load Average` and `Server Load Peak` read.
+/// The client measures load per tick; the simulator takes it as a
+/// constant input — modeled, not measured.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ServerLoad {
+    /// What `Server Load` reads.
+    pub current: f64,
+    /// What `Server Load Average` reads.
+    pub average: f64,
+    /// What `Server Load Peak` reads.
+    pub peak: f64,
+}
+
 /// A validated scenario.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Scenario {
@@ -128,6 +143,9 @@ pub(crate) struct Scenario {
     /// `None` when the scenario supplies none; a random read is then a
     /// missing input.
     pub random: Option<u64>,
+    /// The `serverLoad` numbers; `None` when the scenario supplies none,
+    /// so a `Server Load *` read is a missing input.
+    pub server_load: Option<ServerLoad>,
 }
 
 #[derive(Deserialize)]
@@ -146,6 +164,8 @@ struct ScenarioDoc {
     expect: Vec<serde_json::Value>,
     #[serde(default, deserialize_with = "object_or_absent")]
     random: Option<RandomDoc>,
+    #[serde(default, rename = "serverLoad", deserialize_with = "object_or_absent")]
+    server_load: Option<ServerLoad>,
 }
 
 #[derive(Deserialize)]
@@ -154,13 +174,14 @@ struct RandomDoc {
     seed: u64,
 }
 
-/// An `Option` field alone reads `null` as absent; `random` is an
-/// object, as `events` and `expect` are lists.
-fn object_or_absent<'de, D>(deserializer: D) -> Result<Option<RandomDoc>, D::Error>
+/// An `Option` field alone reads `null` as absent; these fields are
+/// objects, as `events` and `expect` are lists.
+fn object_or_absent<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
 {
-    RandomDoc::deserialize(deserializer).map(Some)
+    T::deserialize(deserializer).map(Some)
 }
 
 #[derive(Deserialize)]
@@ -432,5 +453,6 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         events,
         expect,
         random: doc.random.map(|random| random.seed),
+        server_load: doc.server_load,
     })
 }

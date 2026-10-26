@@ -20,7 +20,8 @@
       "type": "array",
       "items": { "$ref": "#/$defs/expectation" }
     },
-    "random": { "$ref": "#/$defs/random" }
+    "random": { "$ref": "#/$defs/random" },
+    "serverLoad": { "$ref": "#/$defs/serverLoad" }
   },
   "$defs": {
     "id": { "type": "string", "minLength": 1 },
@@ -37,6 +38,17 @@
           "description": "Unsigned 64-bit seed. Write it as an integer literal: the loader rejects a decimal point or exponent, so 1.0 and 1e3 fail although 'integer' admits integral-valued numbers."
         }
       }
+    },
+    "serverLoad": {
+      "type": "object",
+      "required": ["average", "peak", "current"],
+      "additionalProperties": false,
+      "properties": {
+        "average": { "type": "number" },
+        "peak": { "type": "number" },
+        "current": { "type": "number" }
+      },
+      "description": "The numbers Server Load Average, Server Load Peak and Server Load read, constant for the run. Supply the field whole or not at all: a partial object is malformed, and a read with no field is a missing input."
     },
     "value": {
       "type": ["null", "boolean", "number", "string", "array"],

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use workshop_rs::Value;
 
 use crate::call::Random;
-use crate::scenario::{EventCtx, Player};
+use crate::scenario::{EventCtx, Player, ServerLoad};
 use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
 pub(crate) struct Env<'a> {
@@ -34,6 +34,9 @@ pub(crate) struct Env<'a> {
     /// The scenario's `random` source; `None` when the scenario supplies
     /// none, so a `Random *` value is a missing input.
     pub random: Option<&'a RefCell<Random>>,
+    /// The scenario's `serverLoad` numbers; `None` when the scenario
+    /// supplies none, so a `Server Load *` value is a missing input.
+    pub server_load: Option<ServerLoad>,
     /// The index of the rule the evaluated value belongs to — inside a
     /// `Call Subroutine`, the subroutine's own. Recorded on each
     /// `randomDraw` change.

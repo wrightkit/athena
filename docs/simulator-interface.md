@@ -35,7 +35,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
 | `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
-| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue` and `random`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `null` for the others), `tick`, `construct`. |
+| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random` and `serverLoad`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random` and `serverLoad` for `serverLoad`, `null` for the others), `tick`, `construct`. |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
 `logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
@@ -105,6 +105,12 @@ None of these has a client capture; all are **modeled, not measured**.
 - `Randomized Array(array)` is a Fisher-Yates shuffle of the same stream, last index down; an empty or one-element array draws nothing.
 
 A bound that is not finite is `not_modeled`. No capture covers the client's generator or the distribution; all of this is **modeled, not measured**.
+
+### Server load values
+
+`Server Load`, `Server Load Average` and `Server Load Peak` are modeled. Server load is a client-measured quantity the simulator does not guess, so the values read the scenario's `serverLoad` — `{ "serverLoad": { "average": n, "peak": n, "current": n } }` — constant for the whole run: `Server Load` reads `current`, `Server Load Average` reads `average`, `Server Load Peak` reads `peak`. A `Server Load *` value in a run without `serverLoad` is a `missing_input` of kind `serverLoad`. A read records no change; the field is an input, not a draw.
+
+Real load varies per tick and no capture covers it; this is **modeled, not measured**.
 
 ### Workshop settings
 
