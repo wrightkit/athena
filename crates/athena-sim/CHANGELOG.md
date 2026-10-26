@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0](https://github.com/wrightkit/athena/compare/v0.6.0...v0.7.0) (2026-10-26)
+
+
+### Features
+
+* **sim:** model geometry reads as an empty world ([#78](https://github.com/wrightkit/athena/issues/78)) ([2cf25ff](https://github.com/wrightkit/athena/commit/2cf25ff2c707a72ef4d53c317f482ae859d68913)), closes [#77](https://github.com/wrightkit/athena/issues/77)
+* **sim:** model Is Hero Being Played from scenario players ([#85](https://github.com/wrightkit/athena/issues/85)) ([24e73a9](https://github.com/wrightkit/athena/commit/24e73a9ed6167662b05377b88e836ebc7472c819)), closes [#84](https://github.com/wrightkit/athena/issues/84)
+* **sim:** model Objective Position from scenario objectives ([#83](https://github.com/wrightkit/athena/issues/83)) ([f2088dc](https://github.com/wrightkit/athena/commit/f2088dc77696bf15d03dd3a779f6051e47753004)), closes [#82](https://github.com/wrightkit/athena/issues/82)
+* **sim:** resolve ambiguous Vector spellings in operand positions ([#81](https://github.com/wrightkit/athena/issues/81)) ([5691dff](https://github.com/wrightkit/athena/commit/5691dffd9625a0d1e26497f54130783f15ef1513)), closes [#80](https://github.com/wrightkit/athena/issues/80)
+
 ## [0.6.0](https://github.com/wrightkit/athena/compare/v0.5.0...v0.6.0) (2026-10-26)
 
 
