@@ -21,6 +21,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 11. **An unknown field is an error.** The schema forbids extra fields. Typos in an agent-written file are then caught, and version 1 stays closed.
 12. **The schema file lives in `docs/`.** CI skips runs for `docs/**` changes, so a change to the schema alone does not start the schema check. A change to the test or to Rust code does.
 13. **A scenario is a mock: what it does not declare takes the default value, which is `null`.** This is the owner's rule. The repository does not establish it as game behavior. No probe capture and no `workshop-rs` document records what an undeclared variable holds in the real client. The value `null` is what `athena` already uses for a global variable that was never set (`simulator-interface.md`, and `Null` reads as `0` in a number context, `architecture.md`). It is therefore a **modeled** choice, not a **measured** one. A probe is needed before it counts as measured.
+14. **Randomness is a seed, supplied by the scenario.** The client's generator is unmeasured, and the simulator must stay deterministic, so `random` carries a `seed` that drives a splitmix64 stream the `Random *` values consume in evaluation order (athena#65). The mapping from draws to values is **modeled, not measured** — no client capture records the distribution. A `Random *` value in a run without `random` is a group 2 missing input. The alternative — an explicit sequence of draws — can come later; a `random` object leaves room for it.
 
 ## Top-level shape
 
@@ -31,6 +32,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 | `players` | yes | List of players. It may be empty. |
 | `events` | no | Events injected into the run. |
 | `expect` | no | Observations the author expects at the end of the run. |
+| `random` | no | The source `Random *` values draw from: `{ "seed": n }`, `n` an unsigned 64-bit integer. Write `n` as an integer literal: the loader rejects a decimal point or exponent, so `1.0` and `1e3` fail although the schema admits them. |
 
 ### Player
 
@@ -92,6 +94,7 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 - The event player, when the program reads it and the event has no `eventPlayer`.
 - An event value, when the program reads it and the event has no such entry in `values`.
 - The held state of a button, when `Is Button Held` reads it and the player's `buttons` does not list the slot.
+- The random source, when a `Random *` value reads it and the scenario has no `random`.
 
 An input of group 2 is **missing** when the program reads it during the run and the scenario does not supply it. The simulator never fills it in. It stops the run at that read, and the trace names the input.
 
@@ -108,9 +111,9 @@ The trace gains two fields. Adding a field is compatible ([simulator-interface.m
 
 | Field | Meaning |
 | --- | --- |
-| `input` | One of `hero`, `team`, `eventPlayer`, `eventValue`, `button`. |
-| `player` | The `id` of the player the input belongs to, or `null` when no player applies (`eventPlayer`, `eventValue`). |
-| `name` | The event-value name for `eventValue`, the button slot for `button`; `null` for the others. |
+| `input` | One of `hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`. |
+| `player` | The `id` of the player the input belongs to, or `null` when no player applies (`eventPlayer`, `eventValue`, `random`). |
+| `name` | The event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`; `null` for the others. |
 | `tick` | The tick on which the program read it. |
 | `construct` | A short description for people, as in `not_modeled`. Do not match on it. |
 
@@ -170,5 +173,7 @@ The `init` rule's `Create HUD Text` is modeled (athena#10): the full `practice-r
 - `missing-required-field.json`: `seconds` is absent.
 - `wrong-value-type.json`: an event `time` is text.
 - `unknown-team.json`: `team` is not `team1` or `team2`.
+- `random-null.json`: `random` is `null` rather than an object.
+- `seed-too-large.json`: `random.seed` is past the unsigned 64-bit range.
 
 `crates/athena-sim/tests/scenario_schema.rs` checks that every file in `valid/` passes and every invalid example fails. `cargo test` and CI run it.

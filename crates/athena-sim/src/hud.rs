@@ -1,5 +1,7 @@
 //! HUD actions: creating, destroying and enumerating HUD elements.
 
+use std::cell::RefCell;
+
 use workshop_rs::Value;
 
 use crate::eval::{Env, eval, viewers};
@@ -41,7 +43,7 @@ fn create_element(
     name: &str,
     recipients: Vec<String>,
     args: HudArgs,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) {
     let id = hud.elements.len() as u64;
     hud.elements.push(HudElement {
@@ -56,7 +58,9 @@ fn create_element(
     if matches!(kind, HudKind::HudText | HudKind::ProgressBarHud) {
         hud.last_text_id = Some(id);
     }
-    changes.push(Change::HudCreate { id, element: kind });
+    changes
+        .borrow_mut()
+        .push(Change::HudCreate { id, element: kind });
 }
 
 /// Execute a modeled HUD action against `hud`; `None` when `name` is not
@@ -68,7 +72,7 @@ pub(crate) fn action(
     env: &Env,
     hud: &mut Hud,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Option<Result<(), Stop>> {
     Some(match name {
         "createHudText" => create_hud_text(args, env, hud, tick, changes),
@@ -89,7 +93,7 @@ fn create_hud_text(
     env: &Env,
     hud: &mut Hud,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [
         visible_to,
@@ -140,7 +144,7 @@ fn progress_bar_hud(
     env: &Env,
     hud: &mut Hud,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [
         visible_to,
@@ -190,7 +194,7 @@ fn message(
     env: &Env,
     hud: &mut Hud,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [visible_to, header] = args else {
         return unsupported(format!("{name} arguments"));
@@ -214,7 +218,7 @@ fn objective_description(
     env: &Env,
     hud: &mut Hud,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [visible_to, text, reevaluation] = args else {
         return unsupported("setObjectiveDescription arguments");
@@ -235,7 +239,7 @@ fn objective_description(
             element.recipients.retain(|id| !recipients.contains(id));
             if element.recipients.is_empty() {
                 element.destroyed_tick = Some(tick);
-                changes.push(Change::HudDestroy {
+                changes.borrow_mut().push(Change::HudDestroy {
                     id: element.id,
                     element: element.kind,
                 });
@@ -260,7 +264,7 @@ fn destroy(
     env: &Env,
     hud: &mut Hud,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [text_id] = args else {
         return unsupported(format!("{name} arguments"));
@@ -278,7 +282,7 @@ fn destroy(
                 element.kind == kind && element.destroyed_tick.is_none() && element.id as f64 == id
             }) {
                 element.destroyed_tick = Some(tick);
-                changes.push(Change::HudDestroy {
+                changes.borrow_mut().push(Change::HudDestroy {
                     id: element.id,
                     element: element.kind,
                 });
@@ -294,7 +298,7 @@ fn destroy_all(
     args: &[Value],
     hud: &mut Hud,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [] = args else {
         return unsupported(format!("{name} arguments"));
@@ -307,7 +311,7 @@ fn destroy_all(
     for element in &mut hud.elements {
         if element.kind == kind && element.destroyed_tick.is_none() {
             element.destroyed_tick = Some(tick);
-            changes.push(Change::HudDestroy {
+            changes.borrow_mut().push(Change::HudDestroy {
                 id: element.id,
                 element: element.kind,
             });

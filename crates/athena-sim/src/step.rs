@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use workshop_rs::{Action, Rule, Value};
 
 use crate::blocks::Blocks;
+use crate::call::Random;
 use crate::effects::Effects;
 use crate::eval::{Env, eval, number, player_id};
 use crate::hud::Hud;
@@ -59,8 +60,12 @@ pub(crate) struct World {
     /// tick's timeline entry.
     pub runs: Vec<RuleRun>,
     /// The state changes of the tick in progress, in execution order;
-    /// `tick_loop` drains them into the tick's timeline entry.
-    pub changes: Vec<Change>,
+    /// `tick_loop` drains them into the tick's timeline entry. A
+    /// `RefCell` so an `Env` — which borrows the world's other fields —
+    /// can record a `randomDraw`.
+    pub changes: RefCell<Vec<Change>>,
+    /// The scenario's `random` source; `None` when it supplies none.
+    pub random: Option<RefCell<Random>>,
     /// The recorded timeline.
     pub timeline: Timeline,
 }
@@ -152,6 +157,9 @@ pub(crate) fn run_instance(
             element: None,
             once: &inst.once,
             last_entity: world.effects.last_created,
+            random: world.random.as_ref(),
+            rule: rule_idx,
+            changes: &world.changes,
             now,
         };
         match action {
@@ -160,7 +168,7 @@ pub(crate) fn run_instance(
                 let value = eval(value, &env)?;
                 let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
                 world.globals.insert(variable.clone(), value.clone());
-                world.changes.push(Change::GlobalVariable {
+                world.changes.borrow_mut().push(Change::GlobalVariable {
                     name: variable.clone(),
                     index: None,
                     old,
@@ -177,7 +185,7 @@ pub(crate) fn run_instance(
                 let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
                 let updated = apply_modify(old.clone(), op, operand)?;
                 world.globals.insert(variable.clone(), updated.clone());
-                world.changes.push(Change::GlobalVariable {
+                world.changes.borrow_mut().push(Change::GlobalVariable {
                     name: variable.clone(),
                     index: None,
                     old,
@@ -197,7 +205,7 @@ pub(crate) fn run_instance(
                 };
                 let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
                 target.vars.insert(variable.clone(), value.clone());
-                world.changes.push(Change::PlayerVariable {
+                world.changes.borrow_mut().push(Change::PlayerVariable {
                     player: id,
                     name: variable.clone(),
                     index: None,
@@ -220,7 +228,7 @@ pub(crate) fn run_instance(
                 let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
                 let updated = apply_modify(old.clone(), op, operand)?;
                 target.vars.insert(variable.clone(), updated.clone());
-                world.changes.push(Change::PlayerVariable {
+                world.changes.borrow_mut().push(Change::PlayerVariable {
                     player: id,
                     name: variable.clone(),
                     index: None,
@@ -292,7 +300,7 @@ pub(crate) fn run_instance(
                 );
                 let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
                 world.globals.insert(variable.clone(), Val::Number(start));
-                world.changes.push(Change::GlobalVariable {
+                world.changes.borrow_mut().push(Change::GlobalVariable {
                     name: variable.clone(),
                     index: None,
                     old,
@@ -325,7 +333,7 @@ pub(crate) fn run_instance(
                 };
                 let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
                 target.vars.insert(variable.clone(), Val::Number(start));
-                world.changes.push(Change::PlayerVariable {
+                world.changes.borrow_mut().push(Change::PlayerVariable {
                     player: id,
                     name: variable.clone(),
                     index: None,
@@ -356,7 +364,7 @@ pub(crate) fn run_instance(
                         let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
                         let updated = number(&old)? + step;
                         world.globals.insert(variable.clone(), Val::Number(updated));
-                        world.changes.push(Change::GlobalVariable {
+                        world.changes.borrow_mut().push(Change::GlobalVariable {
                             name: variable.clone(),
                             index: None,
                             old,
@@ -386,7 +394,7 @@ pub(crate) fn run_instance(
                         let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
                         let updated = number(&old)? + step;
                         target.vars.insert(variable.clone(), Val::Number(updated));
-                        world.changes.push(Change::PlayerVariable {
+                        world.changes.borrow_mut().push(Change::PlayerVariable {
                             player: id,
                             name: variable.clone(),
                             index: None,
@@ -516,7 +524,7 @@ pub(crate) fn run_instance(
                         tick,
                         text: text.clone(),
                     });
-                    world.changes.push(Change::Log { text });
+                    world.changes.borrow_mut().push(Change::Log { text });
                     advance(inst);
                 }
                 "wait" => {
@@ -593,7 +601,7 @@ pub(crate) fn run_instance(
                         Some(op) => modify_at(slot, index, &op, operand)?,
                     };
                     if let Some((effective, old, new)) = written {
-                        world.changes.push(Change::GlobalVariable {
+                        world.changes.borrow_mut().push(Change::GlobalVariable {
                             name: variable.clone(),
                             index: Some(vec![effective]),
                             old,
@@ -646,7 +654,7 @@ pub(crate) fn run_instance(
                         Some(op) => modify_at(slot, index, &op, operand)?,
                     };
                     if let Some((effective, old, new)) = written {
-                        world.changes.push(Change::PlayerVariable {
+                        world.changes.borrow_mut().push(Change::PlayerVariable {
                             player: id,
                             name: variable.clone(),
                             index: Some(vec![effective]),
@@ -657,28 +665,22 @@ pub(crate) fn run_instance(
                     advance(inst);
                 }
                 other => {
-                    let result = crate::hud::action(
-                        other,
-                        args,
-                        &env,
-                        &mut world.hud,
-                        tick,
-                        &mut world.changes,
-                    )
-                    .or_else(|| {
-                        crate::effects::action(
-                            other,
-                            args,
-                            &env,
-                            &mut world.effects,
-                            tick,
-                            &mut world.changes,
-                        )
-                    });
+                    let result =
+                        crate::hud::action(other, args, &env, &mut world.hud, tick, &world.changes)
+                            .or_else(|| {
+                                crate::effects::action(
+                                    other,
+                                    args,
+                                    &env,
+                                    &mut world.effects,
+                                    tick,
+                                    &world.changes,
+                                )
+                            });
                     // `env` shares a borrow of `world.players`, so it ends
                     // here and the delegated actions take `world` itself.
                     let result = result.or_else(|| {
-                        crate::actions::action(other, args, world, inst, subroutines, now)
+                        crate::actions::action(other, args, world, inst, rule_idx, subroutines, now)
                     });
                     match result {
                         Some(result) => {

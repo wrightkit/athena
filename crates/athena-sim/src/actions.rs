@@ -25,6 +25,7 @@ pub(crate) fn action(
     args: &[Value],
     world: &mut World,
     inst: &Instance<'_>,
+    rule_idx: usize,
     subroutines: &BTreeMap<String, usize>,
     now: f64,
 ) -> Option<Result<(), Stop>> {
@@ -43,7 +44,7 @@ pub(crate) fn action(
     ) {
         return None;
     }
-    Some(run(name, args, world, inst, subroutines, now))
+    Some(run(name, args, world, inst, rule_idx, subroutines, now))
 }
 
 fn run(
@@ -51,6 +52,7 @@ fn run(
     args: &[Value],
     world: &mut World,
     inst: &Instance<'_>,
+    rule_idx: usize,
     subroutines: &BTreeMap<String, usize>,
     now: f64,
 ) -> Result<(), Stop> {
@@ -66,6 +68,9 @@ fn run(
         element: None,
         once: &inst.once,
         last_entity: world.effects.last_created,
+        random: world.random.as_ref(),
+        rule: rule_idx,
+        changes: &world.changes,
         now,
     };
     match name {
@@ -92,7 +97,7 @@ fn run(
                 let after = pools(&target.world);
                 for ((field, old), (_, new)) in before.into_iter().zip(after) {
                     if old != new {
-                        world.changes.push(Change::World {
+                        world.changes.borrow_mut().push(Change::World {
                             player: id.clone(),
                             field: field.to_string(),
                             old: old.map_or(Val::Null, Val::Number),
@@ -124,7 +129,7 @@ fn run(
                 state::heal(&mut target.world, amount * dealt * target.healing_received);
                 let new = target.world.health.current;
                 if new != old {
-                    world.changes.push(Change::World {
+                    world.changes.borrow_mut().push(Change::World {
                         player: id,
                         field: "health".to_string(),
                         old: Val::Number(old),
@@ -147,7 +152,7 @@ fn run(
                 let target = world_state(world, &id)?;
                 let old = target.world.cooldowns.get(slot).copied();
                 target.world.cooldowns.insert(slot.to_string(), seconds);
-                world.changes.push(Change::World {
+                world.changes.borrow_mut().push(Change::World {
                     player: id,
                     field: format!("cooldown.{slot}"),
                     old: old.map_or(Val::Null, Val::Number),
@@ -189,7 +194,7 @@ fn run(
                     None => target.world.statuses.remove(status.as_str()),
                 };
                 if old.is_some() || until.is_some() {
-                    world.changes.push(Change::World {
+                    world.changes.borrow_mut().push(Change::World {
                         player: id,
                         field: format!("status.{}", status.to_lowercase()),
                         old: old.map_or(Val::Null, Val::Number),
@@ -208,7 +213,7 @@ fn run(
             for id in ids {
                 let target = world_state(world, &id)?;
                 let old = target.world.buttons.insert(slot.to_string(), allowed);
-                world.changes.push(Change::World {
+                world.changes.borrow_mut().push(Change::World {
                     player: id,
                     field: format!("button.{slot}"),
                     old: old.map_or(Val::Null, Val::Bool),

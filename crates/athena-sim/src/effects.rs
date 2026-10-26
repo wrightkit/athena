@@ -5,6 +5,8 @@
 //! `Position Of`) stops the run as `not_modeled` like any unmodeled
 //! construct.
 
+use std::cell::RefCell;
+
 use workshop_rs::Value;
 
 use crate::eval::{Env, eval, viewers};
@@ -34,7 +36,7 @@ fn record(
     name: &str,
     recipients: Vec<String>,
     args: EffectArgs,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) {
     let id = effects.elements.len() as u64;
     effects.elements.push(EffectElement {
@@ -49,7 +51,9 @@ fn record(
     if kind == EffectKind::Effect {
         effects.last_created = Some(id);
     }
-    changes.push(Change::EffectCreate { id, element: kind });
+    changes
+        .borrow_mut()
+        .push(Change::EffectCreate { id, element: kind });
 }
 
 /// Execute a modeled effect action against `effects`; `None` when `name`
@@ -60,7 +64,7 @@ pub(crate) fn action(
     env: &Env,
     effects: &mut Effects,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Option<Result<(), Stop>> {
     Some(match name {
         "createEffect" => create_effect(args, env, effects, tick, changes),
@@ -75,7 +79,7 @@ fn create_effect(
     env: &Env,
     effects: &mut Effects,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [visible_to, effect, color, position, radius, reevaluation] = args else {
         return unsupported("createEffect arguments");
@@ -105,7 +109,7 @@ fn play_effect(
     env: &Env,
     effects: &mut Effects,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [visible_to, effect, color, position, radius] = args else {
         return unsupported("playEffect arguments");
@@ -135,7 +139,7 @@ fn destroy_effect(
     env: &Env,
     effects: &mut Effects,
     tick: u64,
-    changes: &mut Vec<Change>,
+    changes: &RefCell<Vec<Change>>,
 ) -> Result<(), Stop> {
     let [entity] = args else {
         return unsupported("destroyEffect arguments");
@@ -151,7 +155,7 @@ fn destroy_effect(
                     && element.id as f64 == id
             }) {
                 element.destroyed_tick = Some(tick);
-                changes.push(Change::EffectDestroy {
+                changes.borrow_mut().push(Change::EffectDestroy {
                     id: element.id,
                     element: element.kind,
                 });
