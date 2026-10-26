@@ -386,7 +386,7 @@ rule ("each") {
     }
     conditions {
         True;
-        Value In Array(Global.a, 0) == 1;
+        Current Array Element == 1;
     }
     actions {
         Set Player Variable(Event Player, marker, 1);

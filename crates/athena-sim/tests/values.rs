@@ -126,6 +126,59 @@ fn first_of_and_count_of_see_null_as_the_empty_array() {
     assert_eq!(global(&trace), &Val::Number(0.0));
 }
 
+/// `Value In Array` yields the element at the index, or `Null` when no
+/// element exists there — an out-of-range or negative index, or a
+/// non-array operand, which has no element at any index (athena#97,
+/// modeled not measured).
+#[test]
+fn value_in_array_yields_null_when_no_element_exists() {
+    let trace = run(&set_global("Value In Array(Array(1, 2), 0)"));
+    assert_eq!(global(&trace), &Val::Number(1.0));
+
+    // Out-of-range and negative indexes already yielded `Null`.
+    let trace = run(&set_global("Value In Array(Array(1, 2), 9)"));
+    assert_eq!(global(&trace), &Val::Null);
+
+    let trace = run(&set_global("Value In Array(Array(1, 2), -1)"));
+    assert_eq!(global(&trace), &Val::Null);
+
+    // A non-array operand has no element at any index.
+    for operand in ["Null", "5", "\"text\"", "True", "Vector(1, 2, 3)"] {
+        let trace = run(&set_global(&format!("Value In Array({operand}, 0)")));
+        assert_eq!(global(&trace), &Val::Null, "{operand}");
+    }
+
+    // `First Of` of `Null` and of the empty array both yield `Null`, so
+    // the `Value In Array(First Of(x), True)` form yields `Null` when
+    // `x` is unset.
+    let trace = run(&set_global("Value In Array(First Of(Null), True)"));
+    assert_eq!(global(&trace), &Val::Null);
+
+    // A `Player` is not an array either.
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "host": true }]
+    }"#;
+    let trace = run_scenario(&set_global("Value In Array(Host Player, 0)"), scenario)
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(global(&trace), &Val::Null);
+}
+
+/// The `Null` answer compares equal to `0` inside `Compare`, and the
+/// value reads the same inside an element-context operand.
+#[test]
+fn value_in_array_on_a_non_array_works_inside_compare_and_is_true_for_any() {
+    let trace = run(&set_global("Compare(Value In Array(Null, 0), ==, 0)"));
+    assert_eq!(global(&trace), &Val::Bool(true));
+
+    // Every element here is a non-array, so each read yields `Null` == 0.
+    let trace = run(&set_global(
+        "Is True For Any(Array(1, Null), Compare(Value In Array(Current Array Element, 0), ==, 0))",
+    ));
+    assert_eq!(global(&trace), &Val::Bool(true));
+}
+
 #[test]
 fn array_contains_and_index_of_array_value_search_by_compare_equality() {
     let trace = run(&set_global("Array Contains(Array(1, 2), Null)"));
