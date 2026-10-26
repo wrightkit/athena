@@ -359,7 +359,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // combines component-wise with a scalar broadcast.
         "add" | "subtract" | "multiply" | "divide" => {
             let [a, b] = arguments::<2>(name, args)?;
-            crate::vector::arithmetic(name, eval(a, env)?, eval(b, env)?, env)
+            crate::vector::arithmetic(name, eval(a, env)?, eval(b, env)?, env.players)
         }
         "modulo" => binary(|a, b| a % b),
         "raiseToPower" => binary(f64::powf),

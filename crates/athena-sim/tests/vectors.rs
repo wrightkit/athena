@@ -223,6 +223,125 @@ fn vector_arithmetic_is_componentwise_with_scalar_broadcast() {
     }
 }
 
+/// `Set` then `Modify` a variable: the `Modify` operations named like the
+/// value forms run the same vector math.
+fn modify_global(initial: &str, op: &str, operand: &str) -> String {
+    format!(
+        r#"
+variables {{
+    global:
+        0: g
+}}
+
+rule ("probe") {{
+    event {{
+        Ongoing - Global;
+    }}
+    actions {{
+        Set Global Variable(g, {initial});
+        Modify Global Variable(g, {op}, {operand});
+    }}
+}}
+"#
+    )
+}
+
+#[test]
+fn modify_variable_arithmetic_is_the_same_vector_math() {
+    for (initial, op, operand, expected) in [
+        (
+            "Vector(1, 2, 3)",
+            "Add",
+            "Vector(10, 20, 30)",
+            vec(11.0, 22.0, 33.0),
+        ),
+        (
+            "Vector(1, 2, 3)",
+            "Subtract",
+            "Vector(10, 20, 30)",
+            vec(-9.0, -18.0, -27.0),
+        ),
+        ("Vector(1, 2, 3)", "Multiply", "2", vec(2.0, 4.0, 6.0)),
+        (
+            "Vector(4, 10, 18)",
+            "Divide",
+            "Vector(4, 5, 6)",
+            vec(1.0, 2.0, 3.0),
+        ),
+        ("2", "Raise To Power", "8", Val::Number(256.0)),
+    ] {
+        let trace = run(&modify_global(initial, op, operand));
+        assert_eq!(global(&trace), &expected, "{op} on {initial}");
+    }
+
+    // `Modulo` stays scalar: a vector operand is not a number.
+    let trace = run(&modify_global("Vector(1, 2, 3)", "Modulo", "2"));
+    assert_not_modeled(&trace, "arithmetic on Vector { x: 1.0, y: 2.0, z: 3.0 }");
+}
+
+#[test]
+fn modify_at_index_runs_the_vector_arithmetic_on_the_element() {
+    let text = r#"
+variables {
+    global:
+        0: g
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Global Variable(g, Array(Vector(1, 2, 3), 0));
+        Modify Global Variable At Index(g, 0, Add, Vector(10, 20, 30));
+    }
+}
+"#;
+    let trace = run(text);
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![vec(11.0, 22.0, 33.0), Val::Number(0.0)])
+    );
+}
+
+#[test]
+fn modify_variable_reads_a_player_operand_position() {
+    let text = r#"
+variables {
+    global:
+        0: g
+    player:
+        0: v
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Each Player;
+    }
+    actions {
+        Set Global Variable(g, Vector(1, 2, 3));
+        Modify Global Variable(g, Add, Event Player);
+        Set Player Variable(Event Player, v, Vector(1, 2, 3));
+        Modify Player Variable(Event Player, v, Add, Vector(10, 20, 30));
+        Set Global Variable(g, (Event Player).v);
+    }
+}
+"#;
+    let trace = run_with(
+        text,
+        r#"{ "id": "p1", "position": { "x": 10, "y": 20, "z": 30 } }"#,
+    );
+    assert_eq!(global(&trace), &vec(11.0, 22.0, 33.0));
+
+    // A `Player` operand without a scenario `position` is a missing input.
+    let trace = run_with(
+        &modify_global("Vector(1, 2, 3)", "Add", "Host Player"),
+        &format!("{HOST} }}"),
+    );
+    assert_eq!(trace.outcome, Outcome::MissingInput);
+    assert_eq!(trace.missing_inputs[0].input, MissingInputKind::Position);
+}
+
 #[test]
 fn vector_divide_by_zero_stops_instead_of_serializing_null() {
     let trace = run(&set_global("Divide(Vector(1, 2, 3), 0)"));
@@ -454,8 +573,10 @@ fn a_vector_serializes_in_the_documented_shape() {
 fn a_partial_position_or_facing_is_malformed() {
     let text = set_global("1");
     for player in [
+        r#"{ "id": "p1", "position": null }"#,
         r#"{ "id": "p1", "position": { "x": 1, "y": 2 } }"#,
         r#"{ "id": "p1", "position": [1, 2] }"#,
+        r#"{ "id": "p1", "facing": null }"#,
         r#"{ "id": "p1", "facing": { "horizontal": 90 } }"#,
         r#"{ "id": "p1", "facing": { "horizontal": 90, "vertical": 0, "roll": 0 } }"#,
     ] {

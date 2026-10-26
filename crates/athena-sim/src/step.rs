@@ -190,7 +190,7 @@ pub(crate) fn run_instance(
             } => {
                 let operand = eval(value, &env)?;
                 let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
-                let updated = apply_modify(old.clone(), op, operand)?;
+                let updated = apply_modify(old.clone(), op, operand, &world.players)?;
                 world.globals.insert(variable.clone(), updated.clone());
                 world.changes.borrow_mut().push(Change::GlobalVariable {
                     name: variable.clone(),
@@ -229,12 +229,17 @@ pub(crate) fn run_instance(
             } => {
                 let id = player_id(player, &env)?;
                 let operand = eval(value, &env)?;
-                let Some(target) = world.players.get_mut(&id) else {
+                let Some(target) = world.players.get(&id) else {
                     return unsupported(format!("player variable of undeclared player `{id}`"));
                 };
                 let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
-                let updated = apply_modify(old.clone(), op, operand)?;
-                target.vars.insert(variable.clone(), updated.clone());
+                let updated = apply_modify(old.clone(), op, operand, &world.players)?;
+                world
+                    .players
+                    .get_mut(&id)
+                    .expect("a checked player")
+                    .vars
+                    .insert(variable.clone(), updated.clone());
                 world.changes.borrow_mut().push(Change::PlayerVariable {
                     player: id,
                     name: variable.clone(),
@@ -605,7 +610,7 @@ pub(crate) fn run_instance(
                     let slot = world.globals.entry(variable.clone()).or_insert(Val::Null);
                     let written = match op {
                         None => set_at(slot, index, operand)?,
-                        Some(op) => modify_at(slot, index, &op, operand)?,
+                        Some(op) => modify_at(slot, index, &op, operand, &world.players)?,
                     };
                     if let Some((effective, old, new)) = written {
                         world.changes.borrow_mut().push(Change::GlobalVariable {
@@ -652,15 +657,24 @@ pub(crate) fn run_instance(
                     let id = player_id(player, &env)?;
                     let index = number(&eval(index, &env)?)?;
                     let operand = eval(operand, &env)?;
-                    let Some(target) = world.players.get_mut(&id) else {
+                    // The operand can read a player's `position`, so the
+                    // variable's slot is worked on a copy and committed
+                    // when the write applies.
+                    let Some(target) = world.players.get(&id) else {
                         return unsupported(format!("player variable of undeclared player `{id}`"));
                     };
-                    let slot = target.vars.entry(variable.clone()).or_insert(Val::Null);
+                    let mut slot = target.vars.get(&variable).cloned().unwrap_or(Val::Null);
                     let written = match op {
-                        None => set_at(slot, index, operand)?,
-                        Some(op) => modify_at(slot, index, &op, operand)?,
+                        None => set_at(&mut slot, index, operand)?,
+                        Some(op) => modify_at(&mut slot, index, &op, operand, &world.players)?,
                     };
                     if let Some((effective, old, new)) = written {
+                        world
+                            .players
+                            .get_mut(&id)
+                            .expect("a checked player")
+                            .vars
+                            .insert(variable.clone(), slot);
                         world.changes.borrow_mut().push(Change::PlayerVariable {
                             player: id,
                             name: variable.clone(),

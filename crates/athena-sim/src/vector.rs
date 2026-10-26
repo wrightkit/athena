@@ -156,9 +156,13 @@ fn facing(players: &BTreeMap<String, Player>, id: &str, construct: &str) -> Resu
 /// What a position argument reads as: a vector as itself, a player as the
 /// scenario's `position` for it. Anything else — an array included — is
 /// not a position the simulator can name.
-fn position_value(value: Val, env: &Env, construct: &str) -> Result<Vec3, Stop> {
+fn position_value(
+    value: Val,
+    players: &BTreeMap<String, Player>,
+    construct: &str,
+) -> Result<Vec3, Stop> {
     match value {
-        Val::Player(id) => position(env.players, &id, &format!("value {construct}")),
+        Val::Player(id) => position(players, &id, &format!("value {construct}")),
         other => vec(&other, construct),
     }
 }
@@ -171,21 +175,28 @@ pub(crate) enum Operand {
     Vector(Vec3),
 }
 
-pub(crate) fn operand(value: Val, env: &Env, construct: &str) -> Result<Operand, Stop> {
+pub(crate) fn operand(
+    value: Val,
+    players: &BTreeMap<String, Player>,
+    construct: &str,
+) -> Result<Operand, Stop> {
     Ok(match value {
         Val::Vector { x, y, z } => Operand::Vector(Vec3 { x, y, z }),
-        Val::Player(id) => {
-            Operand::Vector(position(env.players, &id, &format!("value {construct}"))?)
-        }
+        Val::Player(id) => Operand::Vector(position(players, &id, &format!("value {construct}"))?),
         other => Operand::Scalar(number(&other)?),
     })
 }
 
 /// `Add`/`Subtract`/`Multiply`/`Divide` on numbers and vectors: a number
 /// against a vector broadcasts to every component, two vectors combine
-/// component-wise.
-pub(crate) fn arithmetic(name: &str, a: Val, b: Val, env: &Env) -> Result<Val, Stop> {
-    let (a, b) = (operand(a, env, name)?, operand(b, env, name)?);
+/// component-wise. The `Modify` operations of the same names run this.
+pub(crate) fn arithmetic(
+    name: &str,
+    a: Val,
+    b: Val,
+    players: &BTreeMap<String, Player>,
+) -> Result<Val, Stop> {
+    let (a, b) = (operand(a, players, name)?, operand(b, players, name)?);
     let op: fn(f64, f64) -> f64 = match name {
         "add" => |a, b| a + b,
         "subtract" => |a, b| a - b,
@@ -285,24 +296,24 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "vectorTowards" => {
             let [start, end] = arguments::<2>(name, args)?;
             let (a, b) = (
-                position_value(eval(start, env)?, env, name)?,
-                position_value(eval(end, env)?, env, name)?,
+                position_value(eval(start, env)?, env.players, name)?,
+                position_value(eval(end, env)?, env.players, name)?,
             );
             produced(b.zip(a, |b, a| b - a), name)
         }
         "distance" => {
             let [start, end] = arguments::<2>(name, args)?;
             let (a, b) = (
-                position_value(eval(start, env)?, env, name)?,
-                position_value(eval(end, env)?, env, name)?,
+                position_value(eval(start, env)?, env.players, name)?,
+                position_value(eval(end, env)?, env.players, name)?,
             );
             produced_number(b.zip(a, |b, a| b - a).magnitude(), name)
         }
         "directionTowards" => {
             let [start, end] = arguments::<2>(name, args)?;
             let (a, b) = (
-                position_value(eval(start, env)?, env, name)?,
-                position_value(eval(end, env)?, env, name)?,
+                position_value(eval(start, env)?, env.players, name)?,
+                position_value(eval(end, env)?, env.players, name)?,
             );
             let displacement = b.zip(a, |b, a| b - a);
             let magnitude = displacement.magnitude();

@@ -208,9 +208,11 @@ struct PlayerDoc {
     buttons: BTreeMap<String, bool>,
     /// The player's position: `{ "x": n, "y": n, "z": n }`, supplied
     /// whole or not at all.
+    #[serde(default, deserialize_with = "object_or_absent")]
     position: Option<PositionDoc>,
     /// The player's facing: `{ "horizontal": n, "vertical": n }`
     /// degrees, supplied whole or not at all.
+    #[serde(default, deserialize_with = "object_or_absent")]
     facing: Option<FacingDoc>,
 }
 
