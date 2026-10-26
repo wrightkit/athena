@@ -15,6 +15,7 @@ mod player;
 mod scenario;
 mod sched;
 mod state;
+mod state_reads;
 mod step;
 mod vector;
 

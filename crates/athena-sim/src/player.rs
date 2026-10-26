@@ -150,11 +150,11 @@ const NAMES: &[&str] = &[
 ];
 
 /// `Some(result)` when `name` is a player-roster or player-state value;
-/// `None` leaves dispatch to the next family. The [`crate::scenario`]
+/// `None` leaves dispatch to the next family. The [`crate::state_reads`]
 /// `STATE_READS` table names the scenario-`state` reads alongside the
 /// static names.
 pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Option<Result<Val, Stop>> {
-    if !NAMES.contains(&name) && crate::scenario::state_read(name).is_none() {
+    if !NAMES.contains(&name) && crate::state_reads::state_read(name).is_none() {
         return None;
     }
     Some(dispatch(name, args, env))
@@ -370,14 +370,14 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             Ok(Val::Number(0.0))
         }
         // A live input: the value comes from the scenario player's
-        // `state` map, keyed by [`crate::scenario::STATE_READS`] —
+        // `state` map, keyed by [`crate::state_reads::STATE_READS`] —
         // scenario-supplied, never simulated; `Speed Of` alone derives
         // the length of `velocity`. A key the map does not list falls
         // back to an established model where one exists — the world
         // pools for `Health`/`Max Health`, the empty world for
         // `Is In Spawn Room` — and is a missing input otherwise.
         name => {
-            let Some(read) = crate::scenario::state_read(name) else {
+            let Some(read) = crate::state_reads::state_read(name) else {
                 unreachable!("call checked the name set");
             };
             let [player] = arguments::<1>(name, args)?;
