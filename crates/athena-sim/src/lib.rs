@@ -223,8 +223,9 @@ pub struct PlayerState {
     /// The catalog-derived world state, `None` when the run could not
     /// resolve it (a player without a `hero`, a hero value the catalog
     /// lacks, or a hero setting the program authors that the simulator
-    /// does not apply). Touching an unresolved player's world state —
-    /// dealt or received — ends the run as `not_modeled`.
+    /// does not apply and the player's `state` map does not cover).
+    /// Touching an unresolved player's world state — dealt or received —
+    /// ends the run as `not_modeled`.
     pub world: Option<PlayerWorld>,
 }
 
