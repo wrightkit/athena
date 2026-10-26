@@ -28,6 +28,14 @@
 //! - `shieldBashCooldown%` scales a reported cooldown but has no public
 //!   slot mapping to apply it through.
 //!
+//! When the player declares a version-2 `state` map, a setting in the
+//! first three groups is skipped rather than failed when the map declares
+//! every `state` key the setting can move — `ultCharge` for the ultimate
+//! settings, `health`, `maxHealth` and `normalizedHealth` for the health
+//! ones — since the scenario supplies the value the setting could move
+//! (athena#91). A skipped setting means the scenario-supplied value was
+//! used, not that the setting was simulated.
+//!
 //! A `Raw`/`RawValue`/`RawGroup` member is one the semantic catalog cannot
 //! fully declare; it is reported the same way, since nothing can show it is
 //! inert for player state. No capture backs these rules yet; the trace
@@ -37,6 +45,7 @@ use std::collections::BTreeMap;
 
 use workshop_rs::settings::{PathPart, Settings, SettingsNode, definition};
 
+use crate::Val;
 use crate::scenario::Team;
 
 /// Per-player multipliers collected from the applied hero settings. Every
@@ -79,17 +88,27 @@ fn cooldown_slot(key: &str) -> Option<Option<&'static str>> {
 
 /// Settings that could move a reported value or a `Damage`/`Heal` amount
 /// but are not applied; an authored occurrence marks the player
-/// `not_modeled` on touch.
-const UNAPPLIED_STATE: &[&str] = &[
-    "ultGen%",
-    "passiveUltGen%",
-    "combatUltGen%",
-    "enableSpawningWithUlt",
-    "passiveHealthRegen",
-    "enableRolePassive",
-    "enableHeadshotsOnly",
-    "spawnWithoutMech",
-    "shieldBashCooldown%",
+/// `not_modeled` on touch. Each row's second element is the `state` keys
+/// the setting can move: when the player's version-2 `state` map declares
+/// every one, the scenario supplies the value and the setting is skipped
+/// (`state.<key>` stands; the setting is not simulated). An empty list
+/// means no `state` keys cover the setting — it always fails.
+const UNAPPLIED_STATE: &[(&str, &[&str])] = &[
+    ("ultGen%", &["ultCharge"]),
+    ("passiveUltGen%", &["ultCharge"]),
+    ("combatUltGen%", &["ultCharge"]),
+    ("enableSpawningWithUlt", &["ultCharge"]),
+    (
+        "passiveHealthRegen",
+        &["health", "maxHealth", "normalizedHealth"],
+    ),
+    (
+        "enableRolePassive",
+        &["health", "maxHealth", "normalizedHealth"],
+    ),
+    ("enableHeadshotsOnly", &[]),
+    ("spawnWithoutMech", &[]),
+    ("shieldBashCooldown%", &[]),
 ];
 
 /// Whether the leaf sits inside the player's hero group or directly under
@@ -114,11 +133,15 @@ fn catalogued(key: &str, scope: Scope) -> bool {
 }
 
 /// Read the hero settings a player's scope authors into its modifiers.
-/// The error names the setting key that is authored but cannot be applied.
+/// `state` is the player's version-2 `state` map, when the scenario
+/// declares one: a skippable setting whose `state` keys are all declared
+/// is skipped. The error names the setting key that is authored but
+/// cannot be applied, plus the `state` keys that would clear it.
 pub(crate) fn modifiers(
     settings: Option<&Settings>,
     team: Option<Team>,
     hero_id: &str,
+    state: Option<&BTreeMap<String, Val>>,
 ) -> Result<HeroModifiers, String> {
     let mut mods = HeroModifiers {
         health: 1.0,
@@ -157,33 +180,60 @@ pub(crate) fn modifiers(
         if !applies_to_team(team_name, team) {
             continue;
         }
-        let unapplied = |key: String| format!("hero setting `{key}` is not applied");
         for member in members {
             match member {
                 SettingsNode::Group { name, children, .. } if name == hero_id => {
                     for leaf in children {
-                        leaf_modifier(&mut mods, leaf, Scope::Hero).map_err(unapplied)?;
+                        leaf_modifier(&mut mods, leaf, Scope::Hero, state)?;
                     }
                 }
                 SettingsNode::Group { .. } => {}
-                leaf => leaf_modifier(&mut mods, leaf, Scope::Team).map_err(unapplied)?,
+                leaf => leaf_modifier(&mut mods, leaf, Scope::Team, state)?,
             }
         }
     }
     Ok(mods)
 }
 
+/// The `not_modeled` message for an authored setting the simulator does
+/// not apply, naming the `state` keys that would clear it when the
+/// setting has `state` coverage.
+fn unapplied(name: &str, missing: &[&str]) -> String {
+    let message = format!("hero setting `{name}` is not applied");
+    if missing.is_empty() {
+        return message;
+    }
+    let ids = missing
+        .iter()
+        .map(|key| format!("`state.{key}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{message}; declaring {ids} would clear it")
+}
+
+/// Whether the member carries an opaque value the catalog could not type
+/// (`Raw`/`RawValue`/`RawGroup`).
+fn opaque(leaf: &SettingsNode) -> bool {
+    matches!(
+        leaf,
+        SettingsNode::Raw { .. } | SettingsNode::RawValue { .. } | SettingsNode::RawGroup { .. }
+    )
+}
+
 /// Fold one authored member into the modifiers, or fail with the key of a
-/// setting the simulator cannot apply to a reported value.
+/// setting the simulator cannot apply to a reported value. `state` is the
+/// player's version-2 `state` map: an unapplied setting whose `state`
+/// keys are all declared is skipped.
 fn leaf_modifier(
     mods: &mut HeroModifiers,
     leaf: &SettingsNode,
     scope: Scope,
+    state: Option<&BTreeMap<String, Val>>,
 ) -> Result<(), String> {
     let name = leaf.name();
     let number = || match leaf {
         SettingsNode::Number { value, .. } => Ok(*value / 100.0),
-        _ => Err(name.to_string()),
+        _ => Err(unapplied(name, &[])),
     };
     match name {
         "health%" => mods.health *= number()?,
@@ -191,22 +241,38 @@ fn leaf_modifier(
         "damageReceived%" => mods.damage_received *= number()?,
         "healingDealt%" => mods.healing_dealt *= number()?,
         "healingReceived%" => mods.healing_received *= number()?,
-        _ => {
-            let unapplied = || Err(name.to_string());
-            match cooldown_slot(name) {
-                Some(None) if matches!(scope, Scope::Team) => mods.cooldown_all *= number()?,
-                Some(Some(slot)) if matches!(scope, Scope::Hero) => {
-                    *mods.cooldown_slots.entry(slot.to_string()).or_insert(1.0) *= number()?;
-                }
-                // A cooldown scalar authored at a scope it does not belong
-                // to is authored but not applied.
-                Some(_) => return unapplied(),
-                None if UNAPPLIED_STATE.contains(&name) => return unapplied(),
-                // An undeclared member cannot be shown inert.
-                None if !declared(leaf, scope) => return unapplied(),
-                None => {}
+        _ => match cooldown_slot(name) {
+            Some(None) if matches!(scope, Scope::Team) => mods.cooldown_all *= number()?,
+            Some(Some(slot)) if matches!(scope, Scope::Hero) => {
+                *mods.cooldown_slots.entry(slot.to_string()).or_insert(1.0) *= number()?;
             }
-        }
+            // A cooldown scalar authored at a scope it does not belong
+            // to is authored but not applied.
+            Some(_) => return Err(unapplied(name, &[])),
+            None => match UNAPPLIED_STATE.iter().find(|(key, _)| *key == name) {
+                // `Raw*` members and settings no `state` keys cover
+                // keep failing exactly as before.
+                Some((_, keys)) if keys.is_empty() || opaque(leaf) => {
+                    return Err(unapplied(name, &[]));
+                }
+                Some((_, keys)) => {
+                    let missing = keys
+                        .iter()
+                        .copied()
+                        .filter(|key| !state.is_some_and(|map| map.contains_key(*key)))
+                        .collect::<Vec<_>>();
+                    if !missing.is_empty() {
+                        return Err(unapplied(name, &missing));
+                    }
+                    // The scenario supplies every value the setting
+                    // could move: the setting is skipped, not
+                    // simulated.
+                }
+                // An undeclared member cannot be shown inert.
+                None if !declared(leaf, scope) => return Err(unapplied(name, &[])),
+                None => {}
+            },
+        },
     }
     Ok(())
 }
@@ -214,10 +280,8 @@ fn leaf_modifier(
 /// Whether the member's name is one the settings catalog declares at this
 /// scope; typed leaves always are.
 fn declared(leaf: &SettingsNode, scope: Scope) -> bool {
-    match leaf {
-        SettingsNode::Raw { .. }
-        | SettingsNode::RawValue { .. }
-        | SettingsNode::RawGroup { .. } => catalogued(leaf.name(), scope),
-        _ => true,
+    if opaque(leaf) {
+        return catalogued(leaf.name(), scope);
     }
+    true
 }

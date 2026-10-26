@@ -70,6 +70,21 @@ fn hero_settings_scenario(players: &str, event_player: &str) -> String {
     )
 }
 
+/// A version-2 scenario with the given players, where `state` is the
+/// player-state map (athena#91 tests the version-2 meaning).
+fn hero_settings_scenario_v2(players: &str, event_player: &str) -> String {
+    format!(
+        r#"{{ "scenarioVersion": 2, "seconds": 1,
+            "players": [{players}],
+            "events": [{{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "{event_player}" }}] }}"#
+    )
+}
+
+/// A version-2 player row declaring `state` keys.
+fn state_player(id: &str, hero: &str, team: &str, state: &str) -> String {
+    format!(r#"{{ "id": "{id}", "hero": "{hero}", "team": "{team}", "state": {state} }}"#)
+}
+
 #[test]
 fn health_percent_scales_every_pool_for_all_teams() {
     let text = hero_settings_program(
@@ -313,4 +328,184 @@ fn an_unapplied_setting_on_an_untouched_player_still_completes() {
     assert_eq!(trace.outcome, Outcome::Complete);
     assert!(trace.players["p1"].world.is_some());
     assert_eq!(trace.players["p2"].world, None);
+}
+
+/// The ultimate-charge settings map to `state.ultCharge`: a player whose
+/// `state` declares it skips the setting — the scenario-supplied value
+/// stands, the setting is not simulated (athena#91).
+#[test]
+fn an_unapplied_ult_setting_is_skipped_when_state_supplies_the_charge() {
+    for setting in [
+        "ultGen%: 0",
+        "passiveUltGen%: 0",
+        "combatUltGen%: 0",
+        "enableSpawningWithUlt: On",
+    ] {
+        let text = hero_settings_program(
+            &format!("        General {{\n            {setting}\n        }}"),
+            "        Damage(Event Player, Null, 10);",
+        );
+        let scenario = hero_settings_scenario_v2(
+            &state_player("p1", "ana", "team1", r#"{ "ultCharge": 30 }"#),
+            "p1",
+        );
+        let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+            .unwrap_or_else(|error| panic!("{setting}: {error}"));
+        assert_eq!(trace.outcome, Outcome::Complete, "{setting}");
+        // The world resolved: `Damage` lands on ana's shield pool.
+        let world = trace.players["p1"].world.as_ref().expect("p1 world");
+        assert_eq!(world.shield.as_ref().unwrap().current, 90.0, "{setting}");
+    }
+}
+
+/// The health settings map to `health`, `maxHealth` and
+/// `normalizedHealth`: all three must be declared for the skip.
+#[test]
+fn an_unapplied_health_setting_needs_every_mapped_state_key() {
+    let text = hero_settings_program(
+        r#"        General {
+            passiveHealthRegen: Off
+            enableRolePassive: Off
+        }"#,
+        "        Damage(Event Player, Null, 10);",
+    );
+    let scenario = hero_settings_scenario_v2(
+        &state_player(
+            "p1",
+            "ana",
+            "team1",
+            r#"{ "health": 200, "maxHealth": 200, "normalizedHealth": 1 }"#,
+        ),
+        "p1",
+    );
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(
+        trace.players["p1"]
+            .world
+            .as_ref()
+            .unwrap()
+            .shield
+            .as_ref()
+            .unwrap()
+            .current,
+        90.0
+    );
+
+    // One mapped key missing: the setting fails as before, and the
+    // message names the `state` keys that would clear it.
+    let scenario = hero_settings_scenario_v2(
+        &state_player(
+            "p1",
+            "ana",
+            "team1",
+            r#"{ "health": 200, "maxHealth": 200 }"#,
+        ),
+        "p1",
+    );
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert!(
+        not_modeled.construct.contains("passiveHealthRegen"),
+        "{}",
+        not_modeled.construct
+    );
+    assert!(
+        not_modeled.construct.contains("state.normalizedHealth"),
+        "{}",
+        not_modeled.construct
+    );
+}
+
+/// A player without `state` gets no skip: the failure names every `state`
+/// key that would clear the setting.
+#[test]
+fn an_unapplied_setting_without_state_fails_naming_the_state_keys() {
+    let text = hero_settings_program(
+        r#"        General {
+            combatUltGen%: 0
+        }"#,
+        "        Damage(Event Player, Null, 10);",
+    );
+    let scenario =
+        hero_settings_scenario_v2(r#"{ "id": "p1", "hero": "ana", "team": "team1" }"#, "p1");
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert!(
+        not_modeled.construct.contains("state.ultCharge"),
+        "{}",
+        not_modeled.construct
+    );
+}
+
+/// A setting with no `state` coverage — `enableHeadshotsOnly`,
+/// `spawnWithoutMech`, `shieldBashCooldown%` — fails exactly as before
+/// even when `state` is fully declared; the message names no `state` key.
+#[test]
+fn an_unmapped_setting_still_fails_with_state() {
+    let text = hero_settings_program(
+        r#"        General {
+            enableHeadshotsOnly: On
+        }"#,
+        "        Damage(Event Player, Null, 10);",
+    );
+    let scenario = hero_settings_scenario_v2(
+        &state_player(
+            "p1",
+            "ana",
+            "team1",
+            r#"{ "health": 200, "maxHealth": 200, "normalizedHealth": 1, "ultCharge": 30 }"#,
+        ),
+        "p1",
+    );
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert!(
+        not_modeled.construct.contains("enableHeadshotsOnly"),
+        "{}",
+        not_modeled.construct
+    );
+    assert!(
+        !not_modeled.construct.contains("state."),
+        "{}",
+        not_modeled.construct
+    );
+}
+
+/// An applied setting still applies for a player with `state`: `health%`
+/// keeps scaling the pools — `state.<key>` governs reads, not the table.
+#[test]
+fn an_applied_setting_still_scales_with_state_declared() {
+    let text = hero_settings_program(
+        r#"        General {
+            health%: 150
+        }"#,
+        "        Damage(Event Player, Null, 10);",
+    );
+    let scenario = hero_settings_scenario_v2(
+        &state_player(
+            "p1",
+            "ana",
+            "team1",
+            r#"{ "health": 200, "maxHealth": 200, "normalizedHealth": 1 }"#,
+        ),
+        "p1",
+    );
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+    // 150% pools; the 10 damage lands on the shield pool.
+    let world = trace.players["p1"].world.as_ref().expect("p1 world");
+    assert_eq!((world.health.current, world.health.max), (300.0, 300.0));
+    assert_eq!(world.shield.as_ref().unwrap().current, 140.0);
 }
