@@ -17,7 +17,7 @@ use crate::load::{Frame, Instance, WaitMode};
 use crate::modify::{apply_modify, modify_at, modify_op, set_at};
 use crate::scenario::{Player, ServerLoad};
 use crate::state::{self, WorldSlot};
-use crate::{Change, LogEntry, NotModeled, RuleRun, Stop, Timeline, Val};
+use crate::{Change, LogEntry, NotModeled, RuleRun, Stop, StopIndex, StopLocation, Timeline, Val};
 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
@@ -27,7 +27,7 @@ const STEP_LIMIT: usize = 1_000_000;
 const CALL_DEPTH_LIMIT: usize = 128;
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// Ticks a `Wait(seconds)` lasts: rounded up, never less than one (P1, P4).
@@ -92,7 +92,7 @@ pub(crate) fn world_state<'w>(
     };
     match &mut player.world {
         WorldSlot::Resolved(state) => Ok(state),
-        WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
+        WorldSlot::Failed(error) => Err(error.clone().into()),
         WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
     }
 }
@@ -106,14 +106,25 @@ pub(crate) fn flag(value: Val) -> Result<bool, Stop> {
 
 /// Whether a rule's enabled conditions all hold under `env`, evaluated in
 /// order. `Loop If Condition Is True`/`False` re-check this mid-run, the
-/// same way the scheduler checks it for the run start.
+/// same way the scheduler checks it for the run start. A stop is located
+/// at the condition that failed.
 pub(crate) fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, Stop> {
-    for condition in rule
-        .conditions
-        .iter()
-        .filter(|condition| !condition.disabled)
-    {
-        if !flag(eval(&condition.value, env)?)? {
+    for (index, condition) in rule.conditions.iter().enumerate() {
+        if condition.disabled {
+            continue;
+        }
+        let held = match eval(&condition.value, env).and_then(flag) {
+            Ok(held) => held,
+            Err(stop) => {
+                return Err(stop.stopped_at(StopLocation {
+                    rule: env.rule,
+                    name: rule.name.clone(),
+                    event_player: env.event_player(),
+                    at: Some(StopIndex::Condition(index)),
+                }));
+            }
+        };
+        if !held {
             return Ok(false);
         }
     }

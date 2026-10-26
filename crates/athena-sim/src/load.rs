@@ -9,10 +9,10 @@ use workshop_rs::{Event, EventTarget, EventTeam, Program, Rule};
 
 use crate::blocks::{Blocks, block_maps};
 use crate::scenario::{EventCtx, Player, Team};
-use crate::{NotModeled, Stop, Val};
+use crate::{NotModeled, Stop, StopLocation, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// The position of a rule execution in progress: the rule whose actions the
@@ -134,7 +134,14 @@ pub(crate) fn load<'a>(
                 };
                 let mut bound = Vec::new();
                 for (id, player) in players {
-                    if player_matches(rule, team, target, player)? {
+                    if player_matches(rule, team, target, player).map_err(|stop| {
+                        stop.stopped_at(StopLocation {
+                            rule: rule_idx,
+                            name: rule.name.clone(),
+                            event_player: Some(id.clone()),
+                            at: None,
+                        })
+                    })? {
                         bound.push(Some(id.clone()));
                     }
                 }
@@ -145,7 +152,14 @@ pub(crate) fn load<'a>(
             subroutines.insert(name.clone(), rule_idx);
         }
         rules.push(rule);
-        blocks.push(block_maps(&rule.actions)?);
+        blocks.push(block_maps(&rule.actions).map_err(|stop| {
+            stop.stopped_at(StopLocation {
+                rule: rule_idx,
+                name: rule.name.clone(),
+                event_player: None,
+                at: None,
+            })
+        })?);
         for each_player in each_players {
             instances.push(Instance {
                 rule,

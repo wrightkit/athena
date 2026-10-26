@@ -14,8 +14,8 @@ use crate::state::{self, WorldSlot};
 use crate::step::{World, conditions_hold, flag, run_instance};
 use crate::{
     ExpectationResult, ExpectationStatus, MissingInput, MissingInputKind, NotModeled, Options,
-    Outcome, PlayerState, RuleRun, RunEnd, Stop, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT,
-    TIMELINE_RULE_LIMIT, Timeline, TimelineEntry, Trace, Val,
+    Outcome, PlayerState, RuleRun, RunEnd, Stop, StopIndex, StopLocation, TIMELINE_CHANGE_LIMIT,
+    TIMELINE_ENTRY_LIMIT, TIMELINE_RULE_LIMIT, Timeline, TimelineEntry, Trace, Val,
 };
 
 /// One server tick (P0, P1).
@@ -97,9 +97,9 @@ pub(crate) fn run(
         .and_then(|loaded| tick_loop(loaded, &mut world, options, &events))
     {
         Ok(()) => Outcome::Complete,
-        Err(Stop::NotModeled(not_modeled)) => Outcome::NotModeled(not_modeled),
+        Err(Stop::NotModeled(not_modeled)) => Outcome::NotModeled(*not_modeled),
         Err(Stop::MissingInput(missing)) => {
-            missing_inputs.push(missing);
+            missing_inputs.push(*missing);
             Outcome::MissingInput
         }
     };
@@ -206,7 +206,7 @@ fn event_player(inst: &Instance<'_>) -> Option<String> {
 
 /// Run one instance and record the execution in `world.runs`: a
 /// `Wait`/`Wait Until` reports `waiting` with its wake tick, a stop
-/// reports `aborted`.
+/// reports `stopped` and gains the failing action's location.
 fn run_and_record(
     inst: &mut Instance<'_>,
     rule_list: &[&Rule],
@@ -220,20 +220,53 @@ fn run_and_record(
     inst.aborted = false;
     let result = run_instance(inst, rule_list, blocks, subroutines, world, tick, now);
     let ended = match &result {
-        Err(_) => RunEnd::Aborted,
+        Err(_) => RunEnd::Stopped,
         Ok(()) if inst.aborted => RunEnd::Aborted,
         Ok(()) => match inst.wake {
             Some(wake) => RunEnd::Waiting { wake },
             None => RunEnd::Finished,
         },
     };
+    // A stop belongs to the rule that owns the failing construct: the
+    // innermost frame still on the stack, so a `Call Subroutine` stop
+    // names the subroutine's rule and action, not the caller's.
+    let (rule_idx, at) = match &result {
+        Err(_) => match inst.frames.last().copied() {
+            Some(Frame { rule_idx, pc }) => (rule_idx, Some(StopIndex::Action(pc))),
+            None => (inst.rule_idx, None),
+        },
+        Ok(()) => (inst.rule_idx, None),
+    };
+    let name = rule_list[rule_idx].name.clone();
     world.runs.push(RuleRun {
-        rule: inst.rule_idx,
-        name: inst.rule.name.clone(),
+        rule: rule_idx,
+        name: name.clone(),
         event_player: event_player(inst),
         ended,
     });
-    result
+    result.map_err(|stop| {
+        stop.stopped_at(StopLocation {
+            rule: rule_idx,
+            name,
+            event_player: event_player(inst),
+            at,
+        })
+    })
+}
+
+/// A stop outside `run_and_record` — a rule's event filter, condition
+/// check or `Wait Until` re-check — still ends a rule's work on the tick:
+/// the tick's `rules` list shows the rule `stopped`, and the stop gains
+/// the same location.
+fn record_stop(runs: &mut Vec<RuleRun>, run: RuleRun, at: Option<StopIndex>, stop: Stop) -> Stop {
+    let location = StopLocation {
+        rule: run.rule,
+        name: run.name.clone(),
+        event_player: run.event_player.clone(),
+        at,
+    };
+    runs.push(run);
+    stop.stopped_at(location)
 }
 
 fn tick_loop(
@@ -318,10 +351,30 @@ fn run_tick(
                                 .get(id)
                                 .expect("the scenario loader checks `eventPlayer` is declared"),
                         )
-                        .map_err(|stop| stop.at(tick))?,
+                        .map_err(|stop| {
+                            record_stop(
+                                &mut world.runs,
+                                RuleRun {
+                                    rule: instance.rule_idx,
+                                    name: instance.rule.name.clone(),
+                                    event_player: injected.player.clone(),
+                                    ended: RunEnd::Stopped,
+                                },
+                                None,
+                                stop.at(tick),
+                            )
+                        })?,
                         None if *team == EventTeam::All && *target == EventTarget::All => true,
                         None => {
-                            return Err(Stop::MissingInput(
+                            return Err(record_stop(
+                                &mut world.runs,
+                                RuleRun {
+                                    rule: instance.rule_idx,
+                                    name: instance.rule.name.clone(),
+                                    event_player: None,
+                                    ended: RunEnd::Stopped,
+                                },
+                                None,
                                 MissingInput::new(
                                     MissingInputKind::EventPlayer,
                                     None,
@@ -331,7 +384,8 @@ fn run_tick(
                                         instance.rule.name
                                     ),
                                 )
-                                .at(tick),
+                                .at(tick)
+                                .into(),
                             ));
                         }
                     };
@@ -391,7 +445,19 @@ fn run_tick(
                     changes: &world.changes,
                     now,
                 };
-                let holds = conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))?;
+                let holds = conditions_hold(instance.rule, &env).map_err(|stop| {
+                    record_stop(
+                        &mut world.runs,
+                        RuleRun {
+                            rule: instance.rule_idx,
+                            name: instance.rule.name.clone(),
+                            event_player: event_player(instance),
+                            ended: RunEnd::Stopped,
+                        },
+                        None,
+                        stop.at(tick),
+                    )
+                })?;
                 let edge = holds && !instance.prev;
                 instance.prev = holds;
                 // A wake due this tick wins over the wait behavior.
@@ -436,7 +502,19 @@ fn run_tick(
                                 rule: frame.rule_idx,
                                 ..env
                             };
-                            if until_holds(rule_list, frame, &until_env).map_err(|e| e.at(tick))? {
+                            if until_holds(rule_list, frame, &until_env).map_err(|stop| {
+                                record_stop(
+                                    &mut world.runs,
+                                    RuleRun {
+                                        rule: frame.rule_idx,
+                                        name: rule_list[frame.rule_idx].name.clone(),
+                                        event_player: event_player(instance),
+                                        ended: RunEnd::Stopped,
+                                    },
+                                    Some(StopIndex::Action(frame.pc)),
+                                    stop.at(tick),
+                                )
+                            })? {
                                 instance.wake = Some(tick);
                             }
                         }
@@ -496,7 +574,19 @@ fn run_tick(
                         changes: &world.changes,
                         now,
                     };
-                    if conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))? {
+                    if conditions_hold(instance.rule, &env).map_err(|stop| {
+                        record_stop(
+                            &mut world.runs,
+                            RuleRun {
+                                rule: instance.rule_idx,
+                                name: instance.rule.name.clone(),
+                                event_player: event_player(instance),
+                                ended: RunEnd::Stopped,
+                            },
+                            None,
+                            stop.at(tick),
+                        )
+                    })? {
                         instance.once.get_mut().clear();
                         instance.frames.push(Frame {
                             rule_idx: instance.rule_idx,
@@ -534,7 +624,19 @@ fn run_tick(
                         changes: &world.changes,
                         now,
                     };
-                    if until_holds(rule_list, frame, &env).map_err(|e| e.at(tick))? {
+                    if until_holds(rule_list, frame, &env).map_err(|stop| {
+                        record_stop(
+                            &mut world.runs,
+                            RuleRun {
+                                rule: frame.rule_idx,
+                                name: rule_list[frame.rule_idx].name.clone(),
+                                event_player: event_player(instance),
+                                ended: RunEnd::Stopped,
+                            },
+                            Some(StopIndex::Action(frame.pc)),
+                            stop.at(tick),
+                        )
+                    })? {
                         instance.wake = Some(tick);
                     }
                 }

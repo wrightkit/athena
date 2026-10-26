@@ -46,6 +46,39 @@ pub struct LogEntry {
     pub text: String,
 }
 
+/// Where inside a rule a run stopped: an action or a condition index,
+/// zero-based in the rule's own list.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StopIndex {
+    /// An action's position in the rule's action list.
+    Action(usize),
+    /// A condition's position in the rule's condition list.
+    Condition(usize),
+}
+
+/// Where a run stopped. `rule`, `name` and `event_player` mean what they do
+/// in a `rules` timeline element, except that `rule` is the index of the
+/// rule the stopped construct belongs to — inside a `Call Subroutine`, the
+/// subroutine's own. `at` is the action or condition index that stopped
+/// the run; `None` when the rule's event filter or block structure stopped
+/// it instead.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StopLocation {
+    /// The index of the rule holding the stopped construct among the
+    /// program's enabled rules, in file order.
+    pub rule: usize,
+    /// The rule's name.
+    pub name: String,
+    /// The scenario `id` the rule ran or was matched for: the `Event
+    /// Player` binding; `None` for `Ongoing - Global` runs and checks with
+    /// none.
+    pub event_player: Option<String>,
+    #[serde(flatten)]
+    pub at: Option<StopIndex>,
+}
+
 /// A construct the simulator does not model. The run stops at it; nothing is
 /// defaulted or skipped.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -54,6 +87,10 @@ pub struct NotModeled {
     pub construct: String,
     /// The tick on which it was met; `None` when found before the first tick.
     pub tick: Option<u64>,
+    /// Where the run stopped: the rule, its `Event Player` and the action
+    /// or condition index. `None` only when no rule was involved, which no
+    /// current path produces.
+    pub location: Option<StopLocation>,
 }
 
 impl NotModeled {
@@ -61,6 +98,7 @@ impl NotModeled {
         Self {
             construct: construct.into(),
             tick: None,
+            location: None,
         }
     }
 
@@ -117,6 +155,8 @@ pub struct MissingInput {
     /// A short description for people, as in `not_modeled`. Do not match on
     /// it.
     pub construct: String,
+    /// Where the run stopped, as in `not_modeled`.
+    pub location: Option<StopLocation>,
 }
 
 impl MissingInput {
@@ -132,6 +172,7 @@ impl MissingInput {
             name,
             tick: None,
             construct: construct.into(),
+            location: None,
         }
     }
 
@@ -394,10 +435,12 @@ pub enum RunEnd {
     /// expires: the resume tick for `Wait`, the timeout tick for
     /// `Wait Until`, whose condition can resume it earlier.
     Waiting { wake: u64 },
-    /// It was killed: by the run's stop (`not_modeled`, `missing_input`,
-    /// the step limit), by an `Abort When False` wait going false, or by
-    /// an `Abort`/`Abort If` action.
+    /// It was killed: by an `Abort When False` wait going false or by an
+    /// `Abort`/`Abort If` action.
     Aborted,
+    /// The run stopped on this rule — `not_modeled` or `missing_input`;
+    /// the outcome's location names the action or condition.
+    Stopped,
 }
 
 /// One state change recorded in a timeline entry.
@@ -610,25 +653,50 @@ impl fmt::Display for RunError {
 
 impl std::error::Error for RunError {}
 
-/// Why a run stopped before its time was up.
+/// Why a run stopped before its time was up. The variants are boxed so
+/// `Result<_, Stop>` stays small.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Stop {
-    NotModeled(NotModeled),
-    MissingInput(MissingInput),
+    NotModeled(Box<NotModeled>),
+    MissingInput(Box<MissingInput>),
 }
 
 impl Stop {
     pub(crate) fn at(self, tick: u64) -> Self {
         match self {
-            Self::NotModeled(not_modeled) => Self::NotModeled(not_modeled.at(tick)),
-            Self::MissingInput(missing) => Self::MissingInput(missing.at(tick)),
+            Self::NotModeled(not_modeled) => Self::NotModeled(Box::new(not_modeled.at(tick))),
+            Self::MissingInput(missing) => Self::MissingInput(Box::new(missing.at(tick))),
         }
+    }
+
+    /// Fill in where the run stopped when the raising code did not say;
+    /// a location already set by a site closer to the construct wins.
+    pub(crate) fn stopped_at(mut self, location: StopLocation) -> Self {
+        match &mut self {
+            Self::NotModeled(stop) => {
+                if stop.location.is_none() {
+                    stop.location = Some(location);
+                }
+            }
+            Self::MissingInput(stop) => {
+                if stop.location.is_none() {
+                    stop.location = Some(location);
+                }
+            }
+        }
+        self
     }
 }
 
 impl From<NotModeled> for Stop {
     fn from(not_modeled: NotModeled) -> Self {
-        Self::NotModeled(not_modeled)
+        Self::NotModeled(Box::new(not_modeled))
+    }
+}
+
+impl From<MissingInput> for Stop {
+    fn from(missing: MissingInput) -> Self {
+        Self::MissingInput(Box::new(missing))
     }
 }
 

@@ -36,7 +36,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
 | `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
-| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`, `position`, `facing`, `objectives`, `state`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad`, `map` and `objectives`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad`, `map` for `map`, `position`/`facing` for the two player-field inputs, `objectives[i]` — the evaluated index — for `objectives`, `state.<key>` for `state`, `null` for the others), `tick`, `construct`. |
+| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`, `position`, `facing`, `objectives`, `state`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad`, `map` and `objectives`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad`, `map` for `map`, `position`/`facing` for the two player-field inputs, `objectives[i]` — the evaluated index — for `objectives`, `state.<key>` for `state`, `null` for the others), `tick`, `construct`, `location` (where the read happened, as under `not_modeled` below). |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
 `logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
@@ -60,8 +60,10 @@ Each row repeats what the scenario declared — `hero` (the scenario text, `null
 ### Outcome and "not modeled"
 
 - `complete`: the whole requested time was simulated.
-- `not_modeled`: the run met a construct the simulator has no passing capture fixture for, and stopped there. The outcome carries `construct` (a short description, for example `action wait` or `value getPosition`) and `tick` (the tick on which it was met, or `null` if it was found before the first tick, for example an unsupported rule event).
-- `missing_input`: the run met a live input the scenario does not supply and stopped at that read. The input is named in `missingInputs`; expectations are all `not_evaluated`.
+- `not_modeled`: the run met a construct the simulator has no passing capture fixture for, and stopped there. The outcome carries `construct` (a short description, for example `action wait` or `value getPosition`), `tick` (the tick on which it was met, or `null` if it was found before the first tick, for example an unsupported rule event) and `location` (below).
+- `missing_input`: the run met a live input the scenario does not supply and stopped at that read. The input is named in `missingInputs`, whose entry carries the same `location`; expectations are all `not_evaluated`.
+
+`location` names where the run stopped: `rule` is the index of the rule holding the stopped construct among the program's enabled rules — inside `Call Subroutine`, the subroutine's own, as in a `rules` timeline element — `name` is the rule's name, `eventPlayer` is the `Event Player` the stopping evaluation ran for (`null` when none applied), and exactly one of `action` or `condition` gives the zero-based index inside that rule. A stop no single statement owns — a rule's event filter, or an action block that failed to load — reports only `rule`, `name` and `eventPlayer`; `location` is `null` only when no rule was involved.
 
 The simulator never skips an unmodeled construct and never replaces it with a default value. A consumer must treat a trace with `outcome` other than `complete` as partial. The text of `construct` is for people; do not match on it.
 
@@ -253,7 +255,7 @@ Each `rules` element:
 | `rule` | The rule's index among the program's enabled rules, in file order. |
 | `name` | The rule's name. |
 | `eventPlayer` | The scenario `id` of the run's `Event Player`: an injected event's `eventPlayer`, or the player an `Ongoing - Each Player` run is bound to; `null` for `Ongoing - Global` runs and events without one. |
-| `ended` | How the execution ended on the tick: `finished` (stepped past its last action), `waiting` with `wake` (suspended; `wake` is the tick the wait expires — the resume tick for `Wait`, the timeout tick for `Wait Until`, whose condition can resume it earlier) or `aborted` (killed by the run's stop, by an `Abort When False` wait going false, or by an `Abort`/`Abort If` action). |
+| `ended` | How the execution ended on the tick: `finished` (stepped past its last action), `waiting` with `wake` (suspended; `wake` is the tick the wait expires — the resume tick for `Wait`, the timeout tick for `Wait Until`, whose condition can resume it earlier), `stopped` (the run's `not_modeled`/`missing_input` stop was inside this rule — an action, a condition check or an event filter; `rule` then names the rule that owns the stopped construct, the subroutine's inside `Call Subroutine`) or `aborted` (killed by an `Abort When False` wait going false or an `Abort`/`Abort If` action). |
 
 Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as the `Val` form:
 
@@ -275,7 +277,12 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 
 ```json
 {
-  "outcome": { "status": "not_modeled", "construct": "value getPosition", "tick": 0 },
+  "outcome": {
+    "status": "not_modeled",
+    "construct": "value getPosition",
+    "tick": 0,
+    "location": { "rule": 0, "name": "init", "eventPlayer": null, "action": 1 }
+  },
   "geometry": "emptyWorld",
   "logs": [{ "tick": 3, "text": "t0=3.023" }],
   "globals": { "a": { "type": "number", "value": 1.0 }, "b": { "type": "null" } },
@@ -325,7 +332,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
             "rule": 0,
             "name": "init",
             "eventPlayer": null,
-            "ended": "finished"
+            "ended": "stopped"
           }
         ],
         "changes": [
@@ -347,7 +354,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 }
 ```
 
-`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`; `null` has no `value`. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
+`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ..., "location": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`; `null` has no `value`. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
 
 Adding a field is compatible. Removing or renaming one, or changing a value's meaning, is a breaking change and needs a version bump of this crate.
 

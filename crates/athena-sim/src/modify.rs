@@ -13,7 +13,7 @@ use crate::vector::arithmetic;
 use crate::{NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// The array a `Modify` array operation reads: an array as itself, `Null`

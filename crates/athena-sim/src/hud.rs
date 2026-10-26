@@ -8,7 +8,7 @@ use crate::eval::{Env, eval, viewers};
 use crate::{Change, HudArgs, HudElement, HudKind, NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// The HUD elements a run created and the text id of the newest one.

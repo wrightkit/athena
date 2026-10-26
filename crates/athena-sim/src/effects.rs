@@ -14,7 +14,7 @@ use crate::hud::enum_member;
 use crate::{Change, EffectArgs, EffectElement, EffectKind, NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// The effect entities a run created or played and the `id` of the newest

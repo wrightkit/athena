@@ -15,7 +15,7 @@ use crate::state::WorldSlot;
 use crate::{MissingInput, MissingInputKind, NotModeled, PlayerWorld, PoolState, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 fn missing<T>(
@@ -24,9 +24,7 @@ fn missing<T>(
     name: Option<String>,
     construct: impl Into<String>,
 ) -> Result<T, Stop> {
-    Err(Stop::MissingInput(MissingInput::new(
-        input, player, name, construct,
-    )))
+    Err(MissingInput::new(input, player, name, construct).into())
 }
 
 /// The resolved world state of a scenario player, as the player-state
@@ -43,7 +41,7 @@ fn player_world<'a>(
     };
     match &player.world {
         WorldSlot::Resolved(state) => Ok(&state.world),
-        WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
+        WorldSlot::Failed(error) => Err(error.clone().into()),
         WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
     }
 }

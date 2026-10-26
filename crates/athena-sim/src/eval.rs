@@ -53,8 +53,17 @@ pub(crate) struct Env<'a> {
     pub now: f64,
 }
 
+impl Env<'_> {
+    /// The scenario `id` this env's evaluation binds as `Event Player`.
+    pub(crate) fn event_player(&self) -> Option<String> {
+        self.event
+            .and_then(|event| event.player.clone())
+            .or_else(|| self.each_player.map(str::to_string))
+    }
+}
+
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 fn missing<T>(
@@ -63,9 +72,7 @@ fn missing<T>(
     name: Option<String>,
     construct: impl Into<String>,
 ) -> Result<T, Stop> {
-    Err(Stop::MissingInput(MissingInput::new(
-        input, player, name, construct,
-    )))
+    Err(MissingInput::new(input, player, name, construct).into())
 }
 
 /// Resolve a Workshop player expression to a scenario player `id`.
