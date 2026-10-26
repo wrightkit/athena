@@ -154,8 +154,8 @@ pub(crate) fn number(value: &Val) -> Result<f64, Stop> {
 
 /// The `Compare` equality of two evaluated values: numbers, booleans and
 /// `Null` by number coercion (`Null` and `False` equal `0`), text by text,
-/// players by scenario `id`, arrays by element-wise equality. Values of
-/// different types are never equal.
+/// players by scenario `id`, arrays by element-wise equality, vectors by
+/// component equality. Values of different types are never equal.
 pub(crate) fn values_equal(a: &Val, b: &Val) -> Result<bool, Stop> {
     Ok(match (a, b) {
         (Val::Array(a), Val::Array(b)) => {
@@ -169,6 +169,7 @@ pub(crate) fn values_equal(a: &Val, b: &Val) -> Result<bool, Stop> {
         }
         (Val::Text(a), Val::Text(b)) => a == b,
         (Val::Player(a), Val::Player(b)) => a == b,
+        (Val::Vector { .. }, Val::Vector { .. }) => a == b,
         _ => false,
     })
 }
