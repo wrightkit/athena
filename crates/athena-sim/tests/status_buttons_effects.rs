@@ -460,7 +460,7 @@ rule ("init") {
 }
 
 /// A position argument that needs geometry the empty world does not
-/// model — here `Eye Position`'s unrecorded eye height — stops the run
+/// model — here a flag the empty world does not carry — stops the run
 /// as `not_modeled` instead of recording an element. `Position Of`
 /// reads the scenario's `position` instead: a player without one stops
 /// the run as `missing_input`.
@@ -472,7 +472,7 @@ rule ("init") {
         Ongoing - Global;
     }
     actions {
-        Play Effect(All Players(All Teams), Ring Explosion, Color(White), Eye Position(Host Player), 3);
+        Play Effect(All Players(All Teams), Ring Explosion, Color(White), Flag Position(Team 1), 3);
     }
 }
 "#;
@@ -480,7 +480,7 @@ rule ("init") {
     let Outcome::NotModeled(stop) = &trace.outcome else {
         panic!("expected not_modeled, got {:?}", trace.outcome);
     };
-    assert!(stop.construct.contains("getEyePosition"), "{stop:?}");
+    assert!(stop.construct.contains("getFlagPosition"), "{stop:?}");
 
     let text = r#"
 rule ("init") {

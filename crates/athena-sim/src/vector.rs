@@ -454,9 +454,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let id = player_id(player, env)?;
             position(env.players, &id, &format!("value {name}")).map(Val::from)
         }
-        // `Eye Position` adds a hero-specific eye height the catalog does
-        // not record, so it cannot follow from `position` alone.
-        "getEyePosition" => unsupported("value getEyePosition: eye height is not cataloged"),
         // `Objective Position` reads the scenario's `objectives` list at
         // the evaluated argument — the catalog's "index of the objective
         // to consider, starting at 0 and counting up" — under the number

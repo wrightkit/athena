@@ -11,8 +11,162 @@ use workshop_rs::catalog::{Catalog, Locale};
 
 use crate::{ScenarioError, Val};
 
-/// The `scenarioVersion` values this simulator runs.
-const SUPPORTED_VERSIONS: &[u64] = &[1];
+/// The `scenarioVersion` values this simulator runs: version 1 keeps
+/// the player's `state` field meaning player variables; version 2
+/// moves them to `vars` and makes `state` the player-state map.
+const SUPPORTED_VERSIONS: &[u64] = &[1, 2];
+
+/// The JSON type a `state` key takes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StateType {
+    Bool,
+    Number,
+    Vector,
+}
+
+impl StateType {
+    /// The article-and-name a malformed-scenario error reports.
+    fn desc(self) -> &'static str {
+        match self {
+            Self::Bool => "a boolean",
+            Self::Number => "a number",
+            Self::Vector => "a vector",
+        }
+    }
+}
+
+/// One row of the player-state table (athena#89): the no-extra-argument
+/// player reads a version-2 `state` map answers. `id` is the catalog
+/// value id the program spells, `key` the `state` map key — the `id`
+/// minus a `get` prefix — and `ty` the key's JSON type. A scenario
+/// supplies every value; nothing is derived or defaulted except
+/// `Speed Of`, which is the length of `velocity` (`derived`), while
+/// `Is Moving` is supplied, not derived.
+pub(crate) struct StateRead {
+    /// The catalog value id the program spells (`getHealth`).
+    pub id: &'static str,
+    /// The `state` key it reads (`health`).
+    pub key: &'static str,
+    /// The key's JSON type.
+    pub ty: StateType,
+    /// `getSpeed` alone: the read is the key's vector length, not the
+    /// stored value.
+    pub derived: bool,
+}
+
+/// The player-state table: one row per modeled no-extra-argument
+/// player read. Adding a read is one row plus a test.
+pub(crate) const STATE_READS: &[StateRead] = &[
+    StateRead {
+        id: "getHealth",
+        key: "health",
+        ty: StateType::Number,
+        derived: false,
+    },
+    StateRead {
+        id: "getMaxHealth",
+        key: "maxHealth",
+        ty: StateType::Number,
+        derived: false,
+    },
+    StateRead {
+        id: "getNormalizedHealth",
+        key: "normalizedHealth",
+        ty: StateType::Number,
+        derived: false,
+    },
+    StateRead {
+        id: "getVelocity",
+        key: "velocity",
+        ty: StateType::Vector,
+        derived: false,
+    },
+    StateRead {
+        id: "getSpeed",
+        key: "velocity",
+        ty: StateType::Number,
+        derived: true,
+    },
+    StateRead {
+        id: "getEyePosition",
+        key: "eyePosition",
+        ty: StateType::Vector,
+        derived: false,
+    },
+    StateRead {
+        id: "getUltCharge",
+        key: "ultCharge",
+        ty: StateType::Number,
+        derived: false,
+    },
+    StateRead {
+        id: "isDead",
+        key: "isDead",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isUsingUltimate",
+        key: "isUsingUltimate",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isMeleeing",
+        key: "isMeleeing",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isFiringSecondary",
+        key: "isFiringSecondary",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isInAlternateForm",
+        key: "isInAlternateForm",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isCommunicatingEmote",
+        key: "isCommunicatingEmote",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isInSpawnRoom",
+        key: "isInSpawnRoom",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isDummy",
+        key: "isDummy",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isMoving",
+        key: "isMoving",
+        ty: StateType::Bool,
+        derived: false,
+    },
+];
+
+/// The read a value `id` names, when `id` is a player-state value.
+pub(crate) fn state_read(id: &str) -> Option<&'static StateRead> {
+    STATE_READS.iter().find(|read| read.id == id)
+}
+
+/// The table row a `state` map `key` declares, when `key` is a known
+/// `state` key. `derived` rows name no key of their own.
+pub(crate) fn state_key(key: &str) -> Option<&'static StateRead> {
+    STATE_READS
+        .iter()
+        .find(|read| read.key == key && !read.derived)
+}
 
 /// A scenario `team` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,9 +213,17 @@ pub(crate) struct Player {
     pub team: Option<Team>,
     /// The player `Host Player` returns; at most one player has it.
     pub host: bool,
-    /// Player variables from `state`. A variable not listed starts as
-    /// `null`.
+    /// Player variables: the version-1 `state` map, `vars` in
+    /// version 2. A variable not listed starts as `null`.
     pub vars: BTreeMap<String, Val>,
+    /// The player-state values the scenario's version-2 `state` map
+    /// declares, keyed by [`STATE_READS`] key; `None` when the field is
+    /// absent. A player that declares `state` opts into scenario-supplied
+    /// reads: a key the program reads but the map does not list is a
+    /// `missing_input`. A player without `state` keeps the established
+    /// models (`Health`/`Max Health` pools, the empty world's
+    /// `Is In Spawn Room`); every other listed read is a `missing_input`.
+    pub state: Option<BTreeMap<String, Val>>,
     /// Held state of buttons from `buttons`, keyed by slot name
     /// (`jump`, `ability1`, …). A slot not listed is a live input the
     /// program cannot read: `Is Button Held` on it is a `missing_input`.
@@ -210,8 +372,15 @@ struct PlayerDoc {
     team: Option<TeamDoc>,
     #[serde(default)]
     host: bool,
-    #[serde(default)]
-    state: BTreeMap<String, serde_json::Value>,
+    /// scenarioVersion 1: the player's variables. scenarioVersion 2:
+    /// the player's `state` map. `Option` keeps an absent field apart
+    /// from a declared empty map: in version 2 the latter still opts
+    /// the player into scenario-supplied reads.
+    #[serde(default, deserialize_with = "object_or_absent")]
+    state: Option<BTreeMap<String, serde_json::Value>>,
+    /// scenarioVersion 2: the player's variables.
+    #[serde(default, deserialize_with = "object_or_absent")]
+    vars: Option<BTreeMap<String, serde_json::Value>>,
     #[serde(default)]
     buttons: BTreeMap<String, bool>,
     /// The player's position: `{ "x": n, "y": n, "z": n }`, supplied
@@ -263,6 +432,49 @@ fn format_error<T>(message: impl Into<String>) -> Result<T, ScenarioError> {
 
 fn load_error<T>(message: impl Into<String>) -> Result<T, ScenarioError> {
     Err(ScenarioError::Load(message.into()))
+}
+
+/// The `{ "x": n, "y": n, "z": n }` a `state` vector takes; anything
+/// else — a missing or extra key, a non-number component — is malformed.
+fn state_vector(
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Option<crate::vector::Vec3> {
+    if object.len() != 3 {
+        return None;
+    }
+    Some(crate::vector::Vec3 {
+        x: object.get("x")?.as_f64()?,
+        y: object.get("y")?.as_f64()?,
+        z: object.get("z")?.as_f64()?,
+    })
+}
+
+/// One `state` map entry to its `Val`; a wrong JSON type is malformed
+/// naming the key.
+fn state_value(
+    read: &StateRead,
+    player: &str,
+    value: &serde_json::Value,
+) -> Result<Val, ScenarioError> {
+    let mistyped = || {
+        ScenarioError::Format(format!(
+            "player `{player}` `state.{}` must be {}",
+            read.key,
+            read.ty.desc()
+        ))
+    };
+    Ok(match (read.ty, value) {
+        (StateType::Bool, serde_json::Value::Bool(b)) => Val::Bool(*b),
+        (StateType::Number, serde_json::Value::Number(n)) => Val::Number(
+            n.as_f64()
+                .ok_or_else(|| ScenarioError::Format(format!("number {n} is too large")))?,
+        ),
+        (StateType::Vector, serde_json::Value::Object(object)) => match state_vector(object) {
+            Some(vector) => vector.into(),
+            None => return Err(mistyped()),
+        },
+        _ => return Err(mistyped()),
+    })
 }
 
 fn value_to_val(value: &serde_json::Value) -> Result<Val, ScenarioError> {
@@ -394,12 +606,11 @@ fn map_names(catalog: &Catalog) -> BTreeMap<String, String> {
 pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioError> {
     let doc: serde_json::Value =
         serde_json::from_str(json).map_err(|error| ScenarioError::Format(error.to_string()))?;
-    let version = doc.get("scenarioVersion");
-    let supported = version
-        .and_then(|version| version.as_u64())
-        .is_some_and(|version| SUPPORTED_VERSIONS.contains(&version));
+    let raw_version = doc.get("scenarioVersion");
+    let version = raw_version.and_then(|version| version.as_u64());
+    let supported = version.is_some_and(|version| SUPPORTED_VERSIONS.contains(&version));
     if !supported {
-        let found = version.map_or_else(|| "absent".to_string(), |value| value.to_string());
+        let found = raw_version.map_or_else(|| "absent".to_string(), |value| value.to_string());
         return Err(ScenarioError::Version {
             found,
             supported: SUPPORTED_VERSIONS.to_vec(),
@@ -433,9 +644,37 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
                 }
             }
         }
+        // `state` means player variables in version 1 and the
+        // player-state map in version 2, where variables moved to
+        // `vars`.
+        let (var_doc, state_doc) = if version == Some(1) {
+            if player.vars.is_some() {
+                return format_error(format!(
+                    "player `{}` has `vars`, new in scenarioVersion 2",
+                    player.id
+                ));
+            }
+            (player.state.as_ref(), None)
+        } else {
+            (player.vars.as_ref(), player.state.as_ref())
+        };
         let mut vars = BTreeMap::new();
-        for (name, value) in &player.state {
+        for (name, value) in var_doc.into_iter().flatten() {
             vars.insert(name.clone(), value_to_val(value)?);
+        }
+        let mut state = None;
+        if let Some(state_doc) = state_doc {
+            let mut map = BTreeMap::new();
+            for (key, value) in state_doc {
+                let Some(read) = state_key(key) else {
+                    return format_error(format!(
+                        "player `{}` has unknown `state.{key}`",
+                        player.id
+                    ));
+                };
+                map.insert(read.key.to_string(), state_value(read, &player.id, value)?);
+            }
+            state = Some(map);
         }
         for slot in player.buttons.keys() {
             if !crate::eval::BUTTON_SLOTS.contains(&slot.as_str()) {
@@ -455,6 +694,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
             }),
             host: player.host,
             vars,
+            state,
             held: player.buttons,
             position: player.position.map(|position| crate::vector::Vec3 {
                 x: position.x,

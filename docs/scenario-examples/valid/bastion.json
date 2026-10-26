@@ -1,0 +1,111 @@
+{
+  "scenarioVersion": 2,
+  "seconds": 10,
+  "players": [
+    {
+      "id": "p1",
+      "hero": "Ana",
+      "team": "team1",
+      "host": true,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "facing": {
+        "horizontal": 0,
+        "vertical": 0
+      },
+      "state": {
+        "health": 200,
+        "maxHealth": 200,
+        "normalizedHealth": 1,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "eyePosition": {
+          "x": 0,
+          "y": 1.5,
+          "z": 0
+        },
+        "ultCharge": 0,
+        "isDead": false,
+        "isUsingUltimate": false,
+        "isMeleeing": false,
+        "isFiringSecondary": false,
+        "isInAlternateForm": false,
+        "isCommunicatingEmote": false,
+        "isInSpawnRoom": false,
+        "isDummy": false,
+        "isMoving": false
+      }
+    },
+    {
+      "id": "p2",
+      "hero": "Reaper",
+      "team": "team2",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 10
+      },
+      "facing": {
+        "horizontal": 90,
+        "vertical": 0
+      },
+      "state": {
+        "health": 250,
+        "maxHealth": 250,
+        "normalizedHealth": 1,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "eyePosition": {
+          "x": 5,
+          "y": 1.5,
+          "z": 10
+        },
+        "ultCharge": 0,
+        "isDead": false,
+        "isUsingUltimate": false,
+        "isMeleeing": false,
+        "isFiringSecondary": false,
+        "isInAlternateForm": false,
+        "isCommunicatingEmote": false,
+        "isInSpawnRoom": false,
+        "isDummy": false,
+        "isMoving": false
+      }
+    }
+  ],
+  "random": {
+    "seed": 1
+  },
+  "serverLoad": {
+    "average": 30,
+    "peak": 90,
+    "current": 40
+  },
+  "map": "King's Row",
+  "objectives": [
+    {
+      "x": 0,
+      "y": 0,
+      "z": 30
+    },
+    {
+      "x": 10,
+      "y": 0,
+      "z": 40
+    },
+    {
+      "x": 20,
+      "y": 0,
+      "z": 50
+    }
+  ]
+}

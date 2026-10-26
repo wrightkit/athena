@@ -1,5 +1,5 @@
 {
-  "scenarioVersion": 2,
+  "scenarioVersion": 3,
   "seconds": 2,
   "players": [
     { "id": "p1", "hero": "ana", "team": "team1", "state": { "streak": 2 } }

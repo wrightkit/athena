@@ -1,6 +1,6 @@
 //! The empty-world geometry model (athena#77): the run has no map
 //! geometry, so a raycast never hits, line of sight always holds and
-//! every position is walkable, on the ground and in no spawn room.
+//! every position is walkable, on the ground and on no wall.
 //! `Teleport` writes the scenario `position`; `Apply Impulse` needs a
 //! velocity the model does not carry and stays `not_modeled`.
 //! All empty world, modeled not measured.
@@ -143,7 +143,6 @@ fn ground_queries_answer_for_an_empty_world() {
         ("Is On Ground(Host Player)", true),
         ("Is In Air(Host Player)", false),
         ("Is On Wall(Host Player)", false),
-        ("Is In Spawn Room(Host Player)", false),
     ] {
         let trace = run_with(&set_global(value), HOST);
         assert_eq!(global(&trace), &Val::Bool(expected), "{value}");

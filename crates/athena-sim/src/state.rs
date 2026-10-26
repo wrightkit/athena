@@ -8,7 +8,8 @@
 //! leaves the row unresolved, and touching that player's world state
 //! (`Damage`, `Heal`, `Set Ability Cooldown`, `Set`/`Clear Status`,
 //! `Allow`/`Disallow Button`, a `Health`/`Max Health`/`Ability Cooldown`/
-//! `Has Status` read) stops the run as `not_modeled`. Pools, cooldown
+//! `Has Status` read no `state` key answers) stops the run as
+//! `not_modeled`. Pools, cooldown
 //! seconds and ultimate cost are never defaulted or invented. No capture
 //! backs the pool rules; `docs/architecture.md` marks them **modeled**.
 
