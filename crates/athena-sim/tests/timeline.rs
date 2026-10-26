@@ -272,6 +272,7 @@ rule ("init") {
             Change::EffectCreate { .. } => "effectCreate",
             Change::EffectDestroy { .. } => "effectDestroy",
             Change::Log { .. } => "log",
+            Change::RandomDraw { .. } => "randomDraw",
         })
         .collect();
     assert_eq!(

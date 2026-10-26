@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 
 use workshop_rs::Value;
 
-use crate::scenario::{EventCtx, Player, Team};
-use crate::state::WorldSlot;
-use crate::{MissingInput, MissingInputKind, NotModeled, PlayerWorld, PoolState, Stop, Val};
+use crate::call::Random;
+use crate::scenario::{EventCtx, Player};
+use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
 pub(crate) struct Env<'a> {
     pub globals: &'a BTreeMap<String, Val>,
@@ -31,6 +31,15 @@ pub(crate) struct Env<'a> {
     /// The `id` of the newest `createEffect` entity; what
     /// `Last Created Entity` reads. `None` before the first one.
     pub last_entity: Option<u64>,
+    /// The scenario's `random` source; `None` when the scenario supplies
+    /// none, so a `Random *` value is a missing input.
+    pub random: Option<&'a RefCell<Random>>,
+    /// The index of the rule the evaluated value belongs to — inside a
+    /// `Call Subroutine`, the subroutine's own. Recorded on each
+    /// `randomDraw` change.
+    pub rule: usize,
+    /// The tick's recorded changes; a `Random *` value appends its draw.
+    pub changes: &'a RefCell<Vec<Change>>,
     pub now: f64,
 }
 
@@ -48,17 +57,6 @@ fn missing<T>(
         input, player, name, construct,
     )))
 }
-
-/// Event-scoped values the simulator resolves from an injected event's
-/// `values` map. Player-, enum- and vector-typed event values (`attacker`,
-/// `victim`, `hostPlayer`, `eventAbility`, `eventDirection`) are not modeled.
-const EVENT_VALUES: &[&str] = &[
-    "eventDamage",
-    "eventHealing",
-    "eventWasCriticalHit",
-    "eventWasEnvironment",
-    "eventWasHealthPack",
-];
 
 /// Resolve a Workshop player expression to a scenario player `id`.
 pub(crate) fn player_id(value: &Value, env: &Env) -> Result<String, Stop> {
@@ -99,25 +97,6 @@ pub(crate) fn viewers(value: &Value, env: &Env) -> Result<Vec<String>, Stop> {
             .collect(),
         Val::Null => Ok(Vec::new()),
         other => unsupported(format!("{other:?} where players are needed")),
-    }
-}
-
-/// The resolved world state of a scenario player, as the player-state
-/// reading values (`Health`, `Max Health`, `Ability Cooldown`) see it. A
-/// player the scenario did not declare, or whose state failed to resolve at
-/// run start, is reported, never defaulted — reading world state is a touch,
-/// like `Damage`/`Heal`.
-fn player_world<'a>(
-    players: &'a BTreeMap<String, Player>,
-    id: &str,
-) -> Result<&'a PlayerWorld, Stop> {
-    let Some(player) = players.get(id) else {
-        return unsupported(format!("`{id}` is not a scenario player"));
-    };
-    match &player.world {
-        WorldSlot::Resolved(state) => Ok(&state.world),
-        WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
-        WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
     }
 }
 
@@ -166,18 +145,6 @@ pub(crate) fn number(value: &Val) -> Result<f64, Stop> {
     }
 }
 
-/// The truthiness a condition-family value (`and`, `or`, `not`,
-/// `ifThenElse`) reads: a boolean as itself, a number or `Null` (as `0`)
-/// by nonzero-ness. Anything else is not a condition value.
-fn truthy(value: &Val) -> Result<bool, Stop> {
-    match value {
-        Val::Bool(b) => Ok(*b),
-        Val::Number(n) => Ok(*n != 0.0),
-        Val::Null => Ok(false),
-        other => unsupported(format!("condition value {other:?}")),
-    }
-}
-
 /// The `Compare` equality of two evaluated values: numbers, booleans and
 /// `Null` by number coercion (`Null` and `False` equal `0`), text by text,
 /// players by scenario `id`, arrays by element-wise equality. Values of
@@ -199,62 +166,10 @@ pub(crate) fn values_equal(a: &Val, b: &Val) -> Result<bool, Stop> {
     })
 }
 
-/// The array an array-reading value sees: an array as itself, `Null` as
-/// the empty array. Anything else is not an array.
-fn items(value: Val, construct: &str) -> Result<Vec<Val>, Stop> {
-    match value {
-        Val::Array(items) => Ok(items),
-        Val::Null => Ok(Vec::new()),
-        other => unsupported(format!("{construct} on {other:?}")),
-    }
-}
-
-fn render(value: &Val) -> Result<String, Stop> {
-    match value {
-        Val::Number(n) => Ok(format!("{n:.2}")),
-        Val::Null => Ok("0".into()),
-        Val::Bool(b) => Ok(b.to_string()),
-        Val::Text(text) => Ok(text.clone()),
-        Val::Array(_) => unsupported("array inside a custom string"),
-        Val::Player(_) => unsupported("player inside a custom string"),
-    }
-}
-
-/// The produced string a value may return. Whether the client still
-/// caps strings at 511 bytes is unmeasured — the sources conflict on
-/// whether the limit was removed or covers every produced string — so
-/// a produced result past the boundary stops the run rather than pick
-/// a side.
-fn produced(text: String, construct: &str) -> Result<Val, Stop> {
-    if text.len() > 511 {
-        unsupported(format!("{construct} produced a string over 511 bytes"))
-    } else {
-        Ok(Val::Text(text))
-    }
-}
-
-/// The string a string-parameter argument reads as: text as itself, an
-/// empty array as the empty string (the Workshop spells an empty string
-/// `Empty Array` in these parameters), and a number, boolean or `Null`
-/// by the `render` coercion. A non-empty array is not a string.
-fn string(value: &Val) -> Result<String, Stop> {
-    match value {
-        Val::Array(items) if items.is_empty() => Ok(String::new()),
-        Val::Array(_) => unsupported("non-empty array where a string is needed"),
-        other => render(other),
-    }
-}
-
-/// The `Env` an element-context array value's per-element operand sees:
-/// the caller's `env` with `element` bound to the element and its index.
-fn element_env<'a>(env: &Env<'a>, element: &'a Val, index: usize) -> Env<'a> {
-    Env {
-        element: Some((element, index as u64)),
-        ..*env
-    }
-}
-
-fn arguments<'a, const N: usize>(name: &str, args: &'a [Value]) -> Result<&'a [Value; N], Stop> {
+pub(crate) fn arguments<'a, const N: usize>(
+    name: &str,
+    args: &'a [Value],
+) -> Result<&'a [Value; N], Stop> {
     args.try_into()
         .or_else(|_| unsupported(format!("{name} with {} arguments", args.len())))
 }
@@ -318,477 +233,7 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
             env.once.borrow_mut().insert(site, pinned.clone());
             Ok(pinned)
         }
-        Value::Call { name, args } => call(name, args, env),
+        Value::Call { name, args } => crate::call::call(name, args, env),
         other => unsupported(format!("value {other:?}")),
-    }
-}
-
-fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
-    let binary = |op: fn(f64, f64) -> f64| -> Result<Val, Stop> {
-        let [a, b] = arguments::<2>(name, args)?;
-        Ok(Val::Number(op(
-            number(&eval(a, env)?)?,
-            number(&eval(b, env)?)?,
-        )))
-    };
-    match name {
-        "getTotalTimeElapsed" => Ok(Val::Number(env.now)),
-        "lastTextId" => {
-            let [] = arguments::<0>(name, args)?;
-            Ok(env
-                .last_text_id
-                .map_or(Val::Null, |id| Val::Number(id as f64)))
-        }
-        // Modeled, not measured: `Last Created Entity` is the id of the
-        // newest `createEffect` entity; other entity-creating actions are
-        // not modeled.
-        "lastCreatedEntity" => {
-            let [] = arguments::<0>(name, args)?;
-            Ok(env
-                .last_entity
-                .map_or(Val::Null, |id| Val::Number(id as f64)))
-        }
-        "allPlayers" => {
-            let [team] = arguments::<1>(name, args)?;
-            // The `Team` argument is an enum literal in practice; an
-            // evaluated member-id text (as `Team Of` yields) names the
-            // same member.
-            let filter = match team {
-                Value::Enum { value, .. } => value.clone(),
-                other => match eval(other, env)? {
-                    Val::Text(text) => text,
-                    other => return unsupported(format!("allPlayers on {other:?}")),
-                },
-            };
-            let members = |team: Team| {
-                env.players
-                    .iter()
-                    .filter(|(_, player)| player.team == Some(team))
-                    .map(|(id, _)| Val::Player(id.clone()))
-                    .collect()
-            };
-            Ok(Val::Array(match filter.as_str() {
-                "ALL" => env
-                    .players
-                    .keys()
-                    .map(|id| Val::Player(id.clone()))
-                    .collect(),
-                "TEAM_1" => members(Team::Team1),
-                "TEAM_2" => members(Team::Team2),
-                other => return unsupported(format!("allPlayers on {other}")),
-            }))
-        }
-        "and" | "or" => {
-            let [a, b] = arguments::<2>(name, args)?;
-            // `&&`/`||` short-circuit: the right side is not read when the
-            // left already decides the result.
-            if truthy(&eval(a, env)?)? == (name == "or") {
-                return Ok(Val::Bool(name == "or"));
-            }
-            Ok(Val::Bool(truthy(&eval(b, env)?)?))
-        }
-        "not" => {
-            let [value] = arguments::<1>(name, args)?;
-            Ok(Val::Bool(!truthy(&eval(value, env)?)?))
-        }
-        "ifThenElse" => {
-            let [condition, when_true, when_false] = arguments::<3>(name, args)?;
-            // Only the taken branch is read.
-            if truthy(&eval(condition, env)?)? {
-                eval(when_true, env)
-            } else {
-                eval(when_false, env)
-            }
-        }
-        "hostPlayer" => {
-            let [] = arguments::<0>(name, args)?;
-            match env.players.iter().find(|(_, player)| player.host) {
-                Some((id, _)) => Ok(Val::Player(id.clone())),
-                None => unsupported("Host Player: the scenario marks no host player"),
-            }
-        }
-        // Modeled, not measured: the simulator runs one lobby whose settings
-        // nobody edits, so a Workshop Setting yields its declared `default`
-        // argument. `min`/`max`, `options` and `sortOrder` are authoring
-        // metadata the running rules never see; the scenario format has no
-        // settings overrides.
-        "createWorkshopSettingFloat"
-        | "workshopSettingInteger"
-        | "workshopSettingToggle"
-        | "workshopSettingCombo"
-        | "createWorkshopSettingHero" => {
-            let [_, _, default, ..] = args else {
-                return unsupported(format!("{name} with {} arguments", args.len()));
-            };
-            match default {
-                // A hero setting's default is a `Hero` literal; it yields the
-                // catalog member id as text, the same member id `Hero Of`
-                // yields, so a hero setting and a played hero compare equal.
-                Value::Enum { value, .. } => Ok(Val::Text(value.clone())),
-                _ => eval(default, env),
-            }
-        }
-        // Modeled, not measured: a player with a hero is spawned and alive.
-        "hasSpawned" | "isAlive" => {
-            let [player] = arguments::<1>(name, args)?;
-            let id = player_id(player, env)?;
-            match env.players.get(&id) {
-                Some(player) if player.hero.is_some() => Ok(Val::Bool(true)),
-                Some(_) => unsupported(format!("{name} of player `{id}` without a hero")),
-                None => unsupported(format!("`{id}` is not a scenario player")),
-            }
-        }
-        "add" => binary(|a, b| a + b),
-        "subtract" => binary(|a, b| a - b),
-        "multiply" => binary(|a, b| a * b),
-        "divide" => binary(|a, b| a / b),
-        "modulo" => binary(|a, b| a % b),
-        "raiseToPower" => binary(f64::powf),
-        "min" => binary(f64::min),
-        "max" => binary(f64::max),
-        "roundToInteger" => {
-            let [value, rounding] = arguments::<2>(name, args)?;
-            let n = number(&eval(value, env)?)?;
-            let Value::Enum { value: mode, .. } = rounding else {
-                return unsupported(format!("{name} rounding {rounding:?}"));
-            };
-            Ok(Val::Number(match mode.as_str() {
-                "UP" => n.ceil(),
-                "DOWN" => n.floor(),
-                "NEAREST" => n.round(),
-                other => return unsupported(format!("{name} rounding {other}")),
-            }))
-        }
-        "<" | "<=" | ">" | ">=" => {
-            let [a, b] = arguments::<2>(name, args)?;
-            let (a, b) = (number(&eval(a, env)?)?, number(&eval(b, env)?)?);
-            Ok(Val::Bool(match name {
-                "<" => a < b,
-                "<=" => a <= b,
-                ">" => a > b,
-                _ => a >= b,
-            }))
-        }
-        "==" | "!=" => {
-            let [a, b] = arguments::<2>(name, args)?;
-            let (a, b) = (eval(a, env)?, eval(b, env)?);
-            Ok(Val::Bool(values_equal(&a, &b)? != (name == "!=")))
-        }
-        "array" => args
-            .iter()
-            .map(|item| eval(item, env))
-            .collect::<Result<_, _>>()
-            .map(Val::Array),
-        "emptyArray" => {
-            let [] = arguments::<0>(name, args)?;
-            Ok(Val::Array(Vec::new()))
-        }
-        "firstOf" => {
-            let [array] = arguments::<1>(name, args)?;
-            Ok(items(eval(array, env)?, name)?
-                .into_iter()
-                .next()
-                .unwrap_or(Val::Null))
-        }
-        "countOf" => {
-            let [array] = arguments::<1>(name, args)?;
-            Ok(Val::Number(items(eval(array, env)?, name)?.len() as f64))
-        }
-        "appendToArray" => {
-            let [array, value] = arguments::<2>(name, args)?;
-            let (mut array, value) = (items(eval(array, env)?, name)?, eval(value, env)?);
-            array.push(value);
-            Ok(Val::Array(array))
-        }
-        "arrayContains" | "indexOfArrayValue" => {
-            let [array, wanted] = arguments::<2>(name, args)?;
-            let (array, wanted) = (eval(array, env)?, eval(wanted, env)?);
-            let mut found = None;
-            for (index, item) in items(array, name)?.iter().enumerate() {
-                if values_equal(item, &wanted)? {
-                    found = Some(index);
-                    break;
-                }
-            }
-            Ok(match name {
-                "arrayContains" => Val::Bool(found.is_some()),
-                _ => Val::Number(found.map_or(-1.0, |index| index as f64)),
-            })
-        }
-        "slice" => {
-            let [array, start, count] = arguments::<3>(name, args)?;
-            let (array, start, count) = (
-                items(eval(array, env)?, name)?,
-                number(&eval(start, env)?)?,
-                number(&eval(count, env)?)?,
-            );
-            let (start, end) = (
-                (start.max(0.0) as usize).min(array.len()),
-                (start.max(0.0) + count.max(0.0)) as usize,
-            );
-            Ok(Val::Array(array[start..end.min(array.len())].to_vec()))
-        }
-        "valueInArray" => {
-            let [array, index] = arguments::<2>(name, args)?;
-            let (array, index) = (eval(array, env)?, number(&eval(index, env)?)?);
-            match array {
-                Val::Array(items) if index >= 0.0 => {
-                    Ok(items.get(index as usize).cloned().unwrap_or(Val::Null))
-                }
-                Val::Array(_) => Ok(Val::Null),
-                other => unsupported(format!("valueInArray on {other:?}")),
-            }
-        }
-        "currentArrayElement" | "currentArrayIndex" => {
-            let [] = arguments::<0>(name, args)?;
-            match env.element {
-                Some((element, index)) => Ok(if name == "currentArrayElement" {
-                    element.clone()
-                } else {
-                    Val::Number(index as f64)
-                }),
-                None => unsupported(format!("{name} outside an element context")),
-            }
-        }
-        // The element-context array values read the array once, then the
-        // operand once per element with `Current Array Element`/`Current
-        // Array Index` bound. `Null` reads as the empty array.
-        "filteredArray" | "sortedArray" | "isTrueForAll" | "isTrueForAny" => {
-            let [array, operand] = arguments::<2>(name, args)?;
-            let items = items(eval(array, env)?, name)?;
-            match name {
-                "filteredArray" => {
-                    let mut kept = Vec::new();
-                    for (index, item) in items.iter().enumerate() {
-                        if truthy(&eval(operand, &element_env(env, item, index))?)? {
-                            kept.push(item.clone());
-                        }
-                    }
-                    Ok(Val::Array(kept))
-                }
-                "sortedArray" => {
-                    let mut keyed = Vec::with_capacity(items.len());
-                    for (index, item) in items.iter().enumerate() {
-                        let key = number(&eval(operand, &element_env(env, item, index))?)?;
-                        keyed.push((key, item));
-                    }
-                    // Ascending by the key; an equal key keeps the
-                    // element's place.
-                    keyed.sort_by(|(a, _), (b, _)| a.total_cmp(b));
-                    Ok(Val::Array(
-                        keyed.into_iter().map(|(_, item)| item.clone()).collect(),
-                    ))
-                }
-                // `Is True For All`/`Any` stop at the element that decides
-                // them: the first false, the first true.
-                _ => {
-                    let want = name == "isTrueForAny";
-                    for (index, item) in items.iter().enumerate() {
-                        if truthy(&eval(operand, &element_env(env, item, index))?)? == want {
-                            return Ok(Val::Bool(want));
-                        }
-                    }
-                    Ok(Val::Bool(!want))
-                }
-            }
-        }
-        "getHero" | "teamOf" => {
-            let [player] = arguments::<1>(name, args)?;
-            let id = player_id(player, env)?;
-            // `Hero Of` yields the catalog member id the declared `hero`
-            // resolves to — hero text compares by member id, not by the
-            // scenario's spelling; `Team Of` likewise yields the member id
-            // of the declared `team`.
-            let resolved = env.players.get(&id).and_then(|player| match name {
-                "getHero" => player.hero_member.clone(),
-                _ => player.team.map(|team| team.member_id().to_string()),
-            });
-            match resolved {
-                Some(value) => Ok(Val::Text(value)),
-                None => missing(
-                    if name == "getHero" {
-                        MissingInputKind::Hero
-                    } else {
-                        MissingInputKind::Team
-                    },
-                    Some(id),
-                    None,
-                    format!("value {name}"),
-                ),
-            }
-        }
-        name if EVENT_VALUES.contains(&name) => {
-            let [] = arguments::<0>(name, args)?;
-            match env.event.and_then(|event| event.values.get(name)).cloned() {
-                Some(value) => Ok(value),
-                None => missing(
-                    MissingInputKind::EventValue,
-                    None,
-                    Some(name.to_string()),
-                    format!("value {name}"),
-                ),
-            }
-        }
-        "getHealth" | "getMaxHealth" => {
-            let [player] = arguments::<1>(name, args)?;
-            let id = player_id(player, env)?;
-            let world = player_world(env.players, &id)?;
-            let pools = [
-                Some(&world.health),
-                world.shield.as_ref(),
-                world.armor.as_ref(),
-            ];
-            let pick = if name == "getHealth" {
-                |pool: &PoolState| pool.current
-            } else {
-                |pool: &PoolState| pool.max
-            };
-            Ok(Val::Number(pools.into_iter().flatten().map(pick).sum()))
-        }
-        // Modeled, not measured: a status is held while its `Set Status`
-        // expiry is still ahead.
-        "hasStatus" => {
-            let [player, status] = arguments::<2>(name, args)?;
-            let id = player_id(player, env)?;
-            let Value::Enum { value: status, .. } = status else {
-                return unsupported(format!("{name} status {status:?}"));
-            };
-            let world = player_world(env.players, &id)?;
-            Ok(Val::Bool(
-                world
-                    .statuses
-                    .get(status.as_str())
-                    .is_some_and(|until| *until > env.now),
-            ))
-        }
-        // A live input: the held state comes from the scenario player's
-        // `buttons` map; a button not listed is a missing input.
-        "isButtonHeld" => {
-            let [player, button] = arguments::<2>(name, args)?;
-            let id = player_id(player, env)?;
-            let slot = button_slot(button)?;
-            match env.players.get(&id) {
-                Some(player) => match player.held.get(slot) {
-                    Some(held) => Ok(Val::Bool(*held)),
-                    None => missing(
-                        MissingInputKind::Button,
-                        Some(id),
-                        Some(slot.to_string()),
-                        "value isButtonHeld",
-                    ),
-                },
-                None => unsupported(format!("`{id}` is not a scenario player")),
-            }
-        }
-        "getAbilityCooldown" => {
-            let [player, button] = arguments::<2>(name, args)?;
-            let id = player_id(player, env)?;
-            let slot = button_slot(button)?;
-            let world = player_world(env.players, &id)?;
-            if let Some(seconds) = world.cooldowns.get(slot) {
-                return Ok(Val::Number(*seconds));
-            }
-            // A slot recorded only under a variant (`slot/variant`) has no
-            // honest answer for the bare button; a slot with no recorded
-            // cooldown at all reports 0 — the ability is never on cooldown.
-            if world
-                .cooldowns
-                .keys()
-                .any(|key| key.starts_with(&format!("{slot}/")))
-            {
-                return unsupported(format!("ability cooldown on variant-keyed slot {slot}"));
-            }
-            Ok(Val::Number(0.0))
-        }
-        "customString" => {
-            let [template, rest @ ..] = args else {
-                return unsupported("customString without a template");
-            };
-            let Val::Text(mut text) = eval(template, env)? else {
-                return unsupported("customString template that is not a string");
-            };
-            let mut rendered = Vec::new();
-            for arg in rest {
-                rendered.push(render(&eval(arg, env)?)?);
-            }
-            for (index, value) in rendered.iter().enumerate() {
-                text = text.replace(&format!("{{{index}}}"), value);
-            }
-            produced(text, name)
-        }
-        // `Char In String` reads the character at the index; an index
-        // outside the string's bounds yields the empty string.
-        "charAt" => {
-            let [source, index] = arguments::<2>(name, args)?;
-            let (source, index) = (string(&eval(source, env)?)?, number(&eval(index, env)?)?);
-            Ok(source
-                .chars()
-                .nth(if index < 0.0 {
-                    usize::MAX
-                } else {
-                    index as usize
-                })
-                .map_or_else(
-                    || Val::Text(String::new()),
-                    |char| Val::Text(char.to_string()),
-                ))
-        }
-        // `String Split` splits around the separator; an empty separator
-        // splits into characters and an empty source yields no parts.
-        "stringSplit" => {
-            let [source, separator] = arguments::<2>(name, args)?;
-            let (source, separator) = (
-                string(&eval(source, env)?)?,
-                string(&eval(separator, env)?)?,
-            );
-            if source.is_empty() {
-                return Ok(Val::Array(Vec::new()));
-            }
-            let parts: Vec<String> = if separator.is_empty() {
-                source.chars().map(|char| char.to_string()).collect()
-            } else {
-                source
-                    .split(&separator)
-                    .map(|part| part.to_string())
-                    .collect()
-            };
-            parts
-                .into_iter()
-                .map(|part| produced(part, name))
-                .collect::<Result<_, _>>()
-                .map(Val::Array)
-        }
-        // `Index Of String Char` reports the needle's first index as a
-        // character count, or -1 when the needle is absent — and an
-        // empty needle, which names no character, is always absent.
-        "strIndex" => {
-            let [source, character] = arguments::<2>(name, args)?;
-            let (source, character) = (
-                string(&eval(source, env)?)?,
-                string(&eval(character, env)?)?,
-            );
-            Ok(Val::Number(if character.is_empty() {
-                -1.0
-            } else {
-                source
-                    .find(&character)
-                    .map_or(-1.0, |byte| source[..byte].chars().count() as f64)
-            }))
-        }
-        // `String Replace` replaces every occurrence of the pattern. An
-        // empty pattern's occurrences are undefined, so the run stops.
-        "stringReplace" => {
-            let [source, pattern, replacement] = arguments::<3>(name, args)?;
-            let (source, pattern, replacement) = (
-                string(&eval(source, env)?)?,
-                string(&eval(pattern, env)?)?,
-                string(&eval(replacement, env)?)?,
-            );
-            if pattern.is_empty() {
-                return unsupported("stringReplace with an empty pattern");
-            }
-            produced(source.replace(&pattern, &replacement), name)
-        }
-        other => unsupported(format!("value {other}")),
     }
 }

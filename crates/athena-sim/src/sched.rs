@@ -5,6 +5,7 @@ use workshop_rs::hero_values::HeroValues;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, Program, Rule};
 
 use crate::blocks::Blocks;
+use crate::call::Random;
 use crate::eval::{Env, eval};
 use crate::hud::Hud;
 use crate::load::{Frame, Instance, Loaded, WaitMode, load, player_matches};
@@ -37,8 +38,15 @@ pub(crate) fn run(
     scenario: Option<Scenario>,
     hero_values: &HeroValues,
 ) -> Trace {
-    let (mut players, events, expect) = scenario
-        .map(|scenario| (scenario.players, scenario.events, scenario.expect))
+    let (mut players, events, expect, random) = scenario
+        .map(|scenario| {
+            (
+                scenario.players,
+                scenario.events,
+                scenario.expect,
+                scenario.random,
+            )
+        })
         .unwrap_or_default();
     // Resolve every player's world state before the first tick. A failure is
     // stored, not reported yet: the trace row still says what the scenario
@@ -72,7 +80,8 @@ pub(crate) fn run(
         effects: crate::effects::Effects::default(),
         pending_starts: Vec::new(),
         runs: Vec::new(),
-        changes: Vec::new(),
+        changes: RefCell::new(Vec::new()),
+        random: random.map(|seed| RefCell::new(Random::new(seed))),
         timeline: Timeline::default(),
     };
     let events = events_by_tick(&events);
@@ -236,7 +245,7 @@ fn tick_loop(
         let result = run_tick(&mut loaded, world, events, tick, now);
         // A tick that stopped the run still records what it did.
         let mut rules = std::mem::take(&mut world.runs);
-        let mut changes = std::mem::take(&mut world.changes);
+        let mut changes = std::mem::take(world.changes.get_mut());
         let keep = TIMELINE_RULE_LIMIT.saturating_sub(rules_recorded);
         if rules.len() > keep {
             rules.truncate(keep);
@@ -366,6 +375,9 @@ fn run_tick(
                     element: None,
                     once: &pass,
                     last_entity: world.effects.last_created,
+                    random: world.random.as_ref(),
+                    rule: instance.rule_idx,
+                    changes: &world.changes,
                     now,
                 };
                 let holds = conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))?;
@@ -462,6 +474,9 @@ fn run_tick(
                         element: None,
                         once: &pass,
                         last_entity: world.effects.last_created,
+                        random: world.random.as_ref(),
+                        rule: instance.rule_idx,
+                        changes: &world.changes,
                         now,
                     };
                     if conditions_hold(instance.rule, &env).map_err(|e| e.at(tick))? {
@@ -494,6 +509,9 @@ fn run_tick(
                         element: None,
                         once: &instance.until_once,
                         last_entity: world.effects.last_created,
+                        random: world.random.as_ref(),
+                        rule: frame.rule_idx,
+                        changes: &world.changes,
                         now,
                     };
                     if until_holds(rule_list, frame, &env).map_err(|e| e.at(tick))? {

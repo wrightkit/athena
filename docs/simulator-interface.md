@@ -35,7 +35,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
 | `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
-| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`), `player` (the player `id` the input belongs to, `null` for `eventPlayer` and `eventValue`), `name` (the event-value name for `eventValue`, the button slot for `button`, `null` for the others), `tick`, `construct`. |
+| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue` and `random`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `null` for the others), `tick`, `construct`. |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
 `logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
@@ -94,6 +94,17 @@ Whether the client still caps a produced string at 511 bytes is unmeasured — t
 The display-only strings — `Icon String`, `Hero Icon String`, `Ability Icon String`, `Input Binding String` — render client-localized glyphs or per-player key names no capture or documented placeholder text defines; they stay `not_modeled`, as does `Current Map` while the scenario format names no map.
 
 None of these has a client capture; all are **modeled, not measured**.
+
+### Random values
+
+`Random Integer`, `Random Real`, `Random Value In Array` and `Randomized Array` are modeled. The client draws nondeterministically; the simulator must stay deterministic, so the draws come from the scenario's `random` source — `{ "random": { "seed": n } }` drives a splitmix64 stream that the values consume in evaluation order, each draw a fraction `u` in `[0, 1)`. A `Random *` value in a run without `random` is a `missing_input` of kind `random`. Every evaluated random value records a `randomDraw` change on its tick.
+
+- `Random Integer(min, max)` floors each bound to an integer and draws an inclusive value; a `Min` past `Max` swaps the bounds.
+- `Random Real(min, max)` is `min + (max − min)·u`, so the bound order swaps the same way and the range is `[min, max)`.
+- `Random Value In Array(array)` draws an index; an empty array — `Null` reads as one — yields `Null` without a draw.
+- `Randomized Array(array)` is a Fisher-Yates shuffle of the same stream, last index down; an empty or one-element array draws nothing.
+
+A bound that is not finite is `not_modeled`. No capture covers the client's generator or the distribution; all of this is **modeled, not measured**.
 
 ### Workshop settings
 
@@ -204,6 +215,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 | `effectCreate` | `id`, `element` | An effect entity was created or played; `id` indexes `effects`, `element` is its `kind`. |
 | `effectDestroy` | `id`, `element` | An effect entity was destroyed. |
 | `log` | `text` | A `Log To Inspector` line. |
+| `randomDraw` | `rule`, `construct`, `value` | A `Random *` value drew from the scenario's `random` source: `rule` is the index of the rule the value belongs to (as in `rules`; inside `Call Subroutine`, the subroutine's own), `construct` the value id, `value` the produced value. |
 
 ### JSON form
 

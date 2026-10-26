@@ -1,5 +1,6 @@
 mod actions;
 mod blocks;
+mod call;
 mod effects;
 mod eval;
 mod hero_settings;
@@ -72,6 +73,8 @@ pub enum MissingInputKind {
     EventValue,
     /// The held state of a player's button.
     Button,
+    /// The scenario's `random` source.
+    Random,
 }
 
 /// A live input the program read but the scenario did not supply. The run
@@ -416,6 +419,15 @@ pub enum Change {
     EffectDestroy { id: u64, element: EffectKind },
     /// A `Log To Inspector` line.
     Log { text: String },
+    /// A `Random *` value drew from the scenario's `random` source.
+    /// `rule` is the index of the rule the value belongs to (as in
+    /// `rules`; inside a `Call Subroutine`, the subroutine's own),
+    /// `construct` the value id, `value` the produced value.
+    RandomDraw {
+        rule: usize,
+        construct: String,
+        value: Val,
+    },
 }
 
 /// One timeline entry: the activity of one tick. `rules` lists the rule

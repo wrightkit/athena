@@ -19,11 +19,20 @@
     "expect": {
       "type": "array",
       "items": { "$ref": "#/$defs/expectation" }
-    }
+    },
+    "random": { "$ref": "#/$defs/random" }
   },
   "$defs": {
     "id": { "type": "string", "minLength": 1 },
     "time": { "type": "number", "minimum": 0 },
+    "random": {
+      "type": "object",
+      "required": ["seed"],
+      "additionalProperties": false,
+      "properties": {
+        "seed": { "type": "integer", "minimum": 0 }
+      }
+    },
     "value": {
       "type": ["null", "boolean", "number", "string", "array"],
       "items": { "$ref": "#/$defs/value" }
