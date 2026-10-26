@@ -122,6 +122,15 @@ pub(crate) fn run(
                 let state = PlayerState {
                     hero: player.hero.clone(),
                     team: player.team.map(|team| team.as_str().to_string()),
+                    // The declared `state` map overlaid by the cells
+                    // actions wrote; a write lands even on a key the
+                    // scenario never supplied.
+                    state: {
+                        let mut state = player.state.clone().unwrap_or_default();
+                        state.extend(player.cells.iter().map(|(k, v)| (k.clone(), v.clone())));
+                        state
+                    },
+                    modifiers: player.modifiers.clone(),
                     world: match &player.world {
                         WorldSlot::Resolved(state) => Some(state.world.clone()),
                         WorldSlot::Unresolved | WorldSlot::Failed(_) => None,

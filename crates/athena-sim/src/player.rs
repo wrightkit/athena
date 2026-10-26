@@ -382,53 +382,71 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             };
             let [player] = arguments::<1>(name, args)?;
             let id = player_id(player, env)?;
-            let Some(player) = env.players.get(&id) else {
-                return unsupported(format!("`{id}` is not a scenario player"));
-            };
-            // A declared `state` map opts the player into
-            // scenario-supplied reads: a key it does not list is a
-            // missing input. Without `state`, the established models
-            // still answer where one exists.
-            if let Some(state) = &player.state {
-                if let Some(value) = state.get(read.key) {
-                    return Ok(match (value, read.derived) {
-                        (Val::Vector { x, y, z }, true) => {
-                            Val::Number((x * x + y * y + z * z).sqrt())
-                        }
-                        (value, false) => value.clone(),
-                        _ => unreachable!("a derived read's key is a vector"),
-                    });
-                }
-                return missing(
-                    MissingInputKind::State,
-                    Some(id),
-                    Some(format!("state.{}", read.key)),
-                    format!("value {name}"),
-                );
-            }
-            match read.id {
-                "getHealth" | "getMaxHealth" => {
-                    let world = player_world(env.players, &id)?;
-                    let pools = [
-                        Some(&world.health),
-                        world.shield.as_ref(),
-                        world.armor.as_ref(),
-                    ];
-                    let pick = if name == "getHealth" {
-                        |pool: &PoolState| pool.current
-                    } else {
-                        |pool: &PoolState| pool.max
-                    };
-                    Ok(Val::Number(pools.into_iter().flatten().map(pick).sum()))
-                }
-                "isInSpawnRoom" => Ok(Val::Bool(false)),
-                _ => missing(
-                    MissingInputKind::State,
-                    Some(id),
-                    Some(format!("state.{}", read.key)),
-                    format!("value {name}"),
-                ),
-            }
+            state_read_value(env.players, &id, read, &format!("value {name}"))
         }
+    }
+}
+
+/// The value a `state`-key read resolves to for player `id`: a cell an
+/// action wrote wins, then the scenario's declared `state` entry, then —
+/// for a player that never declared `state` — the established fallbacks
+/// (`Health`/`Max Health` read the world pools, `Is In Spawn Room` is
+/// false in the empty world). A key with no answer is a `missing_input`
+/// naming `state.<key>` (athena#116: a write defines the key for later
+/// reads even when the scenario never supplied it).
+pub(crate) fn state_read_value(
+    players: &BTreeMap<String, Player>,
+    id: &str,
+    read: &crate::state_reads::StateRead,
+    construct: &str,
+) -> Result<Val, Stop> {
+    let Some(player) = players.get(id) else {
+        return unsupported(format!("`{id}` is not a scenario player"));
+    };
+    let stored = player
+        .cells
+        .get(read.key)
+        .or_else(|| player.state.as_ref().and_then(|state| state.get(read.key)));
+    if let Some(value) = stored {
+        return Ok(match (value, read.derived) {
+            (Val::Vector { x, y, z }, true) => Val::Number((x * x + y * y + z * z).sqrt()),
+            (value, false) => value.clone(),
+            _ => unreachable!("a derived read's key is a vector"),
+        });
+    }
+    // A declared `state` map opts the player into scenario-supplied
+    // reads: a key it does not list — and no action wrote — is a
+    // missing input. Without `state`, the established models still
+    // answer where one exists.
+    if player.state.is_some() {
+        return missing(
+            MissingInputKind::State,
+            Some(id.to_string()),
+            Some(format!("state.{}", read.key)),
+            construct.to_string(),
+        );
+    }
+    match read.id {
+        "getHealth" | "getMaxHealth" => {
+            let world = player_world(players, id)?;
+            let pools = [
+                Some(&world.health),
+                world.shield.as_ref(),
+                world.armor.as_ref(),
+            ];
+            let pick = if read.id == "getHealth" {
+                |pool: &PoolState| pool.current
+            } else {
+                |pool: &PoolState| pool.max
+            };
+            Ok(Val::Number(pools.into_iter().flatten().map(pick).sum()))
+        }
+        "isInSpawnRoom" => Ok(Val::Bool(false)),
+        _ => missing(
+            MissingInputKind::State,
+            Some(id.to_string()),
+            Some(format!("state.{}", read.key)),
+            construct.to_string(),
+        ),
     }
 }

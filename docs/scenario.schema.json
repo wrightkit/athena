@@ -151,7 +151,7 @@
         "isFiringPrimaryFire": { "type": "boolean", "description": "What Is Firing Primary reads — the catalog value id spells the key isFiringPrimaryFire." },
         "isDuplicatingAHero": { "type": "boolean", "description": "What Is Duplicating reads — the catalog value id spells the key isDuplicatingAHero." }
       },
-      "description": "The player-state values the no-extra-argument player reads return, keyed by the accepted ids. Each value is scenario-supplied, not simulated. A key the program reads but the map does not list is a missing input naming `state.<key>`; an unknown key or a wrong type is malformed."
+      "description": "The player-state values the no-extra-argument player reads return, keyed by the accepted ids. Each value is scenario-supplied, not simulated; a state-write action may still write a key the map does not list — a write defines it for later reads (athena#116). A key the program reads but neither the map nor an action supplies is a missing input naming `state.<key>`; an unknown key or a wrong type is malformed."
     },
     "playerV1": {
       "type": "object",

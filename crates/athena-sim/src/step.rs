@@ -723,9 +723,21 @@ pub(crate) fn run_instance(
                             .or_else(|| crate::noop::action(other, args, &env));
                     // `env` shares a borrow of `world.players`, so it ends
                     // here and the delegated actions take `world` itself.
-                    let result = result.or_else(|| {
-                        crate::actions::action(other, args, world, inst, rule_idx, subroutines, now)
-                    });
+                    let result = result
+                        .or_else(|| {
+                            crate::actions::action(
+                                other,
+                                args,
+                                world,
+                                inst,
+                                rule_idx,
+                                subroutines,
+                                now,
+                            )
+                        })
+                        .or_else(|| {
+                            crate::state_writes::action(other, args, world, inst, rule_idx, now)
+                        });
                     match result {
                         Some(result) => {
                             result?;
