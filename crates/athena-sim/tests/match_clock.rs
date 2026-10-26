@@ -365,6 +365,130 @@ rule ("slow") {
 }
 
 #[test]
+fn a_wait_until_condition_wake_under_a_non_100_factor_resumes() {
+    // The one bypass of the stale-wake gate: a `Wait Until` wake its
+    // own condition re-check produced this tick encodes no schedule,
+    // so it resumes even under 50%. `waiter` suspends at 100%, `slow`
+    // sets 50% at tick 1, `setter` writes `g` at tick 3 — the next
+    // re-check wakes the run and it completes.
+    let text = r#"
+variables {
+    global:
+        0: g
+        1: h
+}
+
+rule ("waiter") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait Until(g == 1, 999);
+        Set Global Variable(h, 7);
+    }
+}
+
+rule ("slow") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait(0.016, Ignore Condition);
+        Set Slow Motion(50);
+    }
+}
+
+rule ("setter") {
+    event {
+        Player Died;
+        All;
+        All;
+    }
+    actions {
+        Set Global Variable(g, 1);
+    }
+}
+"#;
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "hero": "ana", "team": "team1" }],
+        "events": [{ "kind": "playerDied", "time": 0.048, "eventPlayer": "p1" }]
+    }"#;
+    let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["h"], Val::Number(7.0));
+}
+
+#[test]
+fn a_subroutine_wait_until_condition_wake_under_a_non_100_factor_resumes() {
+    // The same carve-out on a `Start Rule`'d subroutine instance:
+    // `sub` suspends on the `Wait Until` at 100% at tick 0, `slow`
+    // sets 50% the same tick, and the re-check wake after `setter`
+    // writes `g` resumes through to `h`.
+    let text = r#"
+variables {
+    global:
+        0: g
+        1: h
+}
+
+subroutines {
+    0: sub
+}
+
+rule ("start") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Start Rule(sub, Do Nothing);
+    }
+}
+
+rule ("Subroutine sub") {
+    event {
+        Subroutine;
+        sub;
+    }
+    actions {
+        Wait Until(g == 1, 999);
+        Set Global Variable(h, 9);
+    }
+}
+
+rule ("slow") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Slow Motion(50);
+    }
+}
+
+rule ("setter") {
+    event {
+        Player Died;
+        All;
+        All;
+    }
+    actions {
+        Set Global Variable(g, 1);
+    }
+}
+"#;
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "hero": "ana", "team": "team1" }],
+        "events": [{ "kind": "playerDied", "time": 0.048, "eventPlayer": "p1" }]
+    }"#;
+    let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["h"], Val::Number(9.0));
+}
+
+#[test]
 fn an_event_rule_wait_suspended_before_the_factor_change_stops() {
     // The event-rule resume path gates the same way: the `Player Died`
     // run suspends at 100%, `slow` sets 50%, the wake tick is stale.
