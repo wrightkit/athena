@@ -457,6 +457,32 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // `Eye Position` adds a hero-specific eye height the catalog does
         // not record, so it cannot follow from `position` alone.
         "getEyePosition" => unsupported("value getEyePosition: eye height is not cataloged"),
+        // `Objective Position` reads the scenario's `objectives` list at
+        // the evaluated argument — the catalog's "index of the objective
+        // to consider, starting at 0 and counting up" — under the number
+        // coercion, so `False`/`True` read as 0/1. The map and mode
+        // decide the positions outside the script; an argument naming no
+        // entry — the field absent, or the index out of range, negative,
+        // fractional or non-finite — is a missing input, never a guess.
+        "getObjectivePosition" => {
+            let [index] = arguments::<1>(name, args)?;
+            let index = number(&eval(index, env)?)?;
+            let entry = match env.objectives {
+                Some(objectives) if index >= 0.0 && index.fract() == 0.0 => {
+                    objectives.get(index as usize)
+                }
+                _ => None,
+            };
+            match entry {
+                Some(position) => Ok(Val::from(*position)),
+                None => missing(
+                    MissingInputKind::Objectives,
+                    None,
+                    Some(format!("objectives[{index}]")),
+                    format!("value {name}"),
+                ),
+            }
+        }
         "getFacingDirection" => {
             let [player] = arguments::<1>(name, args)?;
             let id = player_id(player, env)?;

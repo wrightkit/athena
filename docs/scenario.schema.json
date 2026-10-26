@@ -26,6 +26,11 @@
       "type": "string",
       "minLength": 1,
       "description": "The map Current Map reads: a Map member id of the workshop-rs catalog (for example KINGS_ROW) or its en-US spelling, matched case-insensitively — the same form a player's hero takes. Constant for the run; a Current Map read with no field is a missing input."
+    },
+    "objectives": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/position" },
+      "description": "The objective positions Objective Position reads: entry i is the position of objective index i — the evaluated argument, a number or a boolean under the number coercion (False/True as 0/1). Supply the field whole or not at all: a read with no field, or an index naming no entry, is a missing input."
     }
   },
   "$defs": {

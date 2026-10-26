@@ -155,6 +155,10 @@ pub(crate) struct Scenario {
     /// The catalog `Map` member id the `map` field names; `None` when the
     /// scenario supplies none, so a `Current Map` read is a missing input.
     pub map: Option<String>,
+    /// The `objectives` positions `Objective Position` reads, indexed by
+    /// the evaluated argument; `None` when the scenario supplies none, so
+    /// the read is a missing input.
+    pub objectives: Option<Vec<crate::vector::Vec3>>,
 }
 
 #[derive(Deserialize)]
@@ -176,6 +180,10 @@ struct ScenarioDoc {
     #[serde(default, rename = "serverLoad", deserialize_with = "object_or_absent")]
     server_load: Option<ServerLoad>,
     map: Option<String>,
+    /// The objective positions `Objective Position` reads, supplied as a
+    /// list or not at all.
+    #[serde(default, deserialize_with = "object_or_absent")]
+    objectives: Option<Vec<PositionDoc>>,
 }
 
 #[derive(Deserialize)]
@@ -185,7 +193,7 @@ struct RandomDoc {
 }
 
 /// An `Option` field alone reads `null` as absent; these fields are
-/// objects, as `events` and `expect` are lists.
+/// structured, as `events` and `expect` are lists.
 fn object_or_absent<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -524,5 +532,15 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         random: doc.random.map(|random| random.seed),
         server_load: doc.server_load,
         map,
+        objectives: doc.objectives.map(|objectives| {
+            objectives
+                .into_iter()
+                .map(|position| crate::vector::Vec3 {
+                    x: position.x,
+                    y: position.y,
+                    z: position.z,
+                })
+                .collect()
+        }),
     })
 }

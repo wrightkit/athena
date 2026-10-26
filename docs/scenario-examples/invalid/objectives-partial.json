@@ -1,0 +1,6 @@
+{
+  "scenarioVersion": 1,
+  "seconds": 1,
+  "players": [],
+  "objectives": [{ "x": 1, "y": 2 }]
+}
