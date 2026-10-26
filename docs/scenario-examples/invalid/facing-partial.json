@@ -1,0 +1,7 @@
+{
+  "scenarioVersion": 1,
+  "seconds": 1,
+  "players": [
+    { "id": "p1", "facing": { "horizontal": 90 } }
+  ]
+}

@@ -3,9 +3,13 @@
 //! the whole-value operators, `set_at`/`modify_at` for an element, each
 //! reading `Null` as the empty array.
 
+use std::collections::BTreeMap;
+
 use workshop_rs::{ModifyOp, Value};
 
 use crate::eval::{number, values_equal};
+use crate::scenario::Player;
+use crate::vector::arithmetic;
 use crate::{NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
@@ -23,16 +27,22 @@ fn array_operand(value: Val) -> Result<Vec<Val>, Stop> {
 }
 
 /// The value a `Modify` operation writes from the variable's `old` value
-/// and the evaluated `operand`: the arithmetic and `Min`/`Max`/`Raise To
-/// Power` operations read both as numbers; the array operations keep
-/// `operand` whole. `Remove From Array By Value` drops every element equal
-/// to `operand`.
-pub(crate) fn apply_modify(old: Val, op: &ModifyOp, operand: Val) -> Result<Val, Stop> {
+/// and the evaluated `operand`: `Add`/`Subtract`/`Multiply`/`Divide` run
+/// the vector-aware arithmetic of the value forms, reading a `Player`
+/// operand's `position` from `players`; `Modulo`/`Min`/`Max`/`Raise To
+/// Power` read both as numbers; the array operations keep `operand`
+/// whole. `Remove From Array By Value` drops every element equal to
+/// `operand`.
+pub(crate) fn apply_modify(
+    old: Val,
+    op: &ModifyOp,
+    operand: Val,
+    players: &BTreeMap<String, Player>,
+) -> Result<Val, Stop> {
     Ok(match op {
-        ModifyOp::Add => Val::Number(number(&old)? + number(&operand)?),
-        ModifyOp::Subtract => Val::Number(number(&old)? - number(&operand)?),
-        ModifyOp::Multiply => Val::Number(number(&old)? * number(&operand)?),
-        ModifyOp::Divide => Val::Number(number(&old)? / number(&operand)?),
+        ModifyOp::Add | ModifyOp::Subtract | ModifyOp::Multiply | ModifyOp::Divide => {
+            arithmetic(op.catalog_id(), old, operand, players)?
+        }
         ModifyOp::Modulo => Val::Number(number(&old)? % number(&operand)?),
         ModifyOp::Min => Val::Number(number(&old)?.min(number(&operand)?)),
         ModifyOp::Max => Val::Number(number(&old)?.max(number(&operand)?)),
@@ -99,6 +109,7 @@ pub(crate) fn modify_at(
     index: f64,
     op: &ModifyOp,
     operand: Val,
+    players: &BTreeMap<String, Player>,
 ) -> Result<Option<(u64, Val, Val)>, Stop> {
     let items = match slot {
         Val::Array(items) => items,
@@ -110,7 +121,7 @@ pub(crate) fn modify_at(
     }
     let index = index as usize;
     let old = std::mem::replace(&mut items[index], Val::Null);
-    let new = apply_modify(old.clone(), op, operand)?;
+    let new = apply_modify(old.clone(), op, operand, players)?;
     items[index] = new.clone();
     Ok(Some((index as u64, old, new)))
 }

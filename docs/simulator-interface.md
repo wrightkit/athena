@@ -35,7 +35,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
 | `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
-| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad` and `map`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad` and `map` for `map`, `null` for the others), `tick`, `construct`. |
+| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`, `position`, `facing`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad` and `map`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad`, `map` for `map`, `position`/`facing` for the two player-field inputs, `null` for the others), `tick`, `construct`. |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
 `logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
@@ -120,6 +120,18 @@ Real load varies per tick and no capture covers it; this is **modeled, not measu
 
 No capture covers the lobby's map choice; this is **modeled, not measured**.
 
+### Vector values
+
+`Vector`, `X/Y/Z Component Of`, `Vector Towards`, `Direction From Angles`, `Distance Between`, `Dot Product`, `Cross Product`, `Normalize`, `Magnitude`, `Angle Between Vectors`, `Horizontal Angle From Direction`, `Vertical Angle From Direction`, `Direction Towards` and `Local`/`World Vector Of` are modeled, as is the vector form of `Add`, `Subtract`, `Multiply` and `Divide` — component-wise on two vectors, scalar-broadcast against a number — in value positions and in the `Modify` operations of the same names. The frame is the catalog's: `x` is left, `y` is up, `z` is forward; a horizontal angle is 0 at forward, increases turning left and wraps at ±180; a vertical angle is 0 level and increases looking down. `Direction From Angles` maps a `facing` pair to the unit vector `Ryaw(h)·Rpitch(v)·(0,0,1)`, the angle-from-direction values invert it, `Vector Towards` is the raw displacement and `Direction Towards` its unit form.
+
+A `Player` operand in a position place — `Distance Between`, `Vector Towards`, `Direction Towards`, the arithmetic four, and the `Modify` operations of the same names — reads the player's `position`, and `Position Of` returns it. `Facing Direction Of` returns the unit vector of the player's `facing`. `Local Vector Of`/`World Vector Of` take the `Transform` members the catalog declares — `ROTATION` (reads `facing`) and `ROTATION_AND_TRANSLATION` (reads `facing` and `position`); any other transform is `not_modeled`. A `position`/`facing` the scenario omits is a `missing_input` naming the field on the player.
+
+Two edges stop rather than guess, the client's answers being unmeasured: `Normalize` and `Direction Towards` on a zero-length vector, and `Angle Between Vectors` on one. A produced value with a non-finite component — a division by zero among them — is `not_modeled` for the same reason. `Eye Position` adds a hero eye height the catalog does not record, and raycasts, `Is In Line of Sight`, `Nearest Walkable Position`, `Is On Ground` need map geometry the goal document excludes; `Teleport`/`Apply Impulse` move a player nothing models — all stay `not_modeled`.
+
+A vector serializes as `{ "type": "vector", "value": { "x": n, "y": n, "z": n } }`. Vectors compare equal by component and are not strings, conditions, sort keys or array elements the string/array coercions reach; a vector in a `Custom String` argument is `not_modeled`, its client render unmeasured.
+
+None of these has a client capture; all are **modeled, not measured**.
+
 ### Workshop settings
 
 A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` — evaluates to its declared `default` argument: the simulator runs one lobby and no player edits settings. `min`/`max`, `options` and `sortOrder` are authoring metadata the running rules never see. A `Hero` setting yields its `Hero` literal's catalog member id as text — the member id `Hero Of` yields, so the two compare equal whatever spelling the scenario used. The scenario format has no place for setting overrides, so a run always sees the authored defaults.
@@ -184,7 +196,7 @@ The other fields are the evaluated arguments of the action; only the arguments t
 | `radius` | both | the radius |
 | `reevaluation` | `effect` | the `EffectReeval` member id |
 
-A position expression that needs geometry — `Position Of`, a `Vector`, anything unmodeled — stops the run as `not_modeled` before the entity is recorded; no capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing.
+A position expression that needs geometry — `Nearest Walkable Position`, a raycast, anything unmodeled — stops the run as `not_modeled` before the entity is recorded; no capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing.
 
 ### Statuses, buttons and started rules
 
@@ -308,7 +320,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 }
 ```
 
-`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`; `null` has no `value`. `player` holds the scenario `id` that declared the player. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
+`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`; `null` has no `value`. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
 
 Adding a field is compatible. Removing or renaming one, or changing a value's meaning, is a breaking change and needs a version bump of this crate.
 

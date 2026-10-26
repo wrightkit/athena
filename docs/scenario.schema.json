@@ -55,6 +55,27 @@
       },
       "description": "The numbers Server Load Average, Server Load Peak and Server Load read, constant for the run. Supply the field whole or not at all: a partial object is malformed, and a read with no field is a missing input."
     },
+    "position": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      },
+      "description": "The player's position the position-reading values return: x left, y up, z forward. Supply it whole or not at all: a partial object is malformed, and a read with no field is a missing input."
+    },
+    "facing": {
+      "type": "object",
+      "required": ["horizontal", "vertical"],
+      "additionalProperties": false,
+      "properties": {
+        "horizontal": { "type": "number" },
+        "vertical": { "type": "number" }
+      },
+      "description": "The player's facing the facing-reading values use: horizontal and vertical degrees, horizontal 0 forward (+z) increasing left, vertical 0 level increasing downward. Supply it whole or not at all: a partial object is malformed, and a read with no field is a missing input."
+    },
     "value": {
       "type": ["null", "boolean", "number", "string", "array"],
       "items": { "$ref": "#/$defs/value" }
@@ -76,7 +97,9 @@
         "buttons": {
           "type": "object",
           "additionalProperties": { "type": "boolean" }
-        }
+        },
+        "position": { "$ref": "#/$defs/position" },
+        "facing": { "$ref": "#/$defs/facing" }
       }
     },
     "event": {

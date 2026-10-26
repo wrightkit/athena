@@ -66,6 +66,12 @@ pub(crate) struct Player {
     /// (`jump`, `ability1`, …). A slot not listed is a live input the
     /// program cannot read: `Is Button Held` on it is a `missing_input`.
     pub held: BTreeMap<String, bool>,
+    /// The `position` the player stands at; `None` when the scenario
+    /// omits it, so a position read is a `missing_input`.
+    pub position: Option<crate::vector::Vec3>,
+    /// The `facing` direction as horizontal/vertical degrees; `None`
+    /// when the scenario omits it, so a facing read is a `missing_input`.
+    pub facing: Option<crate::vector::Facing>,
     /// The player's catalog-derived world state, resolved when the run
     /// starts.
     pub world: crate::state::WorldSlot,
@@ -200,6 +206,29 @@ struct PlayerDoc {
     state: BTreeMap<String, serde_json::Value>,
     #[serde(default)]
     buttons: BTreeMap<String, bool>,
+    /// The player's position: `{ "x": n, "y": n, "z": n }`, supplied
+    /// whole or not at all.
+    #[serde(default, deserialize_with = "object_or_absent")]
+    position: Option<PositionDoc>,
+    /// The player's facing: `{ "horizontal": n, "vertical": n }`
+    /// degrees, supplied whole or not at all.
+    #[serde(default, deserialize_with = "object_or_absent")]
+    facing: Option<FacingDoc>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PositionDoc {
+    x: f64,
+    y: f64,
+    z: f64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FacingDoc {
+    horizontal: f64,
+    vertical: f64,
 }
 
 #[derive(Deserialize)]
@@ -419,6 +448,15 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
             host: player.host,
             vars,
             held: player.buttons,
+            position: player.position.map(|position| crate::vector::Vec3 {
+                x: position.x,
+                y: position.y,
+                z: position.z,
+            }),
+            facing: player.facing.map(|facing| crate::vector::Facing {
+                horizontal: facing.horizontal,
+                vertical: facing.vertical,
+            }),
             world: crate::state::WorldSlot::Unresolved,
         };
         if players.insert(player.id.clone(), loaded).is_some() {

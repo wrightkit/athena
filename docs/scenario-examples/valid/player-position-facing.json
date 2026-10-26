@@ -1,0 +1,13 @@
+{
+  "scenarioVersion": 1,
+  "seconds": 1,
+  "players": [
+    {
+      "id": "p1",
+      "hero": "ana",
+      "team": "team1",
+      "position": { "x": 10.5, "y": 0, "z": -4.25 },
+      "facing": { "horizontal": 90, "vertical": 0 }
+    }
+  ]
+}

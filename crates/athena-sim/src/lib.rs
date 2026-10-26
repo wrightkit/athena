@@ -11,6 +11,7 @@ mod scenario;
 mod sched;
 mod state;
 mod step;
+mod vector;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -27,6 +28,13 @@ pub enum Val {
     Array(Vec<Val>),
     /// A mocked player, identified by the scenario `id` that declared it.
     Player(String),
+    /// A Workshop vector: `x` is left, `y` is up, `z` is forward.
+    /// Serializes as `{ "type": "vector", "value": { "x": n, "y": n, "z": n } }`.
+    Vector {
+        x: f64,
+        y: f64,
+        z: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -79,6 +87,10 @@ pub enum MissingInputKind {
     ServerLoad,
     /// The scenario's `map`.
     Map,
+    /// The `position` of a scenario player.
+    Position,
+    /// The `facing` of a scenario player.
+    Facing,
 }
 
 /// A live input the program read but the scenario did not supply. The run

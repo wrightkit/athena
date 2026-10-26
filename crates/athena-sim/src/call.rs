@@ -88,6 +88,8 @@ fn render(value: &Val) -> Result<String, Stop> {
         Val::Text(text) => Ok(text.clone()),
         Val::Array(_) => unsupported("array inside a custom string"),
         Val::Player(_) => unsupported("player inside a custom string"),
+        // The client's render form of a vector is unmeasured.
+        Val::Vector { .. } => unsupported("vector inside a custom string"),
     }
 }
 
@@ -352,10 +354,13 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 None => unsupported(format!("`{id}` is not a scenario player")),
             }
         }
-        "add" => binary(|a, b| a + b),
-        "subtract" => binary(|a, b| a - b),
-        "multiply" => binary(|a, b| a * b),
-        "divide" => binary(|a, b| a / b),
+        // `Number|Boolean|Vector` (and a `Player`, read as its
+        // `position`): two numbers yield a number, anything vector-sided
+        // combines component-wise with a scalar broadcast.
+        "add" | "subtract" | "multiply" | "divide" => {
+            let [a, b] = arguments::<2>(name, args)?;
+            crate::vector::arithmetic(name, eval(a, env)?, eval(b, env)?, env.players)
+        }
         "modulo" => binary(|a, b| a % b),
         "raiseToPower" => binary(f64::powf),
         "min" => binary(f64::min),
@@ -755,6 +760,8 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             }
             produced(source.replace(&pattern, &replacement), name)
         }
-        other => unsupported(format!("value {other}")),
+        // The vector family has its own dispatcher; it ends unknown
+        // names in `not_modeled` the same way.
+        other => crate::vector::call(other, args, env),
     }
 }

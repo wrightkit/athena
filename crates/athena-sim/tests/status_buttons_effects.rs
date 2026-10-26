@@ -459,10 +459,31 @@ rule ("init") {
     assert_eq!(destroys, 1);
 }
 
-/// A position argument that needs geometry — here `Position Of` — stops
-/// the run as `not_modeled` instead of recording an element.
+/// A position argument that needs geometry — here `Nearest Walkable
+/// Position` — stops the run as `not_modeled` instead of recording an
+/// element. `Position Of` reads the scenario's `position` instead: a
+/// player without one stops the run as `missing_input`.
 #[test]
 fn an_effect_position_needing_geometry_is_not_modeled() {
+    let text = r#"
+rule ("init") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Play Effect(All Players(All Teams), Ring Explosion, Color(White), Nearest Walkable Position(Vector(0, 0, 0)), 3);
+    }
+}
+"#;
+    let trace = run(text, ANA);
+    let Outcome::NotModeled(stop) = &trace.outcome else {
+        panic!("expected not_modeled, got {:?}", trace.outcome);
+    };
+    assert!(
+        stop.construct.contains("nearestWalkablePosition"),
+        "{stop:?}"
+    );
+
     let text = r#"
 rule ("init") {
     event {
@@ -474,8 +495,6 @@ rule ("init") {
 }
 "#;
     let trace = run(text, ANA);
-    let Outcome::NotModeled(stop) = &trace.outcome else {
-        panic!("expected not_modeled, got {:?}", trace.outcome);
-    };
-    assert!(stop.construct.contains("getPosition"), "{stop:?}");
+    assert_eq!(trace.outcome, Outcome::MissingInput);
+    assert_eq!(trace.missing_inputs[0].input, MissingInputKind::Position);
 }
