@@ -255,6 +255,25 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 other => return unsupported(format!("allPlayers on {other}")),
             }))
         }
+        // Modeled, not measured: the client's element order is
+        // unmeasured, so the catalog's `Hero` member order is the
+        // order. Elements are the member ids `Hero Of` yields, so
+        // `Array Contains(All Heroes(), Hero Of(p))` holds.
+        "allHeroes" => {
+            let [] = arguments::<0>(name, args)?;
+            let catalog = workshop_rs::catalog::Catalog::builtin_ref()
+                .map_err(|error| NotModeled::new(format!("catalog unavailable: {error}")))?;
+            let Some(domain) = catalog.enum_domain("Hero") else {
+                return unsupported("catalog has no `Hero` domain");
+            };
+            Ok(Val::Array(
+                domain
+                    .members
+                    .iter()
+                    .map(|member| Val::Text(member.member.clone()))
+                    .collect(),
+            ))
+        }
         "and" | "or" => {
             let [a, b] = arguments::<2>(name, args)?;
             // `&&`/`||` short-circuit: the right side is not read when the

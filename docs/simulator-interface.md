@@ -77,6 +77,8 @@ The `team` and player (`target`) filters of a rule event resolve against the sce
 
 The element-context values are modeled too: `Evaluate Once` pins its operand's first read per site for the rest of one scope — a rule-instance run (loop bodies and restarted frames re-read the site into the pin; a `Wait` suspension keeps them, and the next run start or restart clears them), one rule-condition check pass, or one `Wait Until` call's per-tick re-checks — and inside an element-context operand, where the site is re-read per element, it is `not_modeled`. `Filtered Array` keeps the elements its condition holds for, `Sorted Array` orders ascending by the per-element key — a number, `Null` or boolean under the number coercion, and an equal key keeps the element's place — and `Is True For All`/`Is True For Any` test the condition per element, stopping at the element that decides them; an empty array is true for `All`, false for `Any`. Each binds `Current Array Element` and `Current Array Index` to the element and its place for the operand's evaluation, nested contexts included; a read of either outside an element context is `not_modeled`. `Mapped Array` is not modeled.
 
+`All Heroes` yields the catalog's `Hero` members in catalog order: an array of member-id texts — the same form `Hero Of` and a `Hero` literal yield, so an element compares equal to both. The client's element order is unmeasured; the catalog order is the modeled order.
+
 None of these has a client capture; all are **modeled, not measured**.
 
 ### String values
