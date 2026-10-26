@@ -195,8 +195,17 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
             .map(Val::Array),
         // An enum literal in a value position yields its catalog member
         // id as text — the same form `Hero Of` and hero settings yield,
-        // so `Compare(Hero Of(p), ==, Hero(Ana))` compares equal.
-        Value::Enum { value, .. } => Ok(Val::Text(value.clone())),
+        // so `Compare(Hero Of(p), ==, Hero(Ana))` compares equal. A
+        // `Vector` member is the directional constant it names instead.
+        Value::Enum { value_type, value } => {
+            if value_type == "Vector" {
+                return match crate::vector::constant(value) {
+                    Some(constant) => Ok(constant.into()),
+                    None => unsupported(format!("value Vector member {value}")),
+                };
+            }
+            Ok(Val::Text(value.clone()))
+        }
         Value::GlobalVariable(name) => Ok(env.globals.get(name).cloned().unwrap_or(Val::Null)),
         Value::PlayerVariable { player, variable } => {
             let id = player_id(player, env)?;

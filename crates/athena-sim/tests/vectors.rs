@@ -528,6 +528,74 @@ fn a_vector_serializes_in_the_documented_shape() {
     );
 }
 
+/// `__ambiguous_enum` — the parser's sentinel for a bare member
+/// spelling that names a candidate in more than one enum domain —
+/// resolves to its `Vector` member's directional constant in a vector
+/// or number operand position (athena#80). `Forward`/`Backward` name
+/// only a `Vector` member, so they parse to the enum literal directly
+/// and the same constants apply.
+#[test]
+fn ambiguous_vector_spellings_resolve_in_operand_positions() {
+    let trace = run(&set_global("Add(Left, Right)"));
+    assert_eq!(global(&trace), &vec(0.0, 0.0, 0.0));
+
+    for (spelling, expected) in [
+        ("Left", (1.0, 0.0, 0.0)),
+        ("Right", (-1.0, 0.0, 0.0)),
+        ("Up", (0.0, 1.0, 0.0)),
+        ("Down", (0.0, -1.0, 0.0)),
+        ("Forward", (0.0, 0.0, 1.0)),
+        ("Backward", (0.0, 0.0, -1.0)),
+    ] {
+        let trace = run(&set_global(&format!("Add({spelling}, Vector(0, 0, 0))")));
+        assert_close(global(&trace), expected);
+    }
+}
+
+/// The same resolution inside the operands of a `Compare`, reached
+/// through `If` and `Or`.
+#[test]
+fn ambiguous_vector_spellings_resolve_inside_compare() {
+    let text = r#"
+variables {
+    global:
+        0: g
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    conditions {
+        Or(Compare(Vector(0, 0, 0), ==, Add(Left, Right)), False);
+    }
+    actions {
+        If(Compare(Vector(0, 0, 0), ==, Add(Left, Right)));
+            Set Global Variable(g, 1);
+        End;
+    }
+}
+"#;
+    let trace = run(text);
+    assert_eq!(global(&trace), &Val::Number(1.0));
+}
+
+/// An ambiguous spelling in a position the catalog does not type as a
+/// vector or number operand stays `not_modeled` and names the spelling.
+#[test]
+fn an_ambiguous_spelling_outside_an_operand_position_is_not_modeled() {
+    // `All Players`' argument is a `Team`.
+    let trace = run(&set_global("Count Of(All Players(Left))"));
+    assert_not_modeled(
+        &trace,
+        "value __ambiguous_enum `Left` in `array` argument of `allPlayers`",
+    );
+
+    // A sentinel as an action's argument names only the spelling.
+    let trace = run(&set_global("Left"));
+    assert_not_modeled(&trace, "value __ambiguous_enum `Left`");
+}
+
 #[test]
 fn a_partial_position_or_facing_is_malformed() {
     let text = set_global("1");
