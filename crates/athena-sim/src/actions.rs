@@ -74,6 +74,7 @@ fn run(
         server_load: world.server_load,
         map: world.map.as_deref(),
         match_phase: world.match_phase,
+        game_mode: world.game_mode.as_deref(),
         objectives: world.objectives.as_deref(),
         rule: rule_idx,
         changes: &world.changes,

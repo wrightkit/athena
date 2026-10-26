@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use workshop_rs::Value;
 
 use crate::eval::{Env, arguments, eval, number, player_id};
-use crate::scenario::Player;
+use crate::scenario::{Player, Team};
 use crate::{MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
@@ -485,6 +485,54 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 direction(facing(env.players, &id, &format!("value {name}"))?),
                 name,
             )
+        }
+        // `Vertical Facing Angle Of` reads the same scenario `facing`
+        // input `Facing Direction Of` does — the vertical component.
+        "getVerticalFacingAngle" => {
+            let [player] = arguments::<1>(name, args)?;
+            let id = player_id(player, env)?;
+            Ok(Val::Number(
+                facing(env.players, &id, &format!("value {name}"))?.vertical,
+            ))
+        }
+        // `Players Within Radius`: the scenario players on the team
+        // whose declared `position` is within `radius` of the evaluated
+        // center, in roster order — the catalog notes dead players are
+        // picked up too, so no life-state filter applies, and each
+        // position read is the live input `Position Of` makes. The
+        // `losCheck` argument is evaluated but decides nothing: in the
+        // empty world line of sight always holds.
+        "getPlayersInRadius" => {
+            let [center, radius, team, los_check] = arguments::<4>(name, args)?;
+            let (center, radius) = (
+                position_value(eval(center, env)?, env.players, name)?,
+                number(&eval(radius, env)?)?,
+            );
+            let filter = match team {
+                Value::Enum { value, .. } => value.clone(),
+                other => match eval(other, env)? {
+                    Val::Text(text) => text,
+                    other => return unsupported(format!("{name} on {other:?}")),
+                },
+            };
+            eval(los_check, env)?;
+            let mut inside = Vec::new();
+            for (id, player) in env.players {
+                let on_team = match filter.as_str() {
+                    "ALL" => true,
+                    "TEAM_1" => player.team == Some(Team::Team1),
+                    "TEAM_2" => player.team == Some(Team::Team2),
+                    other => return unsupported(format!("{name} on {other}")),
+                };
+                if !on_team {
+                    continue;
+                }
+                let at = position(env.players, id, &format!("value {name}"))?;
+                if at.zip(center, |a, c| a - c).magnitude() <= radius {
+                    inside.push(Val::Player(id.clone()));
+                }
+            }
+            Ok(Val::Array(inside))
         }
         // `Local Vector Of`/`World Vector Of` transform a vector into or
         // out of a player's facing frame: `ROTATION` needs `facing`,

@@ -215,6 +215,30 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 ),
             }
         }
+        // Modeled, not measured: the lobby chooses the game mode outside
+        // the script, so the scenario's `gameMode` supplies it as a
+        // constant — the catalog `Gamemode` member id as text, the same
+        // form a `Game Mode` literal yields. The field is optional but
+        // there is no default; a read without it is a missing input, and
+        // a mid-run change is not modeled.
+        "getCurrentGamemode" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.game_mode {
+                Some(mode) => Ok(Val::Text(mode.to_string())),
+                None => missing(
+                    MissingInputKind::GameMode,
+                    None,
+                    Some("gameMode".to_string()),
+                    format!("value {name}"),
+                ),
+            }
+        }
+        // `Game Mode(...)`: the constant constructor — its argument is a
+        // `Gamemode` enum literal, which yields the member id as text.
+        "gameMode" => {
+            let [mode] = arguments::<1>(name, args)?;
+            eval(mode, env)
+        }
         // Modeled, not measured: the match phase is a scenario fact —
         // the simulator does not run a match, so `matchPhase` supplies
         // it as a constant. The catalog's six phase reads each describe
@@ -315,6 +339,16 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "raiseToPower" => binary(f64::powf),
         "min" => binary(f64::min),
         "max" => binary(f64::max),
+        // `Sine From Radians`: plain math on the evaluated argument; a
+        // non-finite argument has no sine to report.
+        "sin" => {
+            let [value] = arguments::<1>(name, args)?;
+            let sine = number(&eval(value, env)?)?.sin();
+            if !sine.is_finite() {
+                return unsupported(format!("{name} produced a non-finite number"));
+            }
+            Ok(Val::Number(sine))
+        }
         "roundToInteger" => {
             let [value, rounding] = arguments::<2>(name, args)?;
             let n = number(&eval(value, env)?)?;
@@ -357,6 +391,13 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             Ok(items(eval(array, env)?, name)?
                 .into_iter()
                 .next()
+                .unwrap_or(Val::Null))
+        }
+        "lastOf" => {
+            let [array] = arguments::<1>(name, args)?;
+            Ok(items(eval(array, env)?, name)?
+                .into_iter()
+                .last()
                 .unwrap_or(Val::Null))
         }
         "countOf" => {

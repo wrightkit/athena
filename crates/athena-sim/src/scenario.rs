@@ -154,6 +154,24 @@ pub(crate) const STATE_READS: &[StateRead] = &[
         ty: StateType::Bool,
         derived: false,
     },
+    StateRead {
+        id: "isUsingAbility1",
+        key: "isUsingAbility1",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isUsingAbility2",
+        key: "isUsingAbility2",
+        ty: StateType::Bool,
+        derived: false,
+    },
+    StateRead {
+        id: "isFiringPrimaryFire",
+        key: "isFiringPrimaryFire",
+        ty: StateType::Bool,
+        derived: false,
+    },
 ];
 
 /// The read a value `id` names, when `id` is a player-state value.
@@ -214,6 +232,8 @@ pub(crate) struct Player {
     pub team: Option<Team>,
     /// The player `Host Player` returns; at most one player has it.
     pub host: bool,
+    /// The player `Local Player` returns; at most one player has it.
+    pub local: bool,
     /// Player variables: the version-1 `state` map, `vars` in
     /// version 2. A variable not listed starts as `null`.
     pub vars: BTreeMap<String, Val>,
@@ -326,6 +346,10 @@ pub(crate) struct Scenario {
     /// The `matchPhase` the phase reads answer; `None` when the scenario
     /// supplies none, so a phase read is a missing input.
     pub match_phase: Option<Phase>,
+    /// The catalog `Gamemode` member id the `gameMode` field names;
+    /// `None` when the scenario supplies none, so a `Current Game Mode`
+    /// read is a missing input.
+    pub game_mode: Option<String>,
     /// The `objectives` positions `Objective Position` reads, indexed by
     /// the evaluated argument; `None` when the scenario supplies none, so
     /// the read is a missing input.
@@ -355,6 +379,10 @@ struct ScenarioDoc {
     /// catalog-defined phases; an unknown value is refused.
     #[serde(rename = "matchPhase")]
     match_phase: Option<Phase>,
+    /// The game mode `Current Game Mode` reads: a catalog `Gamemode`
+    /// member id or en-US spelling, like `map`.
+    #[serde(rename = "gameMode")]
+    game_mode: Option<String>,
     /// The objective positions `Objective Position` reads, supplied as a
     /// list or not at all.
     #[serde(default, deserialize_with = "object_or_absent")]
@@ -385,6 +413,9 @@ struct PlayerDoc {
     team: Option<TeamDoc>,
     #[serde(default)]
     host: bool,
+    /// `true` marks the player `Local Player` returns; like `host`.
+    #[serde(default)]
+    local: bool,
     /// scenarioVersion 1: the player's variables. scenarioVersion 2:
     /// the player's `state` map. `Option` keeps an absent field apart
     /// from a declared empty map: in version 2 the latter still opts
@@ -531,14 +562,15 @@ fn hero_names(catalog: &Catalog) -> BTreeMap<String, (String, Vec<String>)> {
     names
 }
 
-/// Every map name a scenario may give, from the `workshop-rs` catalog: the
-/// canonical `Map` member id (such as `KINGS_ROW`) or an en-US spelling
-/// (such as `King's Row`), matched case-insensitively — the same form
-/// `hero` accepts. Each accepted name maps to the member id.
-fn map_names(catalog: &Catalog) -> BTreeMap<String, String> {
+/// Every member name a scenario may give for `domain`, from the
+/// `workshop-rs` catalog: the canonical member id (such as `KINGS_ROW`)
+/// or an en-US spelling (such as `King's Row`), matched
+/// case-insensitively — the same form `hero` accepts. Each accepted
+/// name maps to the member id.
+fn member_names(catalog: &Catalog, domain_name: &str) -> BTreeMap<String, String> {
     let en_us = Locale::new("en-US");
     let mut names = BTreeMap::new();
-    if let Some(domain) = catalog.enum_domain("Map") {
+    if let Some(domain) = catalog.enum_domain(domain_name) {
         for member in &domain.members {
             names.insert(member.member.to_lowercase(), member.member.clone());
             for spelling in member.spellings(&en_us) {
@@ -656,6 +688,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
                 TeamDoc::Team2 => Team::Team2,
             }),
             host: player.host,
+            local: player.local,
             vars,
             state,
             held: player.buttons,
@@ -679,12 +712,26 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
     if players.values().filter(|player| player.host).count() > 1 {
         return load_error("more than one player is marked `host`");
     }
+    if players.values().filter(|player| player.local).count() > 1 {
+        return load_error("more than one player is marked `local`");
+    }
 
     let map = match &doc.map {
         Some(map) if map.is_empty() => return format_error("`map` must not be empty"),
-        Some(map) => match map_names(catalog).get(&map.to_lowercase()) {
+        Some(map) => match member_names(catalog, "Map").get(&map.to_lowercase()) {
             Some(member) => Some(member.clone()),
             None => return load_error(format!("unknown map `{map}`")),
+        },
+        None => None,
+    };
+
+    let game_mode = match &doc.game_mode {
+        Some(mode) if mode.is_empty() => {
+            return format_error("`gameMode` must not be empty");
+        }
+        Some(mode) => match member_names(catalog, "Gamemode").get(&mode.to_lowercase()) {
+            Some(member) => Some(member.clone()),
+            None => return load_error(format!("unknown gameMode `{mode}`")),
         },
         None => None,
     };
@@ -737,6 +784,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         server_load: doc.server_load,
         map,
         match_phase: doc.match_phase,
+        game_mode,
         objectives: doc.objectives.map(|objectives| {
             objectives
                 .into_iter()

@@ -126,6 +126,41 @@ fn first_of_and_count_of_see_null_as_the_empty_array() {
     assert_eq!(global(&trace), &Val::Number(0.0));
 }
 
+/// `Last Of` is the array tail, symmetric to `First Of` (athena#105):
+/// the last element, `Null` on an empty array — the `0` the catalog
+/// promises — and `Null` seen as the empty array.
+#[test]
+fn last_of_sees_null_as_the_empty_array() {
+    let trace = run(&set_global("Last Of(Array(5, 6))"));
+    assert_eq!(global(&trace), &Val::Number(6.0));
+
+    let trace = run(&set_global("Last Of(Array(5))"));
+    assert_eq!(global(&trace), &Val::Number(5.0));
+
+    let trace = run(&set_global("Last Of(Empty Array)"));
+    assert_eq!(global(&trace), &Val::Null);
+
+    let trace = run(&set_global("Last Of(Null)"));
+    assert_eq!(global(&trace), &Val::Null);
+}
+
+/// `Sine From Radians` is plain math on the evaluated argument
+/// (athena#105).
+#[test]
+fn sine_from_radians_evaluates_its_argument() {
+    for (value, expected) in [
+        ("Sine From Radians(0)", 0.0),
+        ("Sine From Radians(3.14159265 / 2)", 1.0),
+        ("Sine From Radians(-3.14159265 / 2)", -1.0),
+    ] {
+        let trace = run(&set_global(value));
+        let Val::Number(sine) = global(&trace) else {
+            panic!("{value}: {:?}", global(&trace));
+        };
+        assert!((sine - expected).abs() < 1e-9, "{value}: {sine}");
+    }
+}
+
 /// `Value In Array` yields the element at the index, or `Null` when no
 /// element exists there — an out-of-range or negative index, or a
 /// non-array operand, which has no element at any index (athena#97,

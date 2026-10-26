@@ -39,20 +39,22 @@ pub(crate) fn run(
     scenario: Option<Scenario>,
     hero_values: &HeroValues,
 ) -> Trace {
-    let (mut players, events, expect, random, server_load, map, match_phase, objectives) = scenario
-        .map(|scenario| {
-            (
-                scenario.players,
-                scenario.events,
-                scenario.expect,
-                scenario.random,
-                scenario.server_load,
-                scenario.map,
-                scenario.match_phase,
-                scenario.objectives,
-            )
-        })
-        .unwrap_or_default();
+    let (mut players, events, expect, random, server_load, map, match_phase, game_mode, objectives) =
+        scenario
+            .map(|scenario| {
+                (
+                    scenario.players,
+                    scenario.events,
+                    scenario.expect,
+                    scenario.random,
+                    scenario.server_load,
+                    scenario.map,
+                    scenario.match_phase,
+                    scenario.game_mode,
+                    scenario.objectives,
+                )
+            })
+            .unwrap_or_default();
     // Resolve every player's world state before the first tick. A failure is
     // stored, not reported yet: the trace row still says what the scenario
     // declared, and the run stops only if a `Damage`/`Heal`/`Set Ability
@@ -91,6 +93,7 @@ pub(crate) fn run(
         server_load,
         map,
         match_phase,
+        game_mode,
         objectives,
         timeline: Timeline::default(),
     };
@@ -443,6 +446,7 @@ fn run_tick(
                     server_load: world.server_load,
                     map: world.map.as_deref(),
                     match_phase: world.match_phase,
+                    game_mode: world.game_mode.as_deref(),
                     objectives: world.objectives.as_deref(),
                     rule: instance.rule_idx,
                     changes: &world.changes,
@@ -573,6 +577,7 @@ fn run_tick(
                         server_load: world.server_load,
                         map: world.map.as_deref(),
                         match_phase: world.match_phase,
+                        game_mode: world.game_mode.as_deref(),
                         objectives: world.objectives.as_deref(),
                         rule: instance.rule_idx,
                         changes: &world.changes,
@@ -624,6 +629,7 @@ fn run_tick(
                         server_load: world.server_load,
                         map: world.map.as_deref(),
                         match_phase: world.match_phase,
+                        game_mode: world.game_mode.as_deref(),
                         objectives: world.objectives.as_deref(),
                         rule: frame.rule_idx,
                         changes: &world.changes,

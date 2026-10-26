@@ -134,6 +134,7 @@ const NAMES: &[&str] = &[
     "allPlayers",
     "allHeroes",
     "hostPlayer",
+    "localPlayer",
     "hasSpawned",
     "isAlive",
     "getHero",
@@ -215,6 +216,22 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             match env.players.iter().find(|(_, player)| player.host) {
                 Some((id, _)) => Ok(Val::Player(id.clone())),
                 None => unsupported("Host Player: the scenario marks no host player"),
+            }
+        }
+        // A live input: `Local Player` is the scenario player marked
+        // `local`; the client binds it to the end user's player, which
+        // the simulator cannot derive. A scenario without a `local`
+        // player makes the read a missing input.
+        "localPlayer" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.players.iter().find(|(_, player)| player.local) {
+                Some((id, _)) => Ok(Val::Player(id.clone())),
+                None => missing(
+                    MissingInputKind::Local,
+                    None,
+                    Some("local".to_string()),
+                    format!("value {name}"),
+                ),
             }
         }
         // Modeled, not measured: a player with a hero is spawned and alive.

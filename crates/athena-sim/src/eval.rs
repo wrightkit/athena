@@ -44,6 +44,10 @@ pub(crate) struct Env<'a> {
     /// The scenario's `matchPhase`; `None` when the scenario supplies
     /// none, so a match-phase value is a missing input.
     pub match_phase: Option<crate::scenario::Phase>,
+    /// The catalog `Gamemode` member id the scenario's `gameMode`
+    /// resolved to; `None` when the scenario supplies none, so a
+    /// `Current Game Mode` value is a missing input.
+    pub game_mode: Option<&'a str>,
     /// The scenario's `objectives` positions; `None` when the scenario
     /// supplies none, so an `Objective Position` value is a missing input.
     pub objectives: Option<&'a [crate::vector::Vec3]>,
