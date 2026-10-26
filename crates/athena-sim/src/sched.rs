@@ -7,9 +7,10 @@ use workshop_rs::{Action, Event, EventTarget, EventTeam, Program, Rule};
 use crate::blocks::Blocks;
 use crate::call::Random;
 use crate::eval::{Env, eval};
+use crate::expect::Expectation;
 use crate::hud::Hud;
 use crate::load::{Frame, Instance, Loaded, WaitMode, load, player_matches};
-use crate::scenario::{EventCtx, Expectation, Scenario};
+use crate::scenario::{EventCtx, Scenario};
 use crate::state::{self, WorldSlot};
 use crate::step::{World, conditions_hold, flag, run_instance};
 use crate::{
@@ -343,7 +344,6 @@ fn run_tick(
                     // `All`.
                     let eligible = match &injected.player {
                         Some(id) => player_matches(
-                            instance.rule,
                             *team,
                             target,
                             world

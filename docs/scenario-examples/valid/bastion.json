@@ -7,6 +7,7 @@
       "hero": "Ana",
       "team": "team1",
       "host": true,
+      "slot": 0,
       "position": {
         "x": 0,
         "y": 0,
@@ -46,6 +47,7 @@
       "id": "p2",
       "hero": "Reaper",
       "team": "team2",
+      "slot": 6,
       "position": {
         "x": 5,
         "y": 0,
