@@ -39,7 +39,7 @@ pub(crate) fn run(
     scenario: Option<Scenario>,
     hero_values: &HeroValues,
 ) -> Trace {
-    let (mut players, events, expect, random, server_load, map, objectives) = scenario
+    let (mut players, events, expect, random, server_load, map, match_phase, objectives) = scenario
         .map(|scenario| {
             (
                 scenario.players,
@@ -48,6 +48,7 @@ pub(crate) fn run(
                 scenario.random,
                 scenario.server_load,
                 scenario.map,
+                scenario.match_phase,
                 scenario.objectives,
             )
         })
@@ -89,6 +90,7 @@ pub(crate) fn run(
         random: random.map(|seed| RefCell::new(Random::new(seed))),
         server_load,
         map,
+        match_phase,
         objectives,
         timeline: Timeline::default(),
     };
@@ -440,6 +442,7 @@ fn run_tick(
                     random: world.random.as_ref(),
                     server_load: world.server_load,
                     map: world.map.as_deref(),
+                    match_phase: world.match_phase,
                     objectives: world.objectives.as_deref(),
                     rule: instance.rule_idx,
                     changes: &world.changes,
@@ -569,6 +572,7 @@ fn run_tick(
                         random: world.random.as_ref(),
                         server_load: world.server_load,
                         map: world.map.as_deref(),
+                        match_phase: world.match_phase,
                         objectives: world.objectives.as_deref(),
                         rule: instance.rule_idx,
                         changes: &world.changes,
@@ -619,6 +623,7 @@ fn run_tick(
                         random: world.random.as_ref(),
                         server_load: world.server_load,
                         map: world.map.as_deref(),
+                        match_phase: world.match_phase,
                         objectives: world.objectives.as_deref(),
                         rule: frame.rule_idx,
                         changes: &world.changes,

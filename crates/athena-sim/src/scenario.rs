@@ -269,6 +269,24 @@ pub(crate) struct InjectedEvent {
     pub values: BTreeMap<String, Val>,
 }
 
+/// A `matchPhase` value: one of the six match phases the catalog's
+/// phase reads define — the phases `Is Waiting For Players`,
+/// `Is Assembling Heroes`, `Is In Setup`, `Is Game In Progress`,
+/// `Is Between Rounds` and `Is Match Complete` describe. Each catalog
+/// description names exactly one phase, so a read answers true exactly
+/// for its own phase; overtime is no phase the catalog defines, so the
+/// field cannot express it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum Phase {
+    WaitingForPlayers,
+    AssemblingHeroes,
+    Setup,
+    GameInProgress,
+    BetweenRounds,
+    MatchComplete,
+}
+
 /// The server-load numbers a scenario's `serverLoad` supplies: what
 /// `Server Load`, `Server Load Average` and `Server Load Peak` read.
 /// The client measures load per tick; the simulator takes it as a
@@ -305,6 +323,9 @@ pub(crate) struct Scenario {
     /// The catalog `Map` member id the `map` field names; `None` when the
     /// scenario supplies none, so a `Current Map` read is a missing input.
     pub map: Option<String>,
+    /// The `matchPhase` the phase reads answer; `None` when the scenario
+    /// supplies none, so a phase read is a missing input.
+    pub match_phase: Option<Phase>,
     /// The `objectives` positions `Objective Position` reads, indexed by
     /// the evaluated argument; `None` when the scenario supplies none, so
     /// the read is a missing input.
@@ -330,6 +351,10 @@ struct ScenarioDoc {
     #[serde(default, rename = "serverLoad", deserialize_with = "object_or_absent")]
     server_load: Option<ServerLoad>,
     map: Option<String>,
+    /// The match phase the phase reads report: one of the six
+    /// catalog-defined phases; an unknown value is refused.
+    #[serde(rename = "matchPhase")]
+    match_phase: Option<Phase>,
     /// The objective positions `Objective Position` reads, supplied as a
     /// list or not at all.
     #[serde(default, deserialize_with = "object_or_absent")]
@@ -711,6 +736,7 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         random: doc.random.map(|random| random.seed),
         server_load: doc.server_load,
         map,
+        match_phase: doc.match_phase,
         objectives: doc.objectives.map(|objectives| {
             objectives
                 .into_iter()

@@ -7,7 +7,7 @@ use workshop_rs::Value;
 
 use crate::ambiguous;
 use crate::eval::{Env, arguments, eval, number, values_equal};
-use crate::scenario::ServerLoad;
+use crate::scenario::{Phase, ServerLoad};
 use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
@@ -211,6 +211,37 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     MissingInputKind::Map,
                     None,
                     Some("map".to_string()),
+                    format!("value {name}"),
+                ),
+            }
+        }
+        // Modeled, not measured: the match phase is a scenario fact —
+        // the simulator does not run a match, so `matchPhase` supplies
+        // it as a constant. The catalog's six phase reads each describe
+        // exactly one phase, so a read answers true exactly for its own
+        // phase; there is no default, so a read without `matchPhase` is
+        // a missing input.
+        "isWaitingForPlayers"
+        | "isAssemblingHeroes"
+        | "isInSetup"
+        | "isGameInProgress"
+        | "isMatchBetweenRounds"
+        | "isMatchComplete" => {
+            let [] = arguments::<0>(name, args)?;
+            let own = match name {
+                "isWaitingForPlayers" => Phase::WaitingForPlayers,
+                "isAssemblingHeroes" => Phase::AssemblingHeroes,
+                "isInSetup" => Phase::Setup,
+                "isGameInProgress" => Phase::GameInProgress,
+                "isMatchBetweenRounds" => Phase::BetweenRounds,
+                _ => Phase::MatchComplete,
+            };
+            match env.match_phase {
+                Some(phase) => Ok(Val::Bool(phase == own)),
+                None => missing(
+                    MissingInputKind::MatchPhase,
+                    None,
+                    Some("matchPhase".to_string()),
                     format!("value {name}"),
                 ),
             }

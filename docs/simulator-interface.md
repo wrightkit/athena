@@ -36,7 +36,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
 | `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
-| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`, `position`, `facing`, `objectives`, `state`, `slot`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad`, `map` and `objectives`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad`, `map` for `map`, `position`/`facing`/`slot` for the player-field inputs, `objectives[i]` — the evaluated index — for `objectives`, `state.<key>` for `state`, `null` for the others), `tick`, `construct`, `location` (where the read happened, as under `not_modeled` below). |
+| `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`, `matchPhase`, `position`, `facing`, `objectives`, `state`, `slot`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad`, `map`, `matchPhase` and `objectives`), `name` (the event-value name for `eventValue`, the button slot for `button`, the field `random` for `random`, `serverLoad` for `serverLoad`, `map` for `map`, `matchPhase` for `matchPhase`, `position`/`facing`/`slot` for the player-field inputs, `objectives[i]` — the evaluated index — for `objectives`, `state.<key>` for `state`, `null` for the others), `tick`, `construct`, `location` (where the read happened, as under `not_modeled` below). |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
 `logs`, `globals`, `players` and `hud` describe the state when the run ended: after the last tick for `complete`, at the stop for `not_modeled` and `missing_input`. `timeline` covers the ticks before the stop the same way.
@@ -122,6 +122,12 @@ Real load varies per tick and no capture covers it; this is **modeled, not measu
 `Current Map` is modeled. The lobby chooses the map outside the Workshop script, and the simulator does not guess it, so the value reads the scenario's `map` — `{ "map": "KINGS_ROW" }`, a `Map` member id of the `workshop-rs` catalog or its en-US spelling — and yields the member id as text: the same form a `Map` literal yields, so the two compare equal. The map is constant for the run; a mid-run change is not modeled. A `Current Map` value in a run without `map` is a `missing_input` of kind `map`. Other map-derived values (`Current Game Mode`, …) are not modeled — the catalog records no map-to-mode mapping. A read records no change; the field is an input, not a draw.
 
 No capture covers the lobby's map choice; this is **modeled, not measured**.
+
+### Match phase
+
+`Is Waiting For Players`, `Is Assembling Heroes`, `Is In Setup`, `Is Game In Progress`, `Is Between Rounds` and `Is Match Complete` are modeled. The match phase is a lobby fact the simulator does not run, so the values read the scenario's `matchPhase` — `{ "matchPhase": "gameInProgress" }`, one of the six phase ids `docs/scenario.schema.json` lists — and each answers true exactly for its own phase and false for the others: the catalog descriptions name one phase per read, so no read is true across two declared phases. A phase read in a run without `matchPhase` is a `missing_input` of kind `matchPhase`. A read records no change; the field is an input, not a draw.
+
+No capture covers the lobby's phase machine; this is **modeled, not measured**.
 
 ### Objective positions
 

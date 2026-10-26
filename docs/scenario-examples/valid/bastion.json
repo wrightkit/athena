@@ -93,6 +93,7 @@
     "current": 40
   },
   "map": "King's Row",
+  "matchPhase": "gameInProgress",
   "objectives": [
     {
       "x": 0,

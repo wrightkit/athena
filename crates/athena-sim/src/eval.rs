@@ -41,6 +41,9 @@ pub(crate) struct Env<'a> {
     /// `None` when the scenario supplies none, so a `Current Map` value
     /// is a missing input.
     pub map: Option<&'a str>,
+    /// The scenario's `matchPhase`; `None` when the scenario supplies
+    /// none, so a match-phase value is a missing input.
+    pub match_phase: Option<crate::scenario::Phase>,
     /// The scenario's `objectives` positions; `None` when the scenario
     /// supplies none, so an `Objective Position` value is a missing input.
     pub objectives: Option<&'a [crate::vector::Vec3]>,
