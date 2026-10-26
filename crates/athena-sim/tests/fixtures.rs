@@ -243,7 +243,7 @@ fn p6_wait_behavior() {
 }
 
 #[test]
-#[ignore = "no captures yet (`runs` is 0), and the builtin hero values need a workshop-rs release with the pinned file"]
+#[ignore = "no captures yet (`runs` is 0)"]
 fn p7_hero_settings() {
     check_probe("p7-hero-settings");
 }
