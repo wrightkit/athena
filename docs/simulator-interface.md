@@ -35,7 +35,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 | `players` | The player state table: one entry per scenario player, keyed by its `id`. Empty when the run had no scenario. See below. |
 | `hud` | The HUD elements the run created, in creation order. See [HUD elements](#hud-elements). |
 | `effects` | The effect entities the run created or played, in creation order. See [Effect entities](#effect-entities). |
-| `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [Timeline](#timeline). |
+| `timeline` | The per-tick timeline: `{ "entries": [...], "truncated": false }`. See [trace-format.md](trace-format.md). |
 | `missingInputs` | The live inputs the program read but the scenario did not supply. Empty unless `outcome.status` is `missing_input`; at most one entry in version 1. Each entry: `input` (`hero`, `team`, `eventPlayer`, `eventValue`, `button`, `random`, `serverLoad`, `map`, `matchPhase`, `gameMode`, `local`, `position`, `facing`, `objectives`, `state`, `slot`), `player` (the player `id` the input belongs to, `null` for `eventPlayer`, `eventValue`, `random`, `serverLoad`, `map`, `matchPhase`, `gameMode`, `local` and `objectives`), `name` (the event-value name for `eventValue`, the button slot for `button`, the scenario field's own name for `random`, `serverLoad`, `map`, `matchPhase`, `gameMode`, `local`, `position`/`facing`/`slot` for the player-field inputs, `objectives[i]` — the evaluated index — for `objectives`, `state.<key>` for `state`, `null` for the others), `tick`, `construct`, `location` (where the read happened, as under `not_modeled` below). |
 | `expectations` | One result per scenario expectation, in file order: `index`, `status` (`pass`, `fail`, `not_evaluated`), `actual` (the observed value, `null` when it does not exist). |
 
@@ -43,7 +43,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 
 ### `players` rows
 
-Each row repeats the declared `hero` (the scenario text, `null` when undeclared) and `team` (`team1`/`team2`, `null` when undeclared), plus `world`, the catalog-derived state at the end of the run:
+Each row repeats the declared `hero` (the scenario text, `null` when undeclared) and `team` (`team1`/`team2`, `null` when undeclared), plus `state` — the player's `state` values at the end of the run, the declared map overlaid by the cells the state-write actions wrote — `modifiers` — the modifiers the stored-modifier actions recorded on the player, keyed by the modifier name — and `world`, the catalog-derived state at the end of the run:
 
 | `world` field | Meaning |
 | --- | --- |
@@ -142,6 +142,8 @@ No capture covers the positions a mode's objectives take; this is **modeled, not
 In scenario version 2, a player may declare `state`: an object keyed by the accepted ids `docs/scenario.schema.json` lists. The no-extra-argument player reads enumerated in `docs/scenario-format.md` (decision 19) answer from it — each value **scenario-supplied, not simulated**. The two derivations the catalog states exactly are the only exceptions to the no-derivation rule: `Speed Of` yields the length of `velocity` (it reads no key of its own), and `Is Moving` is *not* derived — the scenario supplies it.
 
 A player that declares `state` opts into it fully: a key the program reads but the map does not list is a `missing_input` of kind `state` named `state.<key>` — for `Speed Of`, `state.velocity`. An unknown `state` key or a wrong JSON type refuses the scenario as malformed. A player without `state` keeps the established models — `Health`/`Max Health` read the `world` pools `Damage`/`Heal` move, `Is In Spawn Room` is false in the empty world — and every other listed read is a `missing_input`. Reads that take extra arguments (`Has Status`, `Ability Cooldown`, `Player Stat`) are not state reads and stay `not_modeled`. A read records no change; the field is an input, not a draw.
+
+The state-write actions of athena#116 write a cell over the map (see [State-cell writes and stored modifiers](#state-cell-writes-and-stored-modifiers)): a read consults the cell first, then the declared map, then — for a player without `state` — the established models. A write defines a key the scenario never supplied; a read before any write of an undeclared key is the `missing_input` above.
 
 ### Vector values
 
@@ -245,130 +247,13 @@ Actions the catalog ties to no readable value run as no-ops: arguments still eva
 - `Start Rule(subroutine, ifAlreadyExecuting)` launches the subroutine's own rule instance, applied when the tick loop visits that instance: a subroutine listed later in the program starts on the same tick, an earlier one on the next tick. `Restart Rule` restarts an instance already running or waiting; `Do Nothing` leaves it alone. A started subroutine runs until it finishes or waits; a `Wait` inside resumes on its wake tick. A subroutine rule has no conditions, so `Abort When False`/`Restart When True` do not apply inside it; a `Wait Until` still re-checks its own condition each tick.
 - `Stop Chasing Global/Player Variable` does nothing: the `Chase *` actions are not modeled, so a run never has a chase in progress. The action still resolves its player argument.
 
-### Timeline
+### State-cell writes and stored modifiers
 
-`timeline` holds one `entries` element per tick that had activity — a rule execution or a state change — in order; ticks without activity are omitted. A run that ends `not_modeled` or `missing_input` still returns the entries up to and including the stop tick.
+Two action classes write per-player state directly (athena#116), each modeled — not measured — from its catalog sentence:
 
-The timeline is bounded: `entries` stops at 10 000 (`TIMELINE_ENTRY_LIMIT`), and across all entries `rules` stops at 100 000 (`TIMELINE_RULE_LIMIT`) and `changes` at 100 000 (`TIMELINE_CHANGE_LIMIT`). Records past a bound are dropped — also inside a tick — and `truncated` is `true` once any bound dropped something.
+- **State-cell writes.** A write lands on a `state` key of the player — a cell over the declared `state` map — even on a key the scenario never supplied; a read after the write returns the written value, and a read before any write of an undeclared key is the `missing_input` of decision 19. Every write records a `state` change naming the player and the key, and the write alone changes the cell — no damage, healing, movement or physics follows. The set: `Set Ultimate Charge` writes `ultCharge` (`False`/`True` coerce to `0`/`1`); `Set Player Health` writes `health`, gated by the catalog's "only has an effect on living players" — it reads `isDead` like a program read and skips a dead target, while a scenario that cannot answer `isDead` stops `missing_input`; `Set Max Health` writes `maxHealth` as a percentage of the current max and clamps `health` to the new max ("will ensure that a player's current health will not exceed the new max health"), reading the current values the same way — cell, declared `state` or the pools fallback; `Kill` writes `isDead` true, `Respawn` writes `isDead` false and `health` to the `maxHealth` read — the relocation to a spawn point is a gameplay effect the model does not simulate — and `Resurrect` writes `isDead` false. `Set Facing(player, direction, To World)` writes the scenario `facing` to the direction's angles, like `Teleport` writes `position`; `To Player` is `not_modeled` — the catalog does not state the composition.
+- **Stored modifiers.** An action whose catalog sentence stores a fact no modeled read answers records a `modifier` change — the action id, the player `id` and the evaluated non-target arguments — and stores it on the player's `modifiers` row under a key named for it; nothing reads it back and no `state` or `world` value moves. The set, each with its key: `Set Ultimate Ability Enabled` → `ultEnabled`, `Set Ability 1/2 Enabled` → `ability1Enabled`/`ability2Enabled`, `Set Damage Dealt`/`Set Damage Received`/`Set Healing Dealt`/`Set Healing Received` → `damageDealt`/`damageReceived`/`healingDealt`/`healingReceived`, `Set Move Speed` → `moveSpeed`, `Set Gravity` → `gravity`, `Set Knockback Received` → `knockbackReceived`, `Set Player Allowed Heroes` → `allowedHeroes`, `Start Forcing Player To Be Hero` → `forcedHero` (`Stop Forcing Player To Be Hero` removes it), and `Start Forcing Spawn Room` → `forcedSpawnRoom` on every player of the team.
 
-Each entry:
-
-| Field | Meaning |
-| --- | --- |
-| `tick` | The tick. |
-| `time` | The tick's `Total Time Elapsed` in milliseconds: 15 + tick·16. |
-| `rules` | The rule executions that started, resumed or ended on the tick, in execution order. See below. |
-| `changes` | The state changes the executions made, in execution order across rules. See below. |
-
-Each `rules` element:
-
-| Field | Meaning |
-| --- | --- |
-| `rule` | The rule's index among the program's enabled rules, in file order. |
-| `name` | The rule's name. |
-| `eventPlayer` | The scenario `id` of the run's `Event Player`: an injected event's `eventPlayer`, or the player an `Ongoing - Each Player` run is bound to; `null` for `Ongoing - Global` runs and events without one. |
-| `ended` | How the execution ended on the tick: `finished` (stepped past its last action), `waiting` with `wake` (suspended; `wake` is the tick the wait expires — the resume tick for `Wait`, the timeout tick for `Wait Until`, whose condition can resume it earlier), `stopped` (the run's `not_modeled`/`missing_input` stop was inside this rule — an action, a condition check or an event filter; `rule` then names the rule that owns the stopped construct, the subroutine's inside `Call Subroutine`) or `aborted` (killed by an `Abort When False` wait going false or an `Abort`/`Abort If` action). |
-
-Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as the `Val` form:
-
-| `kind` | Fields | The change |
-| --- | --- | --- |
-| `globalVariable` | `name`, `index`, `old`, `new` | A `Set`/`Modify Global Variable` write. `index` is the element path a `Set`/`Modify Global Variable At Index` action wrote (`null` for a whole-variable write). |
-| `playerVariable` | `player`, `name`, `index`, `old`, `new` | A `Set`/`Modify Player Variable` write; `player` is the player `id`, `index` the element path an `At Index` action wrote. |
-| `world` | `player`, `field`, `old`, `new` | A change to a player's world state or scenario `position`. `field` is `health`, `shield`, `armor`, `cooldown.<slot>` (for example `cooldown.ability1`), `status.<member>` (lowercase `Status` member id; `new` is the expiry seconds, `null` for a `Clear Status`), `button.<slot>` (a `bool` for `Allow`/`Disallow Button`), `position` (a `Teleport` write; `old`/`new` are vectors, `null` when the player had no `position`) or `ultimate.charge`. For pools `old`/`new` are the `current` points; for a cooldown the reported seconds (`null` when the slot had none). Nothing writes `ultimate.charge` in this version. |
-| `hudCreate` | `id`, `element` | A HUD element was created; `id` indexes `hud`, `element` is its `kind`. |
-| `hudDestroy` | `id`, `element` | A HUD element was destroyed. |
-| `effectCreate` | `id`, `element` | An effect entity was created or played; `id` indexes `effects`, `element` is its `kind`. |
-| `effectDestroy` | `id`, `element` | An effect entity was destroyed. |
-| `log` | `text` | A `Log To Inspector` line. |
-| `randomDraw` | `rule`, `construct`, `value` | A `Random *` value drew from the scenario's `random` source: `rule` is the index of the rule the value belongs to (as in `rules`; inside `Call Subroutine`, the subroutine's own), `construct` the value id, `value` the produced value. |
-
-### JSON form
-
-`Trace` implements `serde::Serialize`. The JSON shape is part of the contract:
-
-```json
-{
-  "outcome": {
-    "status": "not_modeled",
-    "construct": "value getPosition",
-    "tick": 0,
-    "location": { "rule": 0, "name": "init", "eventPlayer": null, "action": 1 }
-  },
-  "geometry": "emptyWorld",
-  "logs": [{ "tick": 3, "text": "t0=3.023" }],
-  "globals": { "a": { "type": "number", "value": 1.0 }, "b": { "type": "null" } },
-  "players": {
-    "p1": {
-      "hero": "Ana",
-      "team": "team1",
-      "world": {
-        "health": { "current": 150.0, "max": 200.0 },
-        "shield": { "current": 0.0, "max": 100.0 },
-        "armor": null,
-        "cooldowns": { "ability1": 10.0, "ability2/secondary": 12.0 },
-        "ultimate": { "charge": 0.0, "cost": 2100.0 },
-        "statuses": { "INVINCIBLE": 3.54 },
-        "buttons": { "jump": false }
-      }
-    }
-  },
-  "hud": [
-    {
-      "id": 0,
-      "kind": "hudText",
-      "createdTick": 0,
-      "destroyedTick": null,
-      "recipients": ["p1"],
-      "construct": "action createHudText",
-      "header": { "type": "text", "value": "Score: 0" },
-      "subheader": { "type": "null" },
-      "text": { "type": "null" },
-      "location": "LEFT",
-      "sortOrder": { "type": "number", "value": 0.0 },
-      "headerColor": "WHITE",
-      "subheaderColor": "WHITE",
-      "textColor": "WHITE",
-      "reevaluation": "VISIBILITY_AND_STRING",
-      "specVisibility": "DEFAULT"
-    }
-  ],
-  "effects": [],
-  "timeline": {
-    "entries": [
-      {
-        "tick": 0,
-        "time": 15.0,
-        "rules": [
-          {
-            "rule": 0,
-            "name": "init",
-            "eventPlayer": null,
-            "ended": "stopped"
-          }
-        ],
-        "changes": [
-          {
-            "kind": "globalVariable",
-            "name": "a",
-            "index": null,
-            "old": { "type": "null" },
-            "new": { "type": "number", "value": 1.0 }
-          },
-          { "kind": "hudCreate", "id": 0, "element": "hudText" }
-        ]
-      }
-    ],
-    "truncated": false
-  },
-  "missingInputs": [],
-  "expectations": []
-}
-```
-
-`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ..., "location": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`, `display`; `null` has no `value`. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
-
-Adding a field is compatible. Removing or renaming one, or changing a value's meaning, is a breaking change and needs a version bump of this crate.
 
 ## Fixtures
 

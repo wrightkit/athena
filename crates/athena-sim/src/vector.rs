@@ -128,7 +128,7 @@ pub(crate) fn constant(member: &str) -> Option<Vec3> {
     })
 }
 
-fn vec(value: &Val, construct: &str) -> Result<Vec3, Stop> {
+pub(crate) fn vec(value: &Val, construct: &str) -> Result<Vec3, Stop> {
     match value {
         Val::Vector { x, y, z } => Ok(Vec3 {
             x: *x,
@@ -280,7 +280,7 @@ pub(crate) fn arithmetic(
 /// The unit vector of a facing: `Ryaw(h)·Rpitch(v)·(0,0,1)` — horizontal
 /// 0 is forward (`+z`), positive horizontal turns left (`+x`), positive
 /// vertical looks down (`-y`).
-fn direction(facing: Facing) -> Vec3 {
+pub(crate) fn direction(facing: Facing) -> Vec3 {
     let h = facing.horizontal.to_radians();
     let v = facing.vertical.to_radians();
     Vec3 {

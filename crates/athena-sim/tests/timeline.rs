@@ -274,6 +274,8 @@ rule ("init") {
             Change::EffectDestroy { .. } => "effectDestroy",
             Change::Log { .. } => "log",
             Change::RandomDraw { .. } => "randomDraw",
+            Change::State { .. } => "state",
+            Change::Modifier { .. } => "modifier",
         })
         .collect();
     assert_eq!(

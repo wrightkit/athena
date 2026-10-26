@@ -80,6 +80,16 @@ pub(crate) struct Player {
     /// (`jump`, `ability1`, …). A slot not listed is a live input the
     /// program cannot read: `Is Button Held` on it is a `missing_input`.
     pub held: BTreeMap<String, bool>,
+    /// Values actions wrote into the player's `state` cells, keyed like
+    /// `state` (athena#116). A write lands here even on a player that
+    /// declared no `state`; a read consults it before `state` and the
+    /// no-`state` fallbacks.
+    pub cells: BTreeMap<String, Val>,
+    /// The modifiers the stored-modifier actions recorded on the player
+    /// (athena#116), keyed by the modifier name (`ultEnabled`,
+    /// `damageDealt`, `forcedHero`, …): stored state nothing in the
+    /// model reads back.
+    pub modifiers: BTreeMap<String, Val>,
     /// The `position` the player stands at; `None` when the scenario
     /// omits it, so a position read is a `missing_input`.
     pub position: Option<crate::vector::Vec3>,
@@ -480,6 +490,8 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
             vars,
             state,
             held: player.buttons,
+            cells: BTreeMap::new(),
+            modifiers: BTreeMap::new(),
             position: player.position.map(|position| crate::vector::Vec3 {
                 x: position.x,
                 y: position.y,
