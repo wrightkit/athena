@@ -366,6 +366,9 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             );
             Ok(Val::Array(array[start..end.min(array.len())].to_vec()))
         }
+        // Modeled, not measured: a non-array operand has no element at
+        // any index, so the catalog's "element does not exist" answer —
+        // the same `Null` an out-of-range index yields — applies to it.
         "valueInArray" => {
             let [array, index] = arguments::<2>(name, args)?;
             let (array, index) = (eval(array, env)?, number(&eval(index, env)?)?);
@@ -373,8 +376,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 Val::Array(items) if index >= 0.0 => {
                     Ok(items.get(index as usize).cloned().unwrap_or(Val::Null))
                 }
-                Val::Array(_) => Ok(Val::Null),
-                other => unsupported(format!("valueInArray on {other:?}")),
+                _ => Ok(Val::Null),
             }
         }
         // Modeled, not measured: the client's generator is unmeasured.
