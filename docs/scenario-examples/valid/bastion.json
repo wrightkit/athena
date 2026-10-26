@@ -7,6 +7,7 @@
       "hero": "Ana",
       "team": "team1",
       "host": true,
+      "local": true,
       "slot": 0,
       "position": {
         "x": 0,
@@ -16,6 +17,18 @@
       "facing": {
         "horizontal": 0,
         "vertical": 0
+      },
+      "buttons": {
+        "primaryFire": false,
+        "secondaryFire": false,
+        "ability1": false,
+        "ability2": false,
+        "ultimate": false,
+        "interact": false,
+        "melee": false,
+        "crouch": false,
+        "jump": false,
+        "reload": false
       },
       "state": {
         "health": 200,
@@ -40,7 +53,10 @@
         "isCommunicatingEmote": false,
         "isInSpawnRoom": false,
         "isDummy": false,
-        "isMoving": false
+        "isMoving": false,
+        "isUsingAbility1": false,
+        "isUsingAbility2": false,
+        "isFiringPrimaryFire": false
       }
     },
     {
@@ -56,6 +72,18 @@
       "facing": {
         "horizontal": 90,
         "vertical": 0
+      },
+      "buttons": {
+        "primaryFire": false,
+        "secondaryFire": false,
+        "ability1": false,
+        "ability2": false,
+        "ultimate": false,
+        "interact": false,
+        "melee": false,
+        "crouch": false,
+        "jump": false,
+        "reload": false
       },
       "state": {
         "health": 250,
@@ -80,7 +108,10 @@
         "isCommunicatingEmote": false,
         "isInSpawnRoom": false,
         "isDummy": false,
-        "isMoving": false
+        "isMoving": false,
+        "isUsingAbility1": false,
+        "isUsingAbility2": false,
+        "isFiringPrimaryFire": false
       }
     }
   ],
@@ -94,6 +125,7 @@
   },
   "map": "King's Row",
   "matchPhase": "gameInProgress",
+  "gameMode": "Skirmish",
   "objectives": [
     {
       "x": 0,

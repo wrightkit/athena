@@ -627,3 +627,77 @@ fn a_partial_position_or_facing_is_malformed() {
         }
     }
 }
+
+/// `Vertical Facing Angle Of` reads the same scenario `facing` input
+/// `Facing Direction Of` does — the vertical component (athena#105).
+#[test]
+fn vertical_facing_angle_of_reads_the_scenario_facing() {
+    let trace = run_with(
+        &set_global("Vertical Facing Angle Of(Host Player)"),
+        r#"{ "id": "p1", "host": true, "facing": { "horizontal": 90, "vertical": 45 } }"#,
+    );
+    assert_eq!(global(&trace), &Val::Number(45.0));
+
+    // A player without `facing` is the same missing input
+    // `Facing Direction Of` reports.
+    let trace = run_with(
+        &set_global("Vertical Facing Angle Of(Host Player)"),
+        &format!("{HOST} }}"),
+    );
+    assert_eq!(trace.outcome, Outcome::MissingInput);
+    let [input] = trace.missing_inputs.as_slice() else {
+        panic!("{:?}", trace.missing_inputs);
+    };
+    assert_eq!(input.input, MissingInputKind::Facing);
+    assert_eq!(input.player.as_deref(), Some("p1"));
+}
+
+/// `Players Within Radius` yields the scenario players on the team
+/// whose `position` is within the radius, in roster order — the
+/// catalog notes dead players are picked up too — and `losCheck`
+/// evaluates but holds in the empty world (athena#105).
+#[test]
+fn players_within_radius_filters_by_team_and_distance() {
+    let players = concat!(
+        r#"{ "id": "p1", "team": "team1", "host": true, "position": { "x": 0, "y": 0, "z": 0 } },"#,
+        r#"{ "id": "p2", "team": "team2", "position": { "x": 5, "y": 0, "z": 10 } },"#,
+        r#"{ "id": "p3", "team": "team1", "position": { "x": 3, "y": 0, "z": 0 } }"#
+    );
+
+    // All teams, radius 4 from the origin: p1 and p3, roster order.
+    let trace = run_with(
+        &set_global("Players Within Radius(Vector(0, 0, 0), 4, All Teams, Off)"),
+        players,
+    );
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![Val::Player("p1".into()), Val::Player("p3".into())])
+    );
+
+    // Team 2 alone: p2 is over 11 m out — an empty array.
+    let trace = run_with(
+        &set_global("Players Within Radius(Vector(0, 0, 0), 4, Team 2, Off)"),
+        players,
+    );
+    assert_eq!(global(&trace), &Val::Array(vec![]));
+
+    // A player as the center reads that player's `position`.
+    let trace = run_with(
+        &set_global("Players Within Radius(Host Player, 4, All Teams, Off)"),
+        players,
+    );
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![Val::Player("p1".into()), Val::Player("p3".into())])
+    );
+
+    // A team player without `position` is the same missing input a
+    // `Position Of` read reports.
+    let trace = run_with(
+        &set_global("Players Within Radius(Vector(0, 0, 0), 4, All Teams, Off)"),
+        r#"{ "id": "p1", "team": "team1" }"#,
+    );
+    assert_eq!(trace.outcome, Outcome::MissingInput);
+    assert_eq!(trace.missing_inputs[0].input, MissingInputKind::Position);
+    assert_eq!(trace.missing_inputs[0].player.as_deref(), Some("p1"));
+}

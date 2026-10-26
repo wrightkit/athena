@@ -136,6 +136,27 @@ const READS: &[(&str, &str, &str, &str, &str)] = &[
     ),
     ("Is Dummy Bot", "isDummy", "isDummy", "boolean", "false"),
     ("Is Moving", "isMoving", "isMoving", "boolean", "true"),
+    (
+        "Is Using Ability 1",
+        "isUsingAbility1",
+        "isUsingAbility1",
+        "boolean",
+        "true",
+    ),
+    (
+        "Is Using Ability 2",
+        "isUsingAbility2",
+        "isUsingAbility2",
+        "boolean",
+        "true",
+    ),
+    (
+        "Is Firing Primary",
+        "isFiringPrimaryFire",
+        "isFiringPrimaryFire",
+        "boolean",
+        "true",
+    ),
 ];
 
 /// A scenario v2 player whose `state` holds every declared key.

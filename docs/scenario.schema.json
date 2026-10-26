@@ -28,6 +28,11 @@
       "enum": ["waitingForPlayers", "assemblingHeroes", "setup", "gameInProgress", "betweenRounds", "matchComplete"],
       "description": "The match phase the phase reads answer: one of the six phases the catalog's phase reads define. Constant for the run; a phase read with no field is a missing input."
     },
+    "gameMode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The game mode Current Game Mode reads: a Gamemode member id of the workshop-rs catalog (for example SKIRMISH) or its en-US spelling, matched case-insensitively — the same form map takes. Constant for the run; a Current Game Mode read with no field is a missing input."
+    },
     "objectives": {
       "type": "array",
       "items": { "$ref": "#/$defs/position" },
@@ -140,7 +145,10 @@
         "isCommunicatingEmote": { "type": "boolean", "description": "What Is Communicating Any Emote reads." },
         "isInSpawnRoom": { "type": "boolean", "description": "What Is In Spawn Room reads." },
         "isDummy": { "type": "boolean", "description": "What Is Dummy Bot reads." },
-        "isMoving": { "type": "boolean", "description": "What Is Moving reads — supplied, never derived from velocity." }
+        "isMoving": { "type": "boolean", "description": "What Is Moving reads — supplied, never derived from velocity." },
+        "isUsingAbility1": { "type": "boolean", "description": "What Is Using Ability 1 reads." },
+        "isUsingAbility2": { "type": "boolean", "description": "What Is Using Ability 2 reads." },
+        "isFiringPrimaryFire": { "type": "boolean", "description": "What Is Firing Primary reads — the catalog value id spells the key isFiringPrimaryFire." }
       },
       "description": "The player-state values the no-extra-argument player reads return, keyed by the accepted ids. Each value is scenario-supplied, not simulated. A key the program reads but the map does not list is a missing input naming `state.<key>`; an unknown key or a wrong type is malformed."
     },
@@ -153,6 +161,7 @@
         "hero": { "type": "string", "minLength": 1 },
         "team": { "enum": ["team1", "team2"] },
         "host": { "type": "boolean" },
+        "local": { "type": "boolean", "description": "True marks the player Local Player returns — at most one player. A Local Player read with no marked player is a missing input naming local." },
         "state": { "$ref": "#/$defs/values", "description": "Version 1: the player's variables. Renamed to `vars` in version 2." },
         "buttons": {
           "type": "object",
@@ -172,6 +181,7 @@
         "hero": { "type": "string", "minLength": 1 },
         "team": { "enum": ["team1", "team2"] },
         "host": { "type": "boolean" },
+        "local": { "type": "boolean", "description": "True marks the player Local Player returns — at most one player. A Local Player read with no marked player is a missing input naming local." },
         "vars": { "$ref": "#/$defs/values", "description": "The player's variables — the version-1 `state` field renamed." },
         "state": { "$ref": "#/$defs/playerState" },
         "buttons": {

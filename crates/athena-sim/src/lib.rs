@@ -142,6 +142,10 @@ pub enum MissingInputKind {
     Slot,
     /// The scenario's `matchPhase`.
     MatchPhase,
+    /// The scenario's `gameMode`.
+    GameMode,
+    /// The scenario player marked `local`.
+    Local,
 }
 
 /// A live input the program read but the scenario did not supply. The run

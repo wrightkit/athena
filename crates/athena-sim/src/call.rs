@@ -215,6 +215,30 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 ),
             }
         }
+        // Modeled, not measured: the lobby chooses the game mode outside
+        // the script, so the scenario's `gameMode` supplies it as a
+        // constant — the catalog `Gamemode` member id as text, the same
+        // form a `Game Mode` literal yields. The field is optional but
+        // there is no default; a read without it is a missing input, and
+        // a mid-run change is not modeled.
+        "getCurrentGamemode" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.game_mode {
+                Some(mode) => Ok(Val::Text(mode.to_string())),
+                None => missing(
+                    MissingInputKind::GameMode,
+                    None,
+                    Some("gameMode".to_string()),
+                    format!("value {name}"),
+                ),
+            }
+        }
+        // `Game Mode(...)`: the constant constructor — its argument is a
+        // `Gamemode` enum literal, which yields the member id as text.
+        "gameMode" => {
+            let [mode] = arguments::<1>(name, args)?;
+            eval(mode, env)
+        }
         // Modeled, not measured: the match phase is a scenario fact —
         // the simulator does not run a match, so `matchPhase` supplies
         // it as a constant. The catalog's six phase reads each describe
@@ -315,6 +339,16 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "raiseToPower" => binary(f64::powf),
         "min" => binary(f64::min),
         "max" => binary(f64::max),
+        // `Sine From Radians`: plain math on the evaluated argument; a
+        // non-finite argument has no sine to report.
+        "sin" => {
+            let [value] = arguments::<1>(name, args)?;
+            let sine = number(&eval(value, env)?)?.sin();
+            if !sine.is_finite() {
+                return unsupported(format!("{name} produced a non-finite number"));
+            }
+            Ok(Val::Number(sine))
+        }
         "roundToInteger" => {
             let [value, rounding] = arguments::<2>(name, args)?;
             let n = number(&eval(value, env)?)?;
@@ -359,6 +393,13 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 .next()
                 .unwrap_or(Val::Null))
         }
+        "lastOf" => {
+            let [array] = arguments::<1>(name, args)?;
+            Ok(items(eval(array, env)?, name)?
+                .into_iter()
+                .last()
+                .unwrap_or(Val::Null))
+        }
         "countOf" => {
             let [array] = arguments::<1>(name, args)?;
             Ok(Val::Number(items(eval(array, env)?, name)?.len() as f64))
@@ -368,6 +409,35 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let (mut array, value) = (items(eval(array, env)?, name)?, eval(value, env)?);
             array.push(value);
             Ok(Val::Array(array))
+        }
+        // `Remove From Array` drops every element equal to the operand —
+        // "one or more values removed (if found)", the same removal
+        // `Remove From Array By Value` performs. An array operand drops
+        // every element equal to any element it holds — "each matching
+        // element is removed".
+        "removeFromArray" => {
+            let [array, wanted] = arguments::<2>(name, args)?;
+            let (array, wanted) = (items(eval(array, env)?, name)?, eval(wanted, env)?);
+            let mut kept = Vec::new();
+            for item in array {
+                let removed = match &wanted {
+                    Val::Array(removals) => {
+                        let mut removed = false;
+                        for removal in removals {
+                            if values_equal(&item, removal)? {
+                                removed = true;
+                                break;
+                            }
+                        }
+                        removed
+                    }
+                    wanted => values_equal(&item, wanted)?,
+                };
+                if !removed {
+                    kept.push(item);
+                }
+            }
+            Ok(Val::Array(kept))
         }
         "arrayContains" | "indexOfArrayValue" => {
             let [array, wanted] = arguments::<2>(name, args)?;
