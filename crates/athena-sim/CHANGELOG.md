@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/wrightkit/athena/compare/v0.9.0...v0.10.0) (2026-10-26)
+
+
+### Features
+
+* **sim:** add isDuplicatingAHero to the version-2 state keys ([feb08e1](https://github.com/wrightkit/athena/commit/feb08e1de6e012f7a664fce60a87e6bd7e132b4f)), closes [#111](https://github.com/wrightkit/athena/issues/111)
+* **sim:** read Null as the zero vector in vector positions ([13a9b6a](https://github.com/wrightkit/athena/commit/13a9b6a8a9edd11d032b2577b1e86caa159c6998)), closes [#108](https://github.com/wrightkit/athena/issues/108)
+
 ## [0.9.0](https://github.com/wrightkit/athena/compare/v0.8.0...v0.9.0) (2026-10-26)
 
 
