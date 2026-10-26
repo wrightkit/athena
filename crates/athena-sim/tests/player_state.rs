@@ -157,6 +157,13 @@ const READS: &[(&str, &str, &str, &str, &str)] = &[
         "boolean",
         "true",
     ),
+    (
+        "Is Duplicating",
+        "isDuplicatingAHero",
+        "isDuplicatingAHero",
+        "boolean",
+        "true",
+    ),
 ];
 
 /// A scenario v2 player whose `state` holds every declared key.
@@ -346,6 +353,7 @@ fn speed_of_reports_velocity_as_its_missing_input() {
 fn a_wrong_type_state_value_is_malformed() {
     for (key, value, ty) in [
         ("isMoving", "1", "a boolean"),
+        ("isDuplicatingAHero", "0", "a boolean"),
         ("health", "true", "a number"),
         ("velocity", "2", "a vector"),
         ("velocity", r#"{ "x": 1, "y": 2 }"#, "a vector"),

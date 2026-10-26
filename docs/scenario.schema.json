@@ -148,7 +148,8 @@
         "isMoving": { "type": "boolean", "description": "What Is Moving reads — supplied, never derived from velocity." },
         "isUsingAbility1": { "type": "boolean", "description": "What Is Using Ability 1 reads." },
         "isUsingAbility2": { "type": "boolean", "description": "What Is Using Ability 2 reads." },
-        "isFiringPrimaryFire": { "type": "boolean", "description": "What Is Firing Primary reads — the catalog value id spells the key isFiringPrimaryFire." }
+        "isFiringPrimaryFire": { "type": "boolean", "description": "What Is Firing Primary reads — the catalog value id spells the key isFiringPrimaryFire." },
+        "isDuplicatingAHero": { "type": "boolean", "description": "What Is Duplicating reads — the catalog value id spells the key isDuplicatingAHero." }
       },
       "description": "The player-state values the no-extra-argument player reads return, keyed by the accepted ids. Each value is scenario-supplied, not simulated. A key the program reads but the map does not list is a missing input naming `state.<key>`; an unknown key or a wrong type is malformed."
     },

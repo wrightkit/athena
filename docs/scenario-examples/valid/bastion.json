@@ -56,7 +56,8 @@
         "isMoving": false,
         "isUsingAbility1": false,
         "isUsingAbility2": false,
-        "isFiringPrimaryFire": false
+        "isFiringPrimaryFire": false,
+        "isDuplicatingAHero": false
       }
     },
     {
@@ -111,7 +112,8 @@
         "isMoving": false,
         "isUsingAbility1": false,
         "isUsingAbility2": false,
-        "isFiringPrimaryFire": false
+        "isFiringPrimaryFire": false,
+        "isDuplicatingAHero": false
       }
     }
   ],
