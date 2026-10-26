@@ -715,7 +715,8 @@ pub(crate) fn run_instance(
                                     tick,
                                     &world.changes,
                                 )
-                            });
+                            })
+                            .or_else(|| crate::noop::action(other, args, &env));
                     // `env` shares a borrow of `world.players`, so it ends
                     // here and the delegated actions take `world` itself.
                     let result = result.or_else(|| {
