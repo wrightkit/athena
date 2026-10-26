@@ -9,6 +9,7 @@ mod hero_settings;
 mod hud;
 mod load;
 mod modify;
+mod player;
 mod scenario;
 mod sched;
 mod state;

@@ -1,18 +1,14 @@
 //! Catalog-call values: the `Value::Call` arms — arithmetic, arrays,
-//! player-state reads, strings and the `Random *` draws a scenario's
-//! `random` source feeds.
-
-use std::collections::BTreeMap;
+//! strings and the `Random *` draws a scenario's `random` source feeds.
+//! The player-roster and player-state reads have their own dispatcher
+//! in `player.rs`.
 
 use workshop_rs::Value;
 
 use crate::ambiguous;
-use crate::eval::{Env, arguments, button_slot, eval, number, player_id, values_equal};
-use crate::scenario::{Player, ServerLoad, Team};
-use crate::state::WorldSlot;
-use crate::{
-    Change, MissingInput, MissingInputKind, NotModeled, PlayerWorld, PoolState, Stop, Val,
-};
+use crate::eval::{Env, arguments, eval, number, values_equal};
+use crate::scenario::ServerLoad;
+use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
     Err(Stop::NotModeled(NotModeled::new(what)))
@@ -39,25 +35,6 @@ const EVENT_VALUES: &[&str] = &[
     "eventWasEnvironment",
     "eventWasHealthPack",
 ];
-
-/// The resolved world state of a scenario player, as the player-state
-/// reading values (`Health`, `Max Health`, `Ability Cooldown`) see it. A
-/// player the scenario did not declare, or whose state failed to resolve at
-/// run start, is reported, never defaulted — reading world state is a touch,
-/// like `Damage`/`Heal`.
-fn player_world<'a>(
-    players: &'a BTreeMap<String, Player>,
-    id: &str,
-) -> Result<&'a PlayerWorld, Stop> {
-    let Some(player) = players.get(id) else {
-        return unsupported(format!("`{id}` is not a scenario player"));
-    };
-    match &player.world {
-        WorldSlot::Resolved(state) => Ok(&state.world),
-        WorldSlot::Failed(error) => Err(Stop::NotModeled(error.clone())),
-        WorldSlot::Unresolved => unreachable!("player world state is resolved at run start"),
-    }
-}
 
 /// The truthiness a condition-family value (`and`, `or`, `not`,
 /// `ifThenElse`) reads: a boolean as itself, a number or `Null` (as `0`)
@@ -255,55 +232,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 .last_entity
                 .map_or(Val::Null, |id| Val::Number(id as f64)))
         }
-        "allPlayers" => {
-            let [team] = arguments::<1>(name, args)?;
-            // The `Team` argument is an enum literal in practice; an
-            // evaluated member-id text (as `Team Of` yields) names the
-            // same member.
-            let filter = match team {
-                Value::Enum { value, .. } => value.clone(),
-                other => match eval(other, env)? {
-                    Val::Text(text) => text,
-                    other => return unsupported(format!("allPlayers on {other:?}")),
-                },
-            };
-            let members = |team: Team| {
-                env.players
-                    .iter()
-                    .filter(|(_, player)| player.team == Some(team))
-                    .map(|(id, _)| Val::Player(id.clone()))
-                    .collect()
-            };
-            Ok(Val::Array(match filter.as_str() {
-                "ALL" => env
-                    .players
-                    .keys()
-                    .map(|id| Val::Player(id.clone()))
-                    .collect(),
-                "TEAM_1" => members(Team::Team1),
-                "TEAM_2" => members(Team::Team2),
-                other => return unsupported(format!("allPlayers on {other}")),
-            }))
-        }
-        // Modeled, not measured: the client's element order is
-        // unmeasured, so the catalog's `Hero` member order is the
-        // order. Elements are the member ids `Hero Of` yields, so
-        // `Array Contains(All Heroes(), Hero Of(p))` holds.
-        "allHeroes" => {
-            let [] = arguments::<0>(name, args)?;
-            let catalog = workshop_rs::catalog::Catalog::builtin_ref()
-                .map_err(|error| NotModeled::new(format!("catalog unavailable: {error}")))?;
-            let Some(domain) = catalog.enum_domain("Hero") else {
-                return unsupported("catalog has no `Hero` domain");
-            };
-            Ok(Val::Array(
-                domain
-                    .members
-                    .iter()
-                    .map(|member| Val::Text(member.member.clone()))
-                    .collect(),
-            ))
-        }
         "and" | "or" => {
             let [a, b] = arguments::<2>(name, args)?;
             // `&&`/`||` short-circuit: the right side is not read when the
@@ -326,13 +254,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 eval(when_false, env)
             }
         }
-        "hostPlayer" => {
-            let [] = arguments::<0>(name, args)?;
-            match env.players.iter().find(|(_, player)| player.host) {
-                Some((id, _)) => Ok(Val::Player(id.clone())),
-                None => unsupported("Host Player: the scenario marks no host player"),
-            }
-        }
         // Modeled, not measured: the simulator runs one lobby whose settings
         // nobody edits, so a Workshop Setting yields its declared `default`
         // argument. `min`/`max`, `options` and `sortOrder` are authoring
@@ -352,16 +273,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 // yields, so a hero setting and a played hero compare equal.
                 Value::Enum { value, .. } => Ok(Val::Text(value.clone())),
                 _ => eval(default, env),
-            }
-        }
-        // Modeled, not measured: a player with a hero is spawned and alive.
-        "hasSpawned" | "isAlive" => {
-            let [player] = arguments::<1>(name, args)?;
-            let id = player_id(player, env)?;
-            match env.players.get(&id) {
-                Some(player) if player.hero.is_some() => Ok(Val::Bool(true)),
-                Some(_) => unsupported(format!("{name} of player `{id}` without a hero")),
-                None => unsupported(format!("`{id}` is not a scenario player")),
             }
         }
         // `Number|Boolean|Vector` (and a `Player`, read as its
@@ -573,31 +484,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 }
             }
         }
-        "getHero" | "teamOf" => {
-            let [player] = arguments::<1>(name, args)?;
-            let id = player_id(player, env)?;
-            // `Hero Of` yields the catalog member id the declared `hero`
-            // resolves to — hero text compares by member id, not by the
-            // scenario's spelling; `Team Of` likewise yields the member id
-            // of the declared `team`.
-            let resolved = env.players.get(&id).and_then(|player| match name {
-                "getHero" => player.hero_member.clone(),
-                _ => player.team.map(|team| team.member_id().to_string()),
-            });
-            match resolved {
-                Some(value) => Ok(Val::Text(value)),
-                None => missing(
-                    if name == "getHero" {
-                        MissingInputKind::Hero
-                    } else {
-                        MissingInputKind::Team
-                    },
-                    Some(id),
-                    None,
-                    format!("value {name}"),
-                ),
-            }
-        }
         name if EVENT_VALUES.contains(&name) => {
             let [] = arguments::<0>(name, args)?;
             match env.event.and_then(|event| event.values.get(name)).cloned() {
@@ -609,77 +495,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     format!("value {name}"),
                 ),
             }
-        }
-        "getHealth" | "getMaxHealth" => {
-            let [player] = arguments::<1>(name, args)?;
-            let id = player_id(player, env)?;
-            let world = player_world(env.players, &id)?;
-            let pools = [
-                Some(&world.health),
-                world.shield.as_ref(),
-                world.armor.as_ref(),
-            ];
-            let pick = if name == "getHealth" {
-                |pool: &PoolState| pool.current
-            } else {
-                |pool: &PoolState| pool.max
-            };
-            Ok(Val::Number(pools.into_iter().flatten().map(pick).sum()))
-        }
-        // Modeled, not measured: a status is held while its `Set Status`
-        // expiry is still ahead.
-        "hasStatus" => {
-            let [player, status] = arguments::<2>(name, args)?;
-            let id = player_id(player, env)?;
-            let Value::Enum { value: status, .. } = status else {
-                return unsupported(format!("{name} status {status:?}"));
-            };
-            let world = player_world(env.players, &id)?;
-            Ok(Val::Bool(
-                world
-                    .statuses
-                    .get(status.as_str())
-                    .is_some_and(|until| *until > env.now),
-            ))
-        }
-        // A live input: the held state comes from the scenario player's
-        // `buttons` map; a button not listed is a missing input.
-        "isButtonHeld" => {
-            let [player, button] = arguments::<2>(name, args)?;
-            let id = player_id(player, env)?;
-            let slot = button_slot(button)?;
-            match env.players.get(&id) {
-                Some(player) => match player.held.get(slot) {
-                    Some(held) => Ok(Val::Bool(*held)),
-                    None => missing(
-                        MissingInputKind::Button,
-                        Some(id),
-                        Some(slot.to_string()),
-                        "value isButtonHeld",
-                    ),
-                },
-                None => unsupported(format!("`{id}` is not a scenario player")),
-            }
-        }
-        "getAbilityCooldown" => {
-            let [player, button] = arguments::<2>(name, args)?;
-            let id = player_id(player, env)?;
-            let slot = button_slot(button)?;
-            let world = player_world(env.players, &id)?;
-            if let Some(seconds) = world.cooldowns.get(slot) {
-                return Ok(Val::Number(*seconds));
-            }
-            // A slot recorded only under a variant (`slot/variant`) has no
-            // honest answer for the bare button; a slot with no recorded
-            // cooldown at all reports 0 — the ability is never on cooldown.
-            if world
-                .cooldowns
-                .keys()
-                .any(|key| key.starts_with(&format!("{slot}/")))
-            {
-                return unsupported(format!("ability cooldown on variant-keyed slot {slot}"));
-            }
-            Ok(Val::Number(0.0))
         }
         "customString" => {
             let [template, rest @ ..] = args else {
@@ -770,8 +585,10 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             }
             produced(source.replace(&pattern, &replacement), name)
         }
-        // The vector family has its own dispatcher; it ends unknown
-        // names in `not_modeled` the same way.
-        other => crate::vector::call(other, args, env),
+        // The player-roster and player-state family has its own
+        // dispatcher, then the vector family; each ends the unknown
+        // names it owns in `not_modeled` the same way.
+        other => crate::player::call(other, args, env)
+            .unwrap_or_else(|| crate::vector::call(other, args, env)),
     }
 }
