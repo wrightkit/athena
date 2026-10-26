@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 use workshop_rs::Value;
 
 use crate::call::Random;
+use crate::effects::Effects;
+use crate::hud::Hud;
 use crate::scenario::{EventCtx, Player, ServerLoad};
 use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
@@ -15,9 +17,10 @@ pub(crate) struct Env<'a> {
     /// The player an `Ongoing - Each Player` instance runs for; `Event
     /// Player` reads it when no injected event supplies one.
     pub each_player: Option<&'a str>,
-    /// The `id` of the newest `hudText`/`progressBarHud` element; what
-    /// `Last Text ID` reads. `None` before the first one is created.
-    pub last_text_id: Option<u64>,
+    /// The display elements the run created; what `Last Text ID` and
+    /// `Text Count` read. A `RefCell` so an `Env` — which borrows it —
+    /// can coexist with the action that mutates it, like `changes`.
+    pub hud: &'a RefCell<Hud>,
     /// The element and place `Current Array Element`/`Current Array Index`
     /// read; an element-context array value binds it per element of its
     /// array argument. `None` outside one.
@@ -28,9 +31,10 @@ pub(crate) struct Env<'a> {
     /// a fresh table per pass, and one `Wait Until` call shares a table
     /// across its per-tick re-checks.
     pub once: &'a RefCell<BTreeMap<usize, Val>>,
-    /// The `id` of the newest `createEffect` entity; what
-    /// `Last Created Entity` reads. `None` before the first one.
-    pub last_entity: Option<u64>,
+    /// The entities the run created or played; what `Last Created
+    /// Entity`, `Entity Exists` and `Entity Count` read. A `RefCell`
+    /// like `hud`.
+    pub effects: &'a RefCell<Effects>,
     /// The scenario's `random` source; `None` when the scenario supplies
     /// none, so a `Random *` value is a missing input.
     pub random: Option<&'a RefCell<Random>>,

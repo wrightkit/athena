@@ -250,28 +250,29 @@ fn a_message_toggle_on_a_missing_event_player_is_a_missing_input() {
     assert_eq!(trace.missing_inputs[0].input, MissingInputKind::EventPlayer);
 }
 
-/// `Create In-World Text` is HUD-related but not modeled: the run stops,
-/// and elements created before the stop are still listed.
-const IN_WORLD: &str = r#"
+/// `Create Dummy Bot` is display-adjacent but not modeled — the roster
+/// family needs a mutable player roster: the run stops, and elements
+/// created before the stop are still listed.
+const UNMODELED: &str = r#"
 rule ("init") {
     event {
         Ongoing - Global;
     }
     actions {
         Create HUD Text(All Players(All Teams), "h", Null, Null, Top, 0, Color(White), Color(White), Color(White), None, Default Visibility);
-        Create In-World Text(All Players(All Teams), "x", Vector(0, 0, 0), 1, Do Not Clip, None, Color(White), Default Visibility);
+        Create Dummy Bot(Hero(Ana), Team 1, 0, Vector(0, 0, 0), Vector(0, 0, 0));
     }
 }
 "#;
 
 #[test]
-fn an_unmodeled_hud_action_stops_the_run_and_keeps_earlier_elements() {
-    let trace = run(IN_WORLD, &scenario(TWO_TEAMS));
+fn an_unmodeled_action_stops_the_run_and_keeps_earlier_elements() {
+    let trace = run(UNMODELED, &scenario(TWO_TEAMS));
     let Outcome::NotModeled(not_modeled) = &trace.outcome else {
         panic!("expected NotModeled, got {:?}", trace.outcome);
     };
     assert!(
-        not_modeled.construct.contains("createInWorldText"),
+        not_modeled.construct.contains("createDummyBot"),
         "{}",
         not_modeled.construct
     );

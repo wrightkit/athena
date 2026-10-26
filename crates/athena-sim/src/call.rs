@@ -276,17 +276,43 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "lastTextId" => {
             let [] = arguments::<0>(name, args)?;
             Ok(env
+                .hud
+                .borrow()
                 .last_text_id
                 .map_or(Val::Null, |id| Val::Number(id as f64)))
         }
-        // Modeled, not measured: `Last Created Entity` is the id of the
-        // newest `createEffect` entity; other entity-creating actions are
-        // not modeled.
+        // `Last Created Entity` is the id of the newest durable entity;
+        // a `playEffect` has no entity id to hand out.
         "lastCreatedEntity" => {
             let [] = arguments::<0>(name, args)?;
             Ok(env
-                .last_entity
+                .effects
+                .borrow()
+                .last_created
                 .map_or(Val::Null, |id| Val::Number(id as f64)))
+        }
+        // The catalog's `Player|EntityId` names "the specified player,
+        // icon entity, or effect entity". A scenario player exists for
+        // the whole run — no action changes the roster; a number
+        // answers from the entity table and `Null` names nothing.
+        "entityExists" => {
+            let [entity] = arguments::<1>(name, args)?;
+            match eval(entity, env)? {
+                Val::Player(_) => Ok(Val::Bool(true)),
+                Val::Number(id) => Ok(Val::Bool(env.effects.borrow().entity_exists(id))),
+                Val::Null => Ok(Val::Bool(false)),
+                other => unsupported(format!("{name} on {other:?}")),
+            }
+        }
+        // "The current number" counts the live elements — a destroyed
+        // one is no longer an instance.
+        "getNumberOfEntityIds" => {
+            let [] = arguments::<0>(name, args)?;
+            Ok(Val::Number(env.effects.borrow().entity_count() as f64))
+        }
+        "getNumberOfTextIds" => {
+            let [] = arguments::<0>(name, args)?;
+            Ok(Val::Number(env.hud.borrow().text_count() as f64))
         }
         "and" | "or" => {
             let [a, b] = arguments::<2>(name, args)?;

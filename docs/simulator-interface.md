@@ -176,14 +176,14 @@ A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` �
 
 ### HUD elements
 
-The first HUD layer models `createHudText`, `progressBarHud`, `bigMessage`, `smallMessage`, `setObjectiveDescription`, the destroy actions `destroyHudText`, `destroyAllHudText`, `destroyProgressBarHud` and `destroyAllProgressBarHudText`, and `enableMessages`/`disableMessages`. Any other HUD-related action or value is `not_modeled`.
+The first HUD layer models `createHudText`, `progressBarHud`, `createInWorldText`, `createProgressBarInWorldText`, `bigMessage`, `smallMessage`, `setObjectiveDescription`, the destroy actions `destroyHudText`, `destroyAllHudText`, `destroyProgressBarHud`, `destroyAllProgressBarHudText`, `destroyInWorldText`, `destroyAllInWorldText`, `destroyProgressBarInWorldText` and `destroyAllProgressBarInWorldText`, and `enableMessages`/`disableMessages`. Any other HUD-related action or value is `not_modeled`.
 
 `hud` holds one entry per element the run created, in creation order — including elements destroyed since, so a destroy never removes an entry:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Stable id in creation order, starting at 0. The `lastTextId` value resolves to the `id` of the newest `hudText` or `progressBarHud` element — the kinds a destroy action can target — or `null` before the first one. |
-| `kind` | `hudText`, `progressBarHud`, `bigMessage`, `smallMessage` or `objectiveDescription`. |
+| `id` | Stable id in creation order, starting at 0. The `lastTextId` value resolves to the `id` of the newest text element — `hudText`, `progressBarHud`, `inWorldText` or `progressBarInWorldText`, the four kinds the catalog's four text creates produce — or `null` before the first one. `getNumberOfTextIds` is the number of live elements of those kinds. |
+| `kind` | `hudText`, `progressBarHud`, `inWorldText`, `progressBarInWorldText`, `bigMessage`, `smallMessage` or `objectiveDescription`. |
 | `createdTick` | The tick the element was created on. |
 | `destroyedTick` | The tick a destroy action removed the element, `null` while it is present. An element counts as present exactly when `destroyedTick` is `null`. |
 | `recipients` | The scenario `id`s of the players the element is presented to: the evaluated `Visible To` argument. A recipient group (for example `All Players(Team 1)`) resolves from the declared `team`s. |
@@ -195,14 +195,18 @@ The other fields are the evaluated arguments of the creating action; only the ar
 | --- | --- | --- |
 | `header` | `hudText`, `bigMessage`, `smallMessage` | the header text |
 | `subheader` | `hudText` | the subheader text |
-| `text` | `hudText`, `progressBarHud`, `objectiveDescription` | the text |
-| `value` | `progressBarHud` | the bar value |
+| `text` | `hudText`, `progressBarHud`, `inWorldText`, `progressBarInWorldText`, `objectiveDescription` | the text |
+| `value` | `progressBarHud`, `progressBarInWorldText` | the bar value |
 | `location` | `hudText`, `progressBarHud` | the `HudPosition` member id |
+| `position` | `inWorldText`, `progressBarInWorldText` | the evaluated `Vector|Player` position — the model has no geometry |
+| `scale` | `inWorldText`, `progressBarInWorldText` | the scale |
+| `clipping` | `inWorldText`, `progressBarInWorldText` | the `Clipping` member id |
 | `sortOrder` | `hudText`, `progressBarHud` | the sort order |
 | `headerColor`, `subheaderColor`, `textColor` | `hudText` | the `Color` member id, or the `Val` form for a non-member |
-| `progressBarColor`, `textColor` | `progressBarHud` | the `Color` member id, or the `Val` form likewise |
-| `reevaluation` | `hudText`, `progressBarHud`, `objectiveDescription` | the reevaluation member id |
-| `specVisibility` | `hudText`, `progressBarHud` | the `SpecVisibility` member id |
+| `progressBarColor`, `textColor` | `progressBarHud`, `progressBarInWorldText` | the `Color` member id, or the `Val` form likewise |
+| `color` | `inWorldText`, `progressBarInWorldText` | the `Color` member id, or the `Val` form likewise |
+| `reevaluation` | `hudText`, `progressBarHud`, `inWorldText`, `progressBarInWorldText`, `objectiveDescription` | the reevaluation member id |
+| `specVisibility` | `hudText`, `progressBarHud`, `inWorldText`, `progressBarInWorldText` | the `SpecVisibility` member id |
 
 HUD behavior is **modeled** with these limits:
 
@@ -210,17 +214,18 @@ HUD behavior is **modeled** with these limits:
 - Message display duration and stacking are client display behavior with no capture. `enableMessages`/`disableMessages` resolve their player argument but produce no element and no other trace state.
 - The objective description is a singleton per player: a new `objectiveDescription` removes its recipients from every present `objectiveDescription` element, which is destroyed (`destroyedTick` set) when no recipient remains.
 - A destroy action affects only elements of its own kind. An unknown, already-destroyed or `null` text id destroys nothing.
+- The catalog defines no `Set ...`/`Update ...` action that takes a text or entity id; any id-taking action outside the destroy set is `not_modeled`.
 
 ### Effect entities
 
-The effect layer models `createEffect`, `playEffect`, `destroyEffect` and `destroyAllEffects`, recorded like HUD elements but without geometry: the model never represents positions. `effects` holds one entry per entity the run created or played, in creation order — including entities destroyed since:
+The effect layer models `createEffect`, `createBeamEffect`, `createIcon`, `createProjectileEffect`, `playEffect`, `destroyEffect`, `destroyAllEffects`, `destroyIcon` and `destroyAllIcons`, recorded like HUD elements but without geometry: the model never represents positions. `effects` holds one entry per entity the run created or played, in creation order — including entities destroyed since:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Stable id in creation order, starting at 0. `lastCreatedEntity` resolves to the `id` of the newest `effect` entity or `null` before the first one; a played effect has no entity id. |
-| `kind` | `effect` (a `createEffect` entity, which `destroyEffect` can target) or `playedEffect` (a `playEffect`, present only on its tick). |
+| `id` | Stable id in creation order, starting at 0. `lastCreatedEntity` resolves to the `id` of the newest durable entity — `effect`, `beam`, `icon` or `projectileEffect` — or `null` before the first one; a played effect has no entity id. `getNumberOfEntityIds` is the number of live `effect`, `beam` and `icon` entities — the kinds the catalog's sentence names; a `projectileEffect` is not counted. |
+| `kind` | `effect` (`createEffect`), `beam` (`createBeamEffect`), `icon` (`createIcon`), `projectileEffect` (`createProjectileEffect`) or `playedEffect` (a `playEffect`, present only on its tick). |
 | `createdTick` | The tick the entity was created or played on. |
-| `destroyedTick` | The tick a `destroyEffect` removed the entity, `null` while it is present; a `playedEffect` records `createdTick` here. |
+| `destroyedTick` | The tick a destroy action removed the entity, `null` while it is present; a `playedEffect` records `createdTick` here. |
 | `recipients` | The scenario `id`s of the players the entity is presented to: the evaluated `Visible To` argument. |
 | `construct` | A short description of the creating statement, for people, as in `outcome`. Do not match on it. |
 
@@ -228,13 +233,20 @@ The other fields are the evaluated arguments of the action; only the arguments t
 
 | Field | Kinds | Argument |
 | --- | --- | --- |
-| `effect` | both | the `Effect`/`DynamicEffect` member id of the `Type` argument |
-| `color` | both | the `Color` member id, or the `Val` form for a non-member (a `Custom Color`) |
-| `position` | both | the evaluated `Position` argument as a `Val`: a player yields `{ "type": "player", "value": "<id>" }` |
-| `radius` | both | the radius |
-| `reevaluation` | `effect` | the `EffectReeval` member id |
+| `effect` | `effect`, `beam`, `projectileEffect`, `playedEffect` | the `Effect`/`DynamicEffect`, `Beam` or `Projectile` member id of the `Type` argument |
+| `icon` | `icon` | the `Icon` member id |
+| `color` | `effect`, `beam`, `icon`, `playedEffect` | the `Color` member id, or the `Val` form for a non-member (a `Custom Color`) |
+| `position` | `effect`, `icon`, `playedEffect` | the evaluated `Position` argument as a `Val`: a player yields `{ "type": "player", "value": "<id>" }` |
+| `radius` | `effect`, `playedEffect` | the radius |
+| `startPosition`, `endPosition` | `beam` | the beam's two positions |
+| `direction`, `oversize` | `projectileEffect` | the direction and scale |
+| `friendlyTo` | `projectileEffect` | the scenario `id`s the entity appears friendly to |
+| `showWhenOffscreen` | `icon` | whether the icon renders off-screen |
+| `reevaluation` | `effect`, `beam`, `icon`, `projectileEffect` | the reevaluation member id |
 
-A position expression that needs unmodeled geometry stops the run as `not_modeled` before the entity is recorded; under the empty-world model `Nearest Walkable Position` and the raycasts evaluate instead (see [Geometry (empty world)](#geometry-empty-world)). No capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing. `destroyAllEffects` removes every live `effect` entity; a played effect is already destroyed on its tick.
+`entityExists` answers the catalog's `Player|EntityId`: a scenario player exists for the whole run (the roster never changes); a number answers whether the entity table holds a live entity of that id — a text id is just a number here, so the answer follows whatever live entity holds it — and `Null` names nothing. Any other value is `not_modeled`.
+
+A position expression that needs unmodeled geometry stops the run as `not_modeled` before the entity is recorded; under the empty-world model `Nearest Walkable Position` and the raycasts evaluate instead (see [Geometry (empty world)](#geometry-empty-world)). No capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` and `destroyAllEffects` target `effect` and `beam` entities — the catalog names both create actions in the destroy sentence; `destroyIcon` and `destroyAllIcons` target `icon` entities. An unknown, already-destroyed or `null` entity id destroys nothing. A `projectileEffect` is durable but no destroy action names it, and a played effect is already destroyed on its tick.
 
 ### Actions with no readable effect
 

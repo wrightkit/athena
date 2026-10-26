@@ -304,7 +304,7 @@ pub struct PlayerState {
     pub world: Option<PlayerWorld>,
 }
 
-/// Which create action produced a HUD element.
+/// Which action produced a display element.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HudKind {
@@ -312,6 +312,10 @@ pub enum HudKind {
     HudText,
     /// `progressBarHud`.
     ProgressBarHud,
+    /// `createInWorldText`.
+    InWorldText,
+    /// `createProgressBarInWorldText`.
+    ProgressBarInWorldText,
     /// `bigMessage`.
     BigMessage,
     /// `smallMessage`.
@@ -320,13 +324,22 @@ pub enum HudKind {
     ObjectiveDescription,
 }
 
-/// Which action produced an effect entity.
+/// Which action produced an entity.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EffectKind {
     /// `createEffect` — a durable entity `Destroy Effect` can target and
     /// `Last Created Entity` reads.
     Effect,
+    /// `createBeamEffect` — a durable entity `Destroy Effect` can target
+    /// and `Last Created Entity` reads.
+    Beam,
+    /// `createIcon` — a durable entity `Destroy Icon` can target and
+    /// `Last Created Entity` reads.
+    Icon,
+    /// `createProjectileEffect` — a durable entity `Last Created Entity`
+    /// reads; no destroy action names it.
+    ProjectileEffect,
     /// `playEffect` — a one-shot effect, present only on its tick.
     PlayedEffect,
 }
@@ -342,18 +355,24 @@ fn member_or_val<S: serde::Serializer>(
     }
 }
 
-/// The evaluated arguments an effect entity records, present only when the
+/// The evaluated arguments an entity records, present only when the
 /// action takes the argument. [`Val`]s serialize as values; enum arguments
-/// (effect type, color, reevaluation) as the catalog member id — a `color`
-/// holding no member id takes the [`Val`] form, for example an opaque
-/// `display` value. `position` is whatever the expression evaluated to — the
-/// model has no geometry, and needing it is `not_modeled`.
+/// (entity type, icon, color, reevaluation) as the catalog member id — a
+/// `color` holding no member id takes the [`Val`] form, for example an
+/// opaque `display` value. A `position`-family field is whatever the
+/// expression evaluated to — the model has no geometry, and needing it is
+/// `not_modeled`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectArgs {
-    /// The `Effect`/`DynamicEffect` member id of the `Type` argument.
+    /// The member id of the `Type` argument: `Effect`/`DynamicEffect` for
+    /// `createEffect`/`playEffect`, `Beam` for `createBeamEffect`,
+    /// `Projectile` for `createProjectileEffect`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effect: Option<String>,
+    /// The `Icon` member id of a `createIcon` `Icon` argument.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     #[serde(
         skip_serializing_if = "Option::is_none",
         serialize_with = "member_or_val"
@@ -363,18 +382,38 @@ pub struct EffectArgs {
     pub position: Option<Val>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub radius: Option<Val>,
+    /// The `StartPosition` of a `createBeamEffect`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_position: Option<Val>,
+    /// The `EndPosition` of a `createBeamEffect`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_position: Option<Val>,
+    /// The `Direction` of a `createProjectileEffect`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<Val>,
+    /// The `Oversize` of a `createProjectileEffect`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oversize: Option<Val>,
+    /// The `Show When Offscreen` of a `createIcon`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_when_offscreen: Option<Val>,
+    /// The scenario `id`s of the players a `createProjectileEffect`
+    /// appears friendly to: the evaluated `Friendly To` argument.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub friendly_to: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reevaluation: Option<String>,
 }
 
-/// An effect entity the run created or played. The `effects` trace field
-/// lists every entity in creation order; a played effect records
+/// An entity the run created or played. The `effects` trace field lists
+/// every entity in creation order; a played effect records
 /// `destroyedTick` equal to `createdTick` — it is never present past its
 /// tick.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EffectElement {
     /// Stable id in creation order, starting at 0. `lastCreatedEntity`
-    /// resolves to the `id` of the newest `effect` element.
+    /// resolves to the `id` of the newest durable element — every kind
+    /// but `playedEffect`.
     pub id: u64,
     pub kind: EffectKind,
     /// The tick the entity was created or played on.
@@ -395,10 +434,12 @@ pub struct EffectElement {
     pub args: EffectArgs,
 }
 
-/// The evaluated arguments a HUD element records, present only when the action
-/// takes the argument. [`Val`]s serialize as values; enum arguments (location,
-/// reevaluation, spectator visibility) as the catalog member id — a color holding
-/// no member id takes the [`Val`] form, for example an opaque `display` value.
+/// The evaluated arguments a display element records, present only when the
+/// action takes the argument. [`Val`]s serialize as values; enum arguments
+/// (location, clipping, reevaluation, spectator visibility) as the catalog
+/// member id — a color holding no member id takes the [`Val`] form, for
+/// example an opaque `display` value. `position` is whatever the expression
+/// evaluated to — the model has no geometry.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HudArgs {
@@ -412,6 +453,16 @@ pub struct HudArgs {
     pub value: Option<Val>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+    /// The `position` of an in-world text — the evaluated `Vector|Player`
+    /// argument.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<Val>,
+    /// The `scale` of an in-world text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale: Option<Val>,
+    /// The `Clipping` member id of an in-world text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clipping: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_order: Option<Val>,
     #[serde(
@@ -434,19 +485,26 @@ pub struct HudArgs {
         serialize_with = "member_or_val"
     )]
     pub progress_bar_color: Option<Val>,
+    /// The `Color` argument of an in-world text.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "member_or_val"
+    )]
+    pub color: Option<Val>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reevaluation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_visibility: Option<String>,
 }
 
-/// A HUD element the run created. The `hud` trace field lists every element
-/// in creation order; `destroyedTick` is `null` while the element is
-/// present.
+/// A display element the run created. The `hud` trace field lists every
+/// element in creation order; `destroyedTick` is `null` while the element
+/// is present.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct HudElement {
     /// Stable id in creation order, starting at 0. `lastTextId` resolves to
-    /// the `id` of the newest `hudText` or `progressBarHud` element.
+    /// the `id` of the newest text element — a `hudText`, `progressBarHud`,
+    /// `inWorldText` or `progressBarInWorldText` element.
     pub id: u64,
     pub kind: HudKind,
     /// The tick the element was created on.
@@ -493,9 +551,11 @@ pub struct Trace {
     /// The player state table: one row per scenario player. Empty when the
     /// run had no scenario.
     pub players: BTreeMap<String, PlayerState>,
-    /// The HUD elements the run created, in creation order.
+    /// The display elements the run created — HUD elements and in-world
+    /// texts — in creation order.
     pub hud: Vec<HudElement>,
-    /// The effect entities the run created or played, in creation order.
+    /// The entities the run created or played — effects, beam effects,
+    /// icons and projectile effects — in creation order.
     pub effects: Vec<EffectElement>,
     /// The per-tick timeline.
     pub timeline: Timeline,
