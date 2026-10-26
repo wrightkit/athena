@@ -220,6 +220,18 @@ fn render(value: &Val) -> Result<String, Stop> {
     }
 }
 
+/// The string a string-parameter argument reads as: text as itself, an
+/// empty array as the empty string (the Workshop spells an empty string
+/// `Empty Array` in these parameters), and a number, boolean or `Null`
+/// by the `render` coercion. A non-empty array is not a string.
+fn string(value: &Val) -> Result<String, Stop> {
+    match value {
+        Val::Array(items) if items.is_empty() => Ok(String::new()),
+        Val::Array(_) => unsupported("non-empty array where a string is needed"),
+        other => render(other),
+    }
+}
+
 /// The `Env` an element-context array value's per-element operand sees:
 /// the caller's `env` with `element` bound to the element and its index.
 fn element_env<'a>(env: &Env<'a>, element: &'a Val, index: usize) -> Env<'a> {
@@ -690,6 +702,88 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 text = text.replace(&format!("{{{index}}}"), value);
             }
             Ok(Val::Text(text))
+        }
+        // `Char In String` reads the character at the index; an index
+        // outside the string's bounds yields the empty string.
+        "charAt" => {
+            let [source, index] = arguments::<2>(name, args)?;
+            let (source, index) = (string(&eval(source, env)?)?, number(&eval(index, env)?)?);
+            Ok(source
+                .chars()
+                .nth(if index < 0.0 {
+                    usize::MAX
+                } else {
+                    index as usize
+                })
+                .map_or_else(
+                    || Val::Text(String::new()),
+                    |char| Val::Text(char.to_string()),
+                ))
+        }
+        // `String Split` splits around the separator; an empty separator
+        // splits into characters and an empty source yields no parts.
+        "stringSplit" => {
+            let [source, separator] = arguments::<2>(name, args)?;
+            let (source, separator) = (
+                string(&eval(source, env)?)?,
+                string(&eval(separator, env)?)?,
+            );
+            if source.is_empty() {
+                return Ok(Val::Array(Vec::new()));
+            }
+            let parts = if separator.is_empty() {
+                source
+                    .chars()
+                    .map(|char| Val::Text(char.to_string()))
+                    .collect()
+            } else {
+                source
+                    .split(&separator)
+                    .map(|part| Val::Text(part.to_string()))
+                    .collect()
+            };
+            Ok(Val::Array(parts))
+        }
+        // `Index Of String Char` reports the needle's first index as a
+        // character count, or -1 when the needle is absent — and an
+        // empty needle, which names no character, is always absent.
+        "strIndex" => {
+            let [source, character] = arguments::<2>(name, args)?;
+            let (source, character) = (
+                string(&eval(source, env)?)?,
+                string(&eval(character, env)?)?,
+            );
+            Ok(Val::Number(if character.is_empty() {
+                -1.0
+            } else {
+                source
+                    .find(&character)
+                    .map_or(-1.0, |byte| source[..byte].chars().count() as f64)
+            }))
+        }
+        // `String Replace` replaces every occurrence of the pattern and
+        // clamps the result to 511 bytes of UTF-8. An empty pattern's
+        // occurrences are undefined, so the run stops.
+        "stringReplace" => {
+            let [source, pattern, replacement] = arguments::<3>(name, args)?;
+            let (source, pattern, replacement) = (
+                string(&eval(source, env)?)?,
+                string(&eval(pattern, env)?)?,
+                string(&eval(replacement, env)?)?,
+            );
+            if pattern.is_empty() {
+                return unsupported("stringReplace with an empty pattern");
+            }
+            let mut replaced = source.replace(&pattern, &replacement);
+            if replaced.len() > 511 {
+                let end = replaced
+                    .char_indices()
+                    .take_while(|(index, _)| *index <= 511)
+                    .last()
+                    .map_or(0, |(index, _)| index);
+                replaced.truncate(end);
+            }
+            Ok(Val::Text(replaced))
         }
         other => unsupported(format!("value {other}")),
     }
