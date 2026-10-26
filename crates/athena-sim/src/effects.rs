@@ -88,7 +88,7 @@ fn create_effect(
     let recipients = viewers(visible_to, env)?;
     let args = EffectArgs {
         effect: Some(enum_member("createEffect", "type", effect)?.to_string()),
-        color: Some(enum_member("createEffect", "color", color)?.to_string()),
+        color: Some(eval(color, env)?),
         position: Some(eval(position, env)?),
         radius: Some(eval(radius, env)?),
         reevaluation: Some(enum_member("createEffect", "reevaluation", reevaluation)?.to_string()),
@@ -118,7 +118,7 @@ fn play_effect(
     let recipients = viewers(visible_to, env)?;
     let args = EffectArgs {
         effect: Some(enum_member("playEffect", "type", effect)?.to_string()),
-        color: Some(enum_member("playEffect", "color", color)?.to_string()),
+        color: Some(eval(color, env)?),
         position: Some(eval(position, env)?),
         radius: Some(eval(radius, env)?),
         ..EffectArgs::default()

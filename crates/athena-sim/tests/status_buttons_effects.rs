@@ -415,7 +415,7 @@ rule ("init") {
     assert_eq!(created.kind, EffectKind::Effect);
     assert_eq!(created.recipients, ["p1"]);
     assert_eq!(created.args.effect.as_deref(), Some("GOOD_AURA"));
-    assert_eq!(created.args.color.as_deref(), Some("WHITE"));
+    assert_eq!(created.args.color, Some(Val::Text("WHITE".into())));
     assert_eq!(created.args.position, Some(Val::Player("p1".into())));
     assert_eq!(created.args.radius, Some(Val::Number(2.0)));
     assert_eq!(

@@ -80,7 +80,7 @@ The `team` and player (`target`) filters of a rule event resolve against the sce
 
 The element-context values: `Evaluate Once` pins its operand's first read per site for the rest of one scope — a rule-instance run (loop bodies and restarted frames re-read the site; a `Wait` suspension keeps them; the next run start or restart clears them), one rule-condition check pass, or one `Wait Until` call's per-tick re-checks — and inside an element-context operand, re-read per element, it is `not_modeled`. `Filtered Array` keeps the elements its condition holds for, `Sorted Array` orders ascending by the per-element key — a number, `Null` or boolean under the number coercion, and an equal key keeps the element's place — and `Is True For All`/`Is True For Any` test the condition per element, stopping at the deciding element; an empty array is true for `All`, false for `Any`. Each binds `Current Array Element` and `Current Array Index` to the element and its place during evaluation, nested contexts included; a read outside one is `not_modeled`. `Mapped Array` is not modeled.
 
-`All Heroes` yields the catalog's `Hero` members in catalog order: an array of member-id texts — the same form `Hero Of` and a `Hero` literal yield, so an element compares equal to both. The client's element order is unmeasured; the catalog order is the modeled order.
+`All Heroes` yields the catalog's `Hero` members in catalog order: an array of member-id texts — the form `Hero Of` and a `Hero` literal yield. The client's element order is unmeasured; the catalog order is the modeled order.
 
 None of these has a client capture; all are **modeled, not measured**.
 
@@ -92,13 +92,17 @@ None of these has a client capture; all are **modeled, not measured**.
 - `String Split` splits around the separator; a separator the source does not contain yields the source alone, an empty separator splits into characters, and an empty source yields the empty array.
 - `Index Of String Char` reports the needle's first index, or -1 when absent; an empty needle names no character and reports -1.
 - `String Replace` replaces every occurrence of the pattern; an empty pattern is `not_modeled`.
-- `Custom String` replaces `{0}`/`{1}`/`{2}` with the rendered arguments it was given; a placeholder without an argument stays literal.
+- `Custom String` replaces `{0}`/`{1}`/`{2}` with the rendered arguments it was given; a placeholder without an argument stays literal. One holding a display value yields a `customString` display value (below).
 
 Whether the client still caps a produced string at 511 bytes is unmeasured — the sources conflict on whether the limit was removed — so a produced string over 511 bytes, a `String Split` part included, is `not_modeled`.
 
-The display-only strings — `Icon String`, `Hero Icon String`, `Ability Icon String`, `Input Binding String` — render client-localized glyphs or per-player key names no capture or documented placeholder text defines; they stay `not_modeled`.
-
 None of these has a client capture; all are **modeled, not measured**.
+
+### Display values
+
+`Icon String`, `Hero Icon String`, `Ability Icon String`, `Input Binding String` and `Custom Color` are modeled: each produces a client rendering token no modeled construct can read, so the value stays opaque — `{ "type": "display", "value": { "producer": "<value id>", "args": [<evaluated arguments>] } }`, never the token's glyph, key name or color. It flows through variables, arrays and the text/color arguments of HUD and effect actions. A `Custom String` holding one is itself display (`producer` `customString`, the template the first argument). Two display values compare equal on identical producer and recursively-equal arguments; every other comparison — a `customString` display's included, its content being the rendered text — and every content read (the string reads above, arithmetic, an index, a sort key, a coercion) is `not_modeled`.
+
+No capture covers the client tokens; this is **modeled, not measured**.
 
 ### Random values
 
@@ -115,7 +119,7 @@ A non-finite bound is `not_modeled`. No capture covers the client's generator or
 
 `Server Load`, `Server Load Average` and `Server Load Peak` are modeled. Server load is a client-measured quantity the simulator does not guess, so the values read the scenario's `serverLoad` — `{ "serverLoad": { "average": n, "peak": n, "current": n } }` — constant for the run: `Server Load` reads `current`, `Server Load Average` reads `average`, `Server Load Peak` reads `peak`. A `Server Load *` value in a run without `serverLoad` is a `missing_input` of kind `serverLoad`. A read records no change; the field is an input, not a draw.
 
-Real load varies per tick and no capture covers it; this is **modeled, not measured**.
+No capture covers it; this is **modeled, not measured**.
 
 ### Map and game mode values
 
@@ -129,13 +133,13 @@ No capture covers the lobby's phase machine; this is **modeled, not measured**.
 
 ### Objective positions
 
-`Objective Position` is modeled. The position of an objective depends on the map and mode, which the lobby decides outside the Workshop script, so the value reads the scenario's `objectives` — `{ "objectives": [{ "x": n, "y": n, "z": n }, …] }`, a list of positions in the same frame `players[].position` uses, indexed by the evaluated argument: the catalog's "index of the objective to consider, starting at 0 and counting up". The argument reads under the number coercion, so `False`/`True` name indexes 0/1. A read with no `objectives` field, or whose evaluated index names no entry — out of range, negative, fractional or non-finite — is a `missing_input` of kind `objectives` named `objectives[i]`; there is no default, and objective movement (payload progress, point capture) is not modeled. Other objective-derived values (`Objective Index`, `Is Objective Complete`, `Payload Position`, …) are not modeled. A read records no change; the field is an input, not a draw.
+`Objective Position` is modeled. The position of an objective depends on the map and mode, which the lobby decides outside the Workshop script, so the value reads the scenario's `objectives` — `{ "objectives": [{ "x": n, "y": n, "z": n }, …] }`, a list of positions in the same frame `players[].position` uses, indexed by the evaluated argument: the catalog's "index of the objective to consider, starting at 0 and counting up". The argument reads under the number coercion, so `False`/`True` name indexes 0/1. A read with no `objectives` field, or whose evaluated index names no entry — out of range, negative, fractional or non-finite — is a `missing_input` of kind `objectives` named `objectives[i]`; there is no default, and objective movement is not modeled. Other objective-derived values (`Objective Index`, `Is Objective Complete`, `Payload Position`, …) are not modeled. A read records no change; the field is an input, not a draw.
 
 No capture covers the positions a mode's objectives take; this is **modeled, not measured**.
 
 ### Player state values
 
-In scenario version 2, a player may declare `state`: an object keyed by the accepted ids `docs/scenario.schema.json` lists. The no-extra-argument player reads enumerated in `docs/scenario-format.md` (decision 19) answer from it — each value **scenario-supplied, not simulated**: nothing in the run changes it. The two derivations the catalog states exactly are the only exceptions to the no-derivation rule: `Speed Of` yields the length of `velocity` (it reads no key of its own), and `Is Moving` is *not* derived — the scenario supplies it.
+In scenario version 2, a player may declare `state`: an object keyed by the accepted ids `docs/scenario.schema.json` lists. The no-extra-argument player reads enumerated in `docs/scenario-format.md` (decision 19) answer from it — each value **scenario-supplied, not simulated**. The two derivations the catalog states exactly are the only exceptions to the no-derivation rule: `Speed Of` yields the length of `velocity` (it reads no key of its own), and `Is Moving` is *not* derived — the scenario supplies it.
 
 A player that declares `state` opts into it fully: a key the program reads but the map does not list is a `missing_input` of kind `state` named `state.<key>` — for `Speed Of`, `state.velocity`. An unknown `state` key or a wrong JSON type refuses the scenario as malformed. A player without `state` keeps the established models — `Health`/`Max Health` read the `world` pools `Damage`/`Heal` move, `Is In Spawn Room` is false in the empty world — and every other listed read is a `missing_input`. Reads that take extra arguments (`Has Status`, `Ability Cooldown`, `Player Stat`) are not state reads and stay `not_modeled`. A read records no change; the field is an input, not a draw.
 
@@ -155,22 +159,22 @@ None of these has a client capture; all are **modeled, not measured**.
 
 ### Geometry (empty world)
 
-The run has no map geometry — the goal excludes physics and hit detection, and the owner picked "empty world" (`athena#75`). Every geometry read answers for an empty world, marked `geometry: "emptyWorld"` in the trace so the viewer can warn that geometry-dependent results are not real. **Empty world, modeled not measured**; no capture covers any of it.
+The run has no map geometry — the goal excludes physics and hit detection, and the owner picked "empty world" (`athena#75`). Every geometry read answers for an empty world, marked `geometry: "emptyWorld"` in the trace so the viewer can warn that geometry-dependent results are not real. **Empty world, modeled not measured**.
 
 - A raycast never hits, and the answer follows the catalog's documented no-hit return: `Ray Cast Hit Position` yields the end position, `Ray Cast Hit Player` yields `Null`, and `Ray Cast Hit Normal` yields the direction from the end position back to the start — a zero-length cast has no direction and is `not_modeled`. A `Player` start or end resolves to the position two meters above the player's feet, as the catalog documents. The include/exclude players still evaluate but decide nothing.
 - `Is In Line of Sight` is true, with the same two-meters-above-the-feet resolution for a `Player` start or end; `Nearest Walkable Position` yields its input.
 - `Is On Ground` is true; `Is In Air` and `Is On Wall` are false — an empty world has none of what they ask about. `Is In Spawn Room` reads the scenario's `state.isInSpawnRoom` when the player declares `state`, and is false without one; the motion queries `Is Moving` (the `state` map) and `Is Standing` (a speed the model does not carry) are a `missing_input` and `not_modeled`.
 - `Teleport` writes the player's scenario `position` to the evaluated destination — `Null` is the origin, the catalog's `zeroAsNull` coercion — and records a `world` change with `field` `position`; `Position Of` reads the new value. `Apply Impulse` changes velocity, which needs physics, and stays `not_modeled`.
 
-The geometry answers do not depend on which player they name, but an undeclared player is `not_modeled` like everywhere else, and a `Player` in a position place still reads the scenario `position` — an omitted field is a `missing_input`.
+The geometry answers do not depend on which player they name, but an undeclared player is `not_modeled`, and a `Player` in a position place still reads the scenario `position` — an omitted field is a `missing_input`.
 
 ### Workshop settings
 
-A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` — evaluates to its declared `default` argument: the simulator runs one lobby and no player edits settings. `min`/`max`, `options` and `sortOrder` are authoring metadata the running rules never see. A `Hero` setting yields its `Hero` literal's catalog member id as text — the member id `Hero Of` yields, so the two compare equal whatever spelling the scenario used. The scenario format has no place for setting overrides, so a run always sees the authored defaults.
+A `Workshop Setting` value — `Real`, `Integer`, `Toggle`, `Combo` or `Hero` — evaluates to its declared `default` argument: the simulator runs one lobby and no player edits settings. `min`/`max`, `options` and `sortOrder` are authoring metadata the running rules never see. A `Hero` setting yields its `Hero` literal's catalog member id as text — the member id `Hero Of` yields, so the two compare equal. The scenario format has no place for setting overrides, so a run always sees the authored defaults.
 
 ### HUD elements
 
-The first HUD layer models `createHudText`, `progressBarHud`, `bigMessage`, `smallMessage`, `setObjectiveDescription`, the destroy actions `destroyHudText`, `destroyAllHudText`, `destroyProgressBarHud` and `destroyAllProgressBarHudText`, and `enableMessages`/`disableMessages`. Any other HUD-related action or value stops the run as `not_modeled`, like any unmodeled construct.
+The first HUD layer models `createHudText`, `progressBarHud`, `bigMessage`, `smallMessage`, `setObjectiveDescription`, the destroy actions `destroyHudText`, `destroyAllHudText`, `destroyProgressBarHud` and `destroyAllProgressBarHudText`, and `enableMessages`/`disableMessages`. Any other HUD-related action or value is `not_modeled`.
 
 `hud` holds one entry per element the run created, in creation order — including elements destroyed since, so a destroy never removes an entry:
 
@@ -193,15 +197,15 @@ The other fields are the evaluated arguments of the creating action; only the ar
 | `value` | `progressBarHud` | the bar value |
 | `location` | `hudText`, `progressBarHud` | the `HudPosition` member id |
 | `sortOrder` | `hudText`, `progressBarHud` | the sort order |
-| `headerColor`, `subheaderColor`, `textColor` | `hudText` | the `Color` member ids |
-| `progressBarColor`, `textColor` | `progressBarHud` | the `Color` member ids |
+| `headerColor`, `subheaderColor`, `textColor` | `hudText` | the `Color` member id, or the `Val` form for a non-member |
+| `progressBarColor`, `textColor` | `progressBarHud` | the `Color` member id, or the `Val` form likewise |
 | `reevaluation` | `hudText`, `progressBarHud`, `objectiveDescription` | the reevaluation member id |
 | `specVisibility` | `hudText`, `progressBarHud` | the `SpecVisibility` member id |
 
 HUD behavior is **modeled** with these limits:
 
 - Arguments are evaluated once, at creation. The `reevaluation` field is recorded but nothing is re-evaluated over time.
-- Message display duration and stacking are client display behavior; there is no capture for them. `enableMessages`/`disableMessages` resolve their player argument but produce no element and no other trace state.
+- Message display duration and stacking are client display behavior with no capture. `enableMessages`/`disableMessages` resolve their player argument but produce no element and no other trace state.
 - The objective description is a singleton per player: a new `objectiveDescription` removes its recipients from every present `objectiveDescription` element, which is destroyed (`destroyedTick` set) when no recipient remains.
 - A destroy action affects only elements of its own kind. An unknown, already-destroyed or `null` text id destroys nothing.
 
@@ -223,16 +227,16 @@ The other fields are the evaluated arguments of the action; only the arguments t
 | Field | Kinds | Argument |
 | --- | --- | --- |
 | `effect` | both | the `Effect`/`DynamicEffect` member id of the `Type` argument |
-| `color` | both | the `Color` member id |
+| `color` | both | the `Color` member id, or the `Val` form for a non-member (a `Custom Color`) |
 | `position` | both | the evaluated `Position` argument as a `Val`: a player yields `{ "type": "player", "value": "<id>" }` |
 | `radius` | both | the radius |
 | `reevaluation` | `effect` | the `EffectReeval` member id |
 
-A position expression that needs unmodeled geometry — anything still unmodeled — stops the run as `not_modeled` before the entity is recorded; under the empty-world model `Nearest Walkable Position` and the raycasts evaluate instead (see [Geometry (empty world)](#geometry-empty-world)). No capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing. `destroyAllEffects` removes every live `effect` entity, the same rule the HUD `Destroy All` actions follow; a played effect is already destroyed on its tick.
+A position expression that needs unmodeled geometry stops the run as `not_modeled` before the entity is recorded; under the empty-world model `Nearest Walkable Position` and the raycasts evaluate instead (see [Geometry (empty world)](#geometry-empty-world)). No capture backs this model of effects at all, so the whole layer is **modeled, not measured**. `destroyEffect` targets `effect` entities only; an unknown, already-destroyed or `null` entity id destroys nothing. `destroyAllEffects` removes every live `effect` entity; a played effect is already destroyed on its tick.
 
 ### Actions with no readable effect
 
-Actions the catalog ties to no readable value run as no-ops: arguments still evaluate, and nothing is written or recorded (athena#103). The set — inspector recording, announcer, music, HUD/in-world-UI and collision toggles, game-mode flags, camera, forced names, outlines, voice-line pitch, scaling, `preloadHero` — is enumerated in [findings.md](findings.md); **modeled, not measured**.
+Actions the catalog ties to no readable value run as no-ops: arguments still evaluate, and nothing is written or recorded (athena#103). The set is enumerated in [findings.md](findings.md); **modeled, not measured**.
 
 ### Statuses, buttons and started rules
 
@@ -245,7 +249,7 @@ Actions the catalog ties to no readable value run as no-ops: arguments still eva
 
 `timeline` holds one `entries` element per tick that had activity — a rule execution or a state change — in order; ticks without activity are omitted. A run that ends `not_modeled` or `missing_input` still returns the entries up to and including the stop tick.
 
-The timeline is bounded so a long or dense run cannot blow up the JSON: `entries` stops at 10 000 (`TIMELINE_ENTRY_LIMIT`), and across all entries `rules` stops at 100 000 (`TIMELINE_RULE_LIMIT`) and `changes` at 100 000 (`TIMELINE_CHANGE_LIMIT`). Records past a bound are dropped — also inside a tick — and `truncated` is `true` once any bound dropped something.
+The timeline is bounded: `entries` stops at 10 000 (`TIMELINE_ENTRY_LIMIT`), and across all entries `rules` stops at 100 000 (`TIMELINE_RULE_LIMIT`) and `changes` at 100 000 (`TIMELINE_CHANGE_LIMIT`). Records past a bound are dropped — also inside a tick — and `truncated` is `true` once any bound dropped something.
 
 Each entry:
 
@@ -362,7 +366,7 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 }
 ```
 
-`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ..., "location": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`; `null` has no `value`. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
+`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ..., "location": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`, `display`; `null` has no `value`. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
 
 Adding a field is compatible. Removing or renaming one, or changing a value's meaning, is a breaking change and needs a version bump of this crate.
 

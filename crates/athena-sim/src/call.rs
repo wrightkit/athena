@@ -66,6 +66,9 @@ fn render(value: &Val) -> Result<String, Stop> {
         Val::Player(_) => unsupported("player inside a custom string"),
         // The client's render form of a vector is unmeasured.
         Val::Vector { .. } => unsupported("vector inside a custom string"),
+        // A `Custom String` checks for the value before `render` runs;
+        // a string-read reaching one through `string()` stops here.
+        Val::Display { .. } => unsupported("a display value inside a string"),
     }
 }
 
@@ -597,6 +600,30 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 ),
             }
         }
+        // The display-only producers: the value is a client rendering
+        // token — a localized icon glyph, a per-player key name or a
+        // color — whose content nothing in the model can read. It
+        // carries the producer and its evaluated arguments, never the
+        // token (athena#113).
+        "iconString" | "heroIconString" | "abilityIconString" | "inputBindingString"
+        | "customColor" => {
+            let arity = match name {
+                "abilityIconString" => 2,
+                "customColor" => 4,
+                _ => 1,
+            };
+            if args.len() != arity {
+                return unsupported(format!("{name} with {} arguments", args.len()));
+            }
+            let evaluated = args
+                .iter()
+                .map(|arg| eval(arg, env))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Val::Display {
+                producer: name.to_string(),
+                args: evaluated,
+            })
+        }
         "customString" => {
             let [template, rest @ ..] = args else {
                 return unsupported("customString without a template");
@@ -604,9 +631,29 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let Val::Text(mut text) = eval(template, env)? else {
                 return unsupported("customString template that is not a string");
             };
-            let mut rendered = Vec::new();
+            let mut evaluated = Vec::with_capacity(rest.len());
             for arg in rest {
-                rendered.push(render(&eval(arg, env)?)?);
+                evaluated.push(eval(arg, env)?);
+            }
+            // A `Custom String` holding a display value is itself
+            // display: the rendered text would carry the token's
+            // content. The record keeps the producer and the evaluated
+            // arguments — template first — so the trace shows
+            // `customString("{0}", iconString(Icon(WARNING)))`, not an
+            // invented rendering (athena#113).
+            if evaluated
+                .iter()
+                .any(|arg| matches!(arg, Val::Display { .. }))
+            {
+                evaluated.insert(0, Val::Text(text));
+                return Ok(Val::Display {
+                    producer: name.to_string(),
+                    args: evaluated,
+                });
+            }
+            let mut rendered = Vec::new();
+            for arg in &evaluated {
+                rendered.push(render(arg)?);
             }
             for (index, value) in rendered.iter().enumerate() {
                 text = text.replace(&format!("{{{index}}}"), value);
