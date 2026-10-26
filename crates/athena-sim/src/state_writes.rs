@@ -113,6 +113,7 @@ fn run(
         rule: rule_idx,
         changes: &world.changes,
         now,
+        match_time: world.clock.match_time,
     };
     match name {
         "setHealth" => {

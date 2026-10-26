@@ -83,6 +83,9 @@ pub(crate) struct World {
     /// The scenario's `objectives` positions; `None` when it supplies
     /// none.
     pub objectives: Option<Vec<crate::vector::Vec3>>,
+    /// The match clock `Pause`/`Set Match Time`/`Set Slow Motion`
+    /// write and `Match Time`/`Total Time Elapsed` read (athena#120).
+    pub clock: crate::clock::Clock,
     /// The recorded timeline.
     pub timeline: Timeline,
 }
@@ -194,6 +197,7 @@ pub(crate) fn run_instance(
             rule: rule_idx,
             changes: &world.changes,
             now,
+            match_time: world.clock.match_time,
         };
         match action {
             Action::Disabled { .. } => advance(inst),
@@ -583,6 +587,15 @@ pub(crate) fn run_instance(
                         return unsupported("wait behavior in an event-triggered rule");
                     }
                     let ticks = wait_ticks(number(&eval(seconds, &env)?)?);
+                    // The catalog's seconds-to-ticks mapping under a
+                    // non-100 `Set Slow Motion` factor is unmeasured —
+                    // stop rather than guess it (athena#120).
+                    if world.clock.slow_motion != 100.0 {
+                        return unsupported(format!(
+                            "action wait under a {}% simulation rate",
+                            world.clock.slow_motion
+                        ));
+                    }
                     inst.wake = Some(tick + ticks);
                     inst.wait_mode = mode;
                     advance(inst);
@@ -612,6 +625,14 @@ pub(crate) fn run_instance(
                     let timeout = number(&eval(timeout, &env)?)?;
                     if timeout <= 0.0 {
                         return unsupported("Wait Until(false, 0)");
+                    }
+                    // The same unmeasured seconds-to-ticks mapping as
+                    // `wait` gates a suspending `Wait Until`.
+                    if world.clock.slow_motion != 100.0 {
+                        return unsupported(format!(
+                            "action waitUntil under a {}% simulation rate",
+                            world.clock.slow_motion
+                        ));
                     }
                     inst.wake = Some(tick + wait_ticks(timeout));
                     inst.wait_mode = WaitMode::Until(Frame { rule_idx, pc });
@@ -741,7 +762,8 @@ pub(crate) fn run_instance(
                         })
                         .or_else(|| {
                             crate::state_writes::action(other, args, world, inst, rule_idx, now)
-                        });
+                        })
+                        .or_else(|| crate::clock::action(other, args, world, inst, rule_idx, now));
                     match result {
                         Some(result) => {
                             result?;

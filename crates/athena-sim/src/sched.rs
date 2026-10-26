@@ -95,6 +95,7 @@ pub(crate) fn run(
         match_phase,
         game_mode,
         objectives,
+        clock: crate::clock::Clock::new(),
         timeline: Timeline::default(),
     };
     let events = events_by_tick(&events);
@@ -297,7 +298,13 @@ fn tick_loop(
     let mut rules_recorded = 0;
     let mut changes_recorded = 0;
     for tick in 0..ticks {
-        let now = START_OFFSET_S + tick as f64 * TICK_S;
+        // The match clock advances into each tick after the first:
+        // paused it stands, slowed it scales, and a countdown reaching
+        // zero ends the run before the tick's rules do any work.
+        if tick > 0 {
+            world.clock.advance(TICK_S).map_err(|stop| stop.at(tick))?;
+        }
+        let now = START_OFFSET_S + world.clock.elapsed;
         let result = run_tick(&mut loaded, world, events, tick, now);
         // A tick that stopped the run still records what it did.
         let mut rules = std::mem::take(&mut world.runs);
@@ -460,6 +467,7 @@ fn run_tick(
                     rule: instance.rule_idx,
                     changes: &world.changes,
                     now,
+                    match_time: world.clock.match_time,
                 };
                 let holds = conditions_hold(instance.rule, &env).map_err(|stop| {
                     record_stop(
@@ -591,6 +599,7 @@ fn run_tick(
                         rule: instance.rule_idx,
                         changes: &world.changes,
                         now,
+                        match_time: world.clock.match_time,
                     };
                     if conditions_hold(instance.rule, &env).map_err(|stop| {
                         record_stop(
@@ -643,6 +652,7 @@ fn run_tick(
                         rule: frame.rule_idx,
                         changes: &world.changes,
                         now,
+                        match_time: world.clock.match_time,
                     };
                     if until_holds(rule_list, frame, &env).map_err(|stop| {
                         record_stop(
