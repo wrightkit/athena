@@ -32,7 +32,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 | `players` | yes | List of players. It may be empty. |
 | `events` | no | Events injected into the run. |
 | `expect` | no | Observations the author expects at the end of the run. |
-| `random` | no | The source `Random *` values draw from: `{ "seed": n }`, `n` an unsigned 64-bit integer. |
+| `random` | no | The source `Random *` values draw from: `{ "seed": n }`, `n` an unsigned 64-bit integer. Write `n` as an integer literal: the loader rejects a decimal point or exponent, so `1.0` and `1e3` fail although the schema admits them. |
 
 ### Player
 

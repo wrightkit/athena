@@ -30,7 +30,12 @@
       "required": ["seed"],
       "additionalProperties": false,
       "properties": {
-        "seed": { "type": "integer", "minimum": 0, "maximum": 18446744073709551615 }
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615,
+          "description": "Unsigned 64-bit seed. Write it as an integer literal: the loader rejects a decimal point or exponent, so 1.0 and 1e3 fail although 'integer' admits integral-valued numbers."
+        }
       }
     },
     "value": {
