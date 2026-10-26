@@ -376,8 +376,10 @@ struct PlayerDoc {
     /// the player's `state` map. `Option` keeps an absent field apart
     /// from a declared empty map: in version 2 the latter still opts
     /// the player into scenario-supplied reads.
+    #[serde(default, deserialize_with = "object_or_absent")]
     state: Option<BTreeMap<String, serde_json::Value>>,
     /// scenarioVersion 2: the player's variables.
+    #[serde(default, deserialize_with = "object_or_absent")]
     vars: Option<BTreeMap<String, serde_json::Value>>,
     #[serde(default)]
     buttons: BTreeMap<String, bool>,

@@ -374,3 +374,20 @@ fn vars_in_version_1_is_malformed() {
         "player `p1` has `vars`, new in scenarioVersion 2"
     );
 }
+
+/// `state` and `vars` are objects or absent: `null` is malformed, not
+/// "absent" — the rule `position`, `facing` and `serverLoad` already
+/// follow.
+#[test]
+fn a_null_state_or_vars_is_malformed() {
+    for (version, field) in [(1, "state"), (2, "state"), (2, "vars")] {
+        let scenario = format!(
+            r#"{{ "scenarioVersion": {version}, "seconds": 1,
+                "players": [{{ "id": "p1", "{field}": null }}] }}"#
+        );
+        match run_scenario(&set_global("Null"), &scenario) {
+            Err(RunError::Scenario(ScenarioError::Format(_))) => {}
+            other => panic!("version {version} `{field}`: {other:?}"),
+        }
+    }
+}
