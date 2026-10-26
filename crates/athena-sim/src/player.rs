@@ -234,10 +234,23 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 ),
             }
         }
-        // Modeled, not measured: a player with a hero is spawned and alive.
+        // Modeled, not measured: a player with a hero is spawned and
+        // alive. `Is Alive` first answers the `isDead` read the catalog
+        // names its complement — a cell an action wrote or the declared
+        // `state.isDead` — and falls back to the hero model only when
+        // `isDead` cannot answer; `Has Spawned` stays hero-based, a
+        // kill does not unspawn a player.
         "hasSpawned" | "isAlive" => {
             let [player] = arguments::<1>(name, args)?;
             let id = player_id(player, env)?;
+            if name == "isAlive" {
+                let read = crate::state_reads::state_read("isDead").expect("in STATE_READS");
+                if let Ok(Val::Bool(dead)) =
+                    state_read_value(env.players, &id, read, "value isAlive")
+                {
+                    return Ok(Val::Bool(!dead));
+                }
+            }
             match env.players.get(&id) {
                 Some(player) if player.hero.is_some() => Ok(Val::Bool(true)),
                 Some(_) => unsupported(format!("{name} of player `{id}` without a hero")),

@@ -203,6 +203,42 @@ fn dead_scenario() -> String {
     )
 }
 
+/// `Is Alive` answers the `isDead` cell `Is Dead` reads — the catalog's
+/// complement — and falls back to the hero model when `isDead` cannot
+/// answer. `Has Spawned` stays hero-based: a kill does not unspawn.
+#[test]
+fn is_alive_reads_the_is_dead_cell() {
+    let trace = run(
+        &program(
+            "Kill(Host Player, Null);
+             Set Global Variable(g, Is Alive(Host Player));",
+        ),
+        &scenario(PLAYER),
+    );
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["g"], Val::Bool(false));
+    // A declared `state.isDead` answers the read without a write.
+    let trace = run(
+        &program("Set Global Variable(g, Is Alive(Host Player));"),
+        &dead_scenario(),
+    );
+    assert_eq!(trace.globals["g"], Val::Bool(false));
+    // An unanswerable `isDead` keeps the hero model.
+    let trace = run(
+        &program("Set Global Variable(g, Is Alive(Host Player));"),
+        &scenario(r#"{ "id": "p1", "host": true, "hero": "ana", "state": { "health": 200 } }"#),
+    );
+    assert_eq!(trace.globals["g"], Val::Bool(true));
+    let trace = run(
+        &program(
+            "Kill(Host Player, Null);
+             Set Global Variable(g, Has Spawned(Host Player));",
+        ),
+        &scenario(PLAYER),
+    );
+    assert_eq!(trace.globals["g"], Val::Bool(true));
+}
+
 /// `Set Facing` writes the scenario `facing` the facing reads derive —
 /// `To World` names the direction's facing outright.
 #[test]

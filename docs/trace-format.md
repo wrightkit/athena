@@ -61,6 +61,8 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
     "p1": {
       "hero": "Ana",
       "team": "team1",
+      "state": { "isDead": { "type": "bool", "value": false } },
+      "modifiers": {},
       "world": {
         "health": { "current": 150.0, "max": 200.0 },
         "shield": { "current": 0.0, "max": 100.0 },
