@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/wrightkit/athena/compare/v0.4.0...v0.5.0) (2026-10-26)
+
+
+### Features
+
+* **sim:** evaluate Workshop Setting values to their defaults ([#55](https://github.com/wrightkit/athena/issues/55)) ([cd3208a](https://github.com/wrightkit/athena/commit/cd3208ae014ca19b7d43a1c202ed219fff056ecc)), closes [#54](https://github.com/wrightkit/athena/issues/54)
+* **sim:** instantiate Each Player rules per matching player ([#49](https://github.com/wrightkit/athena/issues/49)) ([415897e](https://github.com/wrightkit/athena/commit/415897e21165a23e6b0269359704dad8cfaa2ea1)), closes [#46](https://github.com/wrightkit/athena/issues/46)
+* **sim:** model control-flow actions (skip, abort, loop, break/continue) ([#59](https://github.com/wrightkit/athena/issues/59)) ([1802717](https://github.com/wrightkit/athena/commit/1802717d4b890d8cee9a381fa11581eff6f0025b))
+* **sim:** model element-context array values and Evaluate Once ([#62](https://github.com/wrightkit/athena/issues/62)) ([31a42d7](https://github.com/wrightkit/athena/commit/31a42d7d0ce7c9510c570522de80b1d1ca847aaf)), closes [#60](https://github.com/wrightkit/athena/issues/60)
+* **sim:** model For Global/Player Variable and pair their End lines ([#52](https://github.com/wrightkit/athena/issues/52)) ([3c60fd6](https://github.com/wrightkit/athena/commit/3c60fd6508ae608a6c0b02a0ce7faff8d0b93346)), closes [#50](https://github.com/wrightkit/athena/issues/50)
+* **sim:** model general and array values plus at-index writes ([#61](https://github.com/wrightkit/athena/issues/61)) ([2e950a1](https://github.com/wrightkit/athena/commit/2e950a1a6f4c6e65f4f31d2cd372aad7ff33a6e0))
+* **sim:** model Random values from a scenario-supplied seed ([#66](https://github.com/wrightkit/athena/issues/66)) ([446f42b](https://github.com/wrightkit/athena/commit/446f42bb00fce4360ea6bbf665a1b9dd74d9cd6d)), closes [#65](https://github.com/wrightkit/athena/issues/65)
+* **sim:** model statuses, buttons, start rule and effects ([#63](https://github.com/wrightkit/athena/issues/63)) ([b996c07](https://github.com/wrightkit/athena/commit/b996c07bc609e1a50e4650a90043cb3b1bc49489)), closes [#58](https://github.com/wrightkit/athena/issues/58)
+* **sim:** model string values used by Bastion ([#64](https://github.com/wrightkit/athena/issues/64)) ([fe57ffe](https://github.com/wrightkit/athena/commit/fe57ffe22f807b9e513ce088e0b88f444bd05abd)), closes [#57](https://github.com/wrightkit/athena/issues/57)
+* **sim:** record a per-tick timeline in the trace ([#53](https://github.com/wrightkit/athena/issues/53)) ([f163fdb](https://github.com/wrightkit/athena/commit/f163fdb58d0bf5e0fdc10abc4e5c3f9b8b165106)), closes [#48](https://github.com/wrightkit/athena/issues/48)
+
 ## [0.4.0](https://github.com/wrightkit/athena/compare/v0.3.0...v0.4.0) (2026-10-25)
 
 
