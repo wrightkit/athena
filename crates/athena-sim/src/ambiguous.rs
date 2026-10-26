@@ -6,6 +6,8 @@
 //! resolves to its `Vector` member's enum literal; elsewhere it stays a
 //! sentinel and evaluation stops naming the spelling.
 
+use std::borrow::Cow;
+
 use workshop_rs::Value;
 
 use crate::{NotModeled, Stop, Val};
@@ -78,6 +80,19 @@ pub(crate) fn resolve_operands(name: &str, args: &[Value]) -> Vec<Value> {
         }
     }
     args
+}
+
+/// `resolve_operands` for a call whose arguments may hold no sentinel:
+/// the borrowed arguments when no `__ambiguous_enum` is among them.
+pub(crate) fn resolve_args<'a>(name: &str, args: &'a [Value]) -> Cow<'a, [Value]> {
+    if args
+        .iter()
+        .any(|arg| matches!(arg, Value::Call { name, .. } if name == CALL))
+    {
+        resolve_operands(name, args).into()
+    } else {
+        args.into()
+    }
 }
 
 /// A sentinel no operand position resolved: the run stops naming the

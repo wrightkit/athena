@@ -183,16 +183,8 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
     // `__ambiguous_enum` arguments resolve to their `Vector` member in a
     // vector or number operand position; elsewhere they stay sentinels
     // and evaluation stops at them naming the spelling.
-    let resolved;
-    let args = if args
-        .iter()
-        .any(|arg| matches!(arg, Value::Call { name, .. } if name == ambiguous::CALL))
-    {
-        resolved = ambiguous::resolve_operands(name, args);
-        resolved.as_slice()
-    } else {
-        args
-    };
+    let resolved = ambiguous::resolve_args(name, args);
+    let args: &[Value] = &resolved;
     let binary = |op: fn(f64, f64) -> f64| -> Result<Val, Stop> {
         let [a, b] = arguments::<2>(name, args)?;
         Ok(Val::Number(op(

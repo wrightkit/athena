@@ -241,7 +241,10 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
             if env.element.is_some() {
                 return unsupported("evaluateOnce inside an element context");
             }
-            let [operand] = arguments::<1>(name, args)?;
+            // `evaluateOnce` is handled ahead of `call`, so a sentinel
+            // operand is annotated here for the same stop.
+            let resolved = crate::ambiguous::resolve_args(name, args);
+            let [operand] = arguments::<1>(name, &resolved)?;
             let site = value as *const Value as usize;
             if let Some(pinned) = env.once.borrow().get(&site) {
                 return Ok(pinned.clone());

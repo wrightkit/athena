@@ -591,6 +591,14 @@ fn an_ambiguous_spelling_outside_an_operand_position_is_not_modeled() {
         "value __ambiguous_enum `Left` in `array` argument of `allPlayers`",
     );
 
+    // `Evaluate Once`'s operand is a value call's argument too, though
+    // eval handles it ahead of the call dispatch.
+    let trace = run(&set_global("Evaluate Once(Left)"));
+    assert_not_modeled(
+        &trace,
+        "value __ambiguous_enum `Left` in `value` argument of `evaluateOnce`",
+    );
+
     // A sentinel as an action's argument names only the spelling.
     let trace = run(&set_global("Left"));
     assert_not_modeled(&trace, "value __ambiguous_enum `Left`");
