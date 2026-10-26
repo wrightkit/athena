@@ -509,54 +509,13 @@ fn local_and_world_vector_of_rotate_and_translate() {
 }
 
 #[test]
-fn eye_position_and_the_geometry_values_stay_not_modeled() {
+fn eye_position_stays_not_modeled() {
     let player = r#"{ "id": "p1", "host": true, "position": { "x": 0, "y": 0, "z": 0 }, "facing": { "horizontal": 0, "vertical": 0 } }"#;
-    for (value, construct) in [
-        (
-            "Eye Position(Host Player)",
-            "value getEyePosition: eye height is not cataloged",
-        ),
-        (
-            "Ray Cast Hit Position(Vector(0, 0, 0), Vector(1, 0, 0), Null, Null, False)",
-            "value raycastHitPosition",
-        ),
-        (
-            "Is In Line of Sight(Vector(0, 0, 0), Vector(1, 0, 0), All Barriers Block LOS)",
-            "value isInLoS",
-        ),
-        (
-            "Nearest Walkable Position(Vector(0, 0, 0))",
-            "value nearestWalkablePosition",
-        ),
-        ("Is On Ground(Host Player)", "value isOnGround"),
-    ] {
-        let trace = run_with(&set_global(value), player);
-        assert_not_modeled(&trace, construct);
-    }
-
-    // `Teleport`/`Apply Impulse` move a player nothing models.
-    for action in [
-        "Teleport(Host Player, Vector(0, 0, 0))",
-        "Apply Impulse(Host Player, Vector(0, 1, 0), 5, To World, Cancel Contrary Motion)",
-    ] {
-        let text = format!(
-            r#"
-rule ("probe") {{
-    event {{
-        Ongoing - Global;
-    }}
-    actions {{
-        {action};
-    }}
-}}
-"#
-        );
-        let trace = run_with(&text, player);
-        match &trace.outcome {
-            Outcome::NotModeled(_) => {}
-            other => panic!("{action}: expected not_modeled, got {other:?}"),
-        }
-    }
+    // `Eye Position` adds a hero-specific eye height the catalog does
+    // not record, so it cannot follow from `position` alone. The
+    // geometry reads the empty world models live in `empty_world.rs`.
+    let trace = run_with(&set_global("Eye Position(Host Player)"), player);
+    assert_not_modeled(&trace, "value getEyePosition: eye height is not cataloged");
 }
 
 #[test]

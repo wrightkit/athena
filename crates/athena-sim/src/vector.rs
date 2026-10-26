@@ -56,7 +56,7 @@ pub(crate) struct Vec3 {
 }
 
 impl Vec3 {
-    fn map(self, f: impl Fn(f64) -> f64) -> Self {
+    pub(crate) fn map(self, f: impl Fn(f64) -> f64) -> Self {
         Self {
             x: f(self.x),
             y: f(self.y),
@@ -64,7 +64,7 @@ impl Vec3 {
         }
     }
 
-    fn zip(self, other: Self, f: impl Fn(f64, f64) -> f64) -> Self {
+    pub(crate) fn zip(self, other: Self, f: impl Fn(f64, f64) -> f64) -> Self {
         Self {
             x: f(self.x, other.x),
             y: f(self.y, other.y),
@@ -76,7 +76,7 @@ impl Vec3 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
-    fn magnitude(self) -> f64 {
+    pub(crate) fn magnitude(self) -> f64 {
         self.dot(self).sqrt()
     }
 }
@@ -105,7 +105,7 @@ fn vec(value: &Val, construct: &str) -> Result<Vec3, Stop> {
 /// A produced vector stays a value only while every component is finite;
 /// a `NaN` or infinity would serialize as `null` and lie about the result,
 /// so the run stops instead.
-fn produced(v: Vec3, construct: &str) -> Result<Val, Stop> {
+pub(crate) fn produced(v: Vec3, construct: &str) -> Result<Val, Stop> {
     if v.x.is_finite() && v.y.is_finite() && v.z.is_finite() {
         Ok(v.into())
     } else {
@@ -156,7 +156,7 @@ fn facing(players: &BTreeMap<String, Player>, id: &str, construct: &str) -> Resu
 /// What a position argument reads as: a vector as itself, a player as the
 /// scenario's `position` for it. Anything else — an array included — is
 /// not a position the simulator can name.
-fn position_value(
+pub(crate) fn position_value(
     value: Val,
     players: &BTreeMap<String, Player>,
     construct: &str,
@@ -433,6 +433,8 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             };
             produced(rotated, name)
         }
-        other => unsupported(format!("value {other}")),
+        // The empty-world geometry reads have their own dispatcher; it
+        // ends unknown names in `not_modeled` the same way.
+        other => crate::geometry::call(other, args, env),
     }
 }
