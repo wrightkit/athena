@@ -509,13 +509,17 @@ fn local_and_world_vector_of_rotate_and_translate() {
 }
 
 #[test]
-fn eye_position_stays_not_modeled() {
+fn eye_position_is_a_scenario_state_read() {
     let player = r#"{ "id": "p1", "host": true, "position": { "x": 0, "y": 0, "z": 0 }, "facing": { "horizontal": 0, "vertical": 0 } }"#;
-    // `Eye Position` adds a hero-specific eye height the catalog does
-    // not record, so it cannot follow from `position` alone. The
-    // geometry reads the empty world models live in `empty_world.rs`.
+    // `Eye Position` reads the scenario `state` map (athena#89); a
+    // version-1 player has no `state`, so the read is a missing input
+    // naming `state.eyePosition`.
     let trace = run_with(&set_global("Eye Position(Host Player)"), player);
-    assert_not_modeled(&trace, "value getEyePosition: eye height is not cataloged");
+    assert_eq!(trace.outcome, Outcome::MissingInput);
+    let missing = &trace.missing_inputs[0];
+    assert_eq!(missing.input, MissingInputKind::State);
+    assert_eq!(missing.player.as_deref(), Some("p1"));
+    assert_eq!(missing.name.as_deref(), Some("state.eyePosition"));
 }
 
 #[test]

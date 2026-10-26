@@ -462,12 +462,12 @@ fn malformed_scenarios_are_refused() {
     ));
     // `scenarioVersion` is checked before any other field, with the version
     // found and the supported set in the error.
-    let ScenarioError::Version { found, supported } = scenario_error(r#"{ "scenarioVersion": 2 }"#)
+    let ScenarioError::Version { found, supported } = scenario_error(r#"{ "scenarioVersion": 3 }"#)
     else {
         panic!("expected a version refusal");
     };
-    assert_eq!(found, "2");
-    assert_eq!(supported, vec![1]);
+    assert_eq!(found, "3");
+    assert_eq!(supported, vec![1, 2]);
     assert!(matches!(
         scenario_error(r#"{ "scenarioVersion": "1" }"#),
         ScenarioError::Version { .. }

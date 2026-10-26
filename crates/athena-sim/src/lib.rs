@@ -96,6 +96,8 @@ pub enum MissingInputKind {
     Facing,
     /// An entry of the scenario's `objectives` list.
     Objectives,
+    /// An entry of a scenario player's `state` map.
+    State,
 }
 
 /// A live input the program read but the scenario did not supply. The run

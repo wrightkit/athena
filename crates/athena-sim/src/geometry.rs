@@ -1,15 +1,15 @@
 //! The empty-world model for geometry reads (athena#75, athena#77): the
 //! run has no map geometry, so a raycast never hits, line of sight
-//! always holds, and every position is walkable, on the ground and in
-//! no spawn room. The trace marks the run `geometry: "emptyWorld"` so
+//! always holds, and every position is walkable, on the ground and on
+//! no wall. The trace marks the run `geometry: "emptyWorld"` so
 //! the viewer can warn that geometry-dependent results are not real.
 //!
 //! None of it is covered by a client capture — all **empty world,
 //! modeled not measured**. What the model cannot answer stays
-//! `not_modeled`: `Eye Position` (a hero eye height the catalog does
-//! not record), `Apply Impulse` (a velocity change needs physics), and
-//! the motion queries `Is Moving`/`Is Standing` (a speed the model
-//! does not carry).
+//! `not_modeled`: `Apply Impulse` (a velocity change needs physics)
+//! and the motion query `Is Standing` (a speed the model does not
+//! carry). `Is Moving`, `Eye Position` and `Is In Spawn Room` moved to
+//! the scenario `state` reads (athena#89).
 
 use workshop_rs::Value;
 
@@ -81,11 +81,12 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 name,
             )
         }
-        // Ground queries: on the ground, never airborne, on no wall and
-        // in no spawn room — an empty world has none. The answer does
-        // not depend on the player, but one the scenario did not
-        // declare is reported, never defaulted.
-        "isOnGround" | "isInAir" | "isOnWall" | "isInSpawnRoom" => {
+        // Ground queries: on the ground, never airborne and on no
+        // wall — an empty world has none. The answer does not depend
+        // on the player, but one the scenario did not declare is
+        // reported, never defaulted. `Is In Spawn Room` reads the
+        // scenario `state` map instead (athena#89).
+        "isOnGround" | "isInAir" | "isOnWall" => {
             let [player] = arguments::<1>(name, args)?;
             let id = player_id(player, env)?;
             if !env.players.contains_key(&id) {

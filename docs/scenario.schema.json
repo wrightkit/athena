@@ -1,17 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/wrightkit/athena/blob/main/docs/scenario.schema.json",
-  "title": "athena scenario, version 1",
+  "title": "athena scenario, versions 1 and 2",
   "type": "object",
   "required": ["scenarioVersion", "seconds", "players"],
   "additionalProperties": false,
   "properties": {
-    "scenarioVersion": { "const": 1 },
+    "scenarioVersion": { "enum": [1, 2] },
     "seconds": { "type": "number", "exclusiveMinimum": 0 },
-    "players": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/player" }
-    },
+    "players": { "type": "array" },
     "events": {
       "type": "array",
       "items": { "$ref": "#/$defs/event" }
@@ -33,6 +30,21 @@
       "description": "The objective positions Objective Position reads: entry i is the position of objective index i — the evaluated argument, a number or a boolean under the number coercion (False/True as 0/1). Supply the field whole or not at all: a read with no field, or an index naming no entry, is a missing input."
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "scenarioVersion": { "const": 1 } } },
+      "then": {
+        "properties": {
+          "players": { "items": { "$ref": "#/$defs/playerV1" } }
+        }
+      },
+      "else": {
+        "properties": {
+          "players": { "items": { "$ref": "#/$defs/playerV2" } }
+        }
+      }
+    }
+  ],
   "$defs": {
     "id": { "type": "string", "minLength": 1 },
     "time": { "type": "number", "minimum": 0 },
@@ -81,6 +93,17 @@
       },
       "description": "The player's facing the facing-reading values use: horizontal and vertical degrees, horizontal 0 forward (+z) increasing left, vertical 0 level increasing downward. Supply it whole or not at all: a partial object is malformed, and a read with no field is a missing input."
     },
+    "stateVector": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      },
+      "description": "A `state` vector: x left, y up, z forward — the same components `position` takes. A partial object is malformed."
+    },
     "value": {
       "type": ["null", "boolean", "number", "string", "array"],
       "items": { "$ref": "#/$defs/value" }
@@ -89,7 +112,29 @@
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/value" }
     },
-    "player": {
+    "playerState": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "health": { "type": "number", "description": "What Health reads." },
+        "maxHealth": { "type": "number", "description": "What Max Health reads." },
+        "normalizedHealth": { "type": "number", "description": "What Normalized Health reads." },
+        "velocity": { "$ref": "#/$defs/stateVector", "description": "What Velocity Of reads; Speed Of derives its length. Supply it whole or not at all." },
+        "eyePosition": { "$ref": "#/$defs/stateVector", "description": "What Eye Position reads. Supply it whole or not at all." },
+        "ultCharge": { "type": "number", "description": "What Ultimate Charge Percent reads." },
+        "isDead": { "type": "boolean", "description": "What Is Dead reads." },
+        "isUsingUltimate": { "type": "boolean", "description": "What Is Using Ultimate reads." },
+        "isMeleeing": { "type": "boolean", "description": "What Is Meleeing reads." },
+        "isFiringSecondary": { "type": "boolean", "description": "What Is Firing Secondary reads." },
+        "isInAlternateForm": { "type": "boolean", "description": "What Is In Alternate Form reads." },
+        "isCommunicatingEmote": { "type": "boolean", "description": "What Is Communicating Any Emote reads." },
+        "isInSpawnRoom": { "type": "boolean", "description": "What Is In Spawn Room reads." },
+        "isDummy": { "type": "boolean", "description": "What Is Dummy Bot reads." },
+        "isMoving": { "type": "boolean", "description": "What Is Moving reads — supplied, never derived from velocity." }
+      },
+      "description": "The player-state values the no-extra-argument player reads return, keyed by the accepted ids. Each value is scenario-supplied, not simulated. A key the program reads but the map does not list is a missing input naming `state.<key>`; an unknown key or a wrong type is malformed."
+    },
+    "playerV1": {
       "type": "object",
       "required": ["id"],
       "additionalProperties": false,
@@ -98,7 +143,26 @@
         "hero": { "type": "string", "minLength": 1 },
         "team": { "enum": ["team1", "team2"] },
         "host": { "type": "boolean" },
-        "state": { "$ref": "#/$defs/values" },
+        "state": { "$ref": "#/$defs/values", "description": "Version 1: the player's variables. Renamed to `vars` in version 2." },
+        "buttons": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" }
+        },
+        "position": { "$ref": "#/$defs/position" },
+        "facing": { "$ref": "#/$defs/facing" }
+      }
+    },
+    "playerV2": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "hero": { "type": "string", "minLength": 1 },
+        "team": { "enum": ["team1", "team2"] },
+        "host": { "type": "boolean" },
+        "vars": { "$ref": "#/$defs/values", "description": "The player's variables — the version-1 `state` field renamed." },
+        "state": { "$ref": "#/$defs/playerState" },
         "buttons": {
           "type": "object",
           "additionalProperties": { "type": "boolean" }
