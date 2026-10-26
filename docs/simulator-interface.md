@@ -55,7 +55,7 @@ Each row repeats what the scenario declared — `hero` (the scenario text, `null
 | `statuses` | The status effects `Set Status` applied, keyed by `Status` member id; the value is the `Total Time Elapsed` seconds at which the status ends. `Has Status` reads it as held while its expiry is still ahead. `Clear Status` removes the entry. |
 | `buttons` | The `Allow Button`/`Disallow Button` writes, keyed by button slot (`jump`, `ability1`, …); a slot never written is allowed. |
 
-`world` is `null` when the run could not resolve the player's state — a player without a `hero`, a hero value the file does not have, or a hero setting the program authors but the simulator does not apply. `Damage` or `Heal` on such a player or dealt by such a player, a `Set Ability Cooldown`, `Set Status`/`Clear Status` or `Allow`/`Disallow Button` on such a player, or a `Health`/`Max Health`/`Ability Cooldown`/`Has Status` read of such a player that no `state` key answers (see Player state values), stops the run as `not_modeled`; the row still reports the declared `hero`/`team`.
+`world` is `null` when the run could not resolve the player's state — a player without a `hero`, a hero value the file does not have, or a hero setting the program authors that the simulator does not apply and the player's `state` map does not cover. `Damage` or `Heal` on such a player or dealt by such a player, a `Set Ability Cooldown`, `Set Status`/`Clear Status` or `Allow`/`Disallow Button` on such a player, or a `Health`/`Max Health`/`Ability Cooldown`/`Has Status` read of such a player that no `state` key answers (see Player state values), stops the run as `not_modeled`; the row still reports the declared `hero`/`team`.
 
 ### Outcome and "not modeled"
 

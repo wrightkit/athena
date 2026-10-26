@@ -4,8 +4,10 @@
 //! The table is built at the start of a run. Each player's state comes from
 //! `workshop_rs::hero_values` at the pinned version, scaled by the hero
 //! settings the program authors (`src/hero_settings.rs`); a hero the
-//! catalog cannot supply — or a hero setting the simulator does not apply —
-//! leaves the row unresolved, and touching that player's world state
+//! catalog cannot supply — or a hero setting the simulator does not apply,
+//! unless the player's version-2 `state` map already supplies every value
+//! the setting can move — leaves the row unresolved, and touching that
+//! player's world state
 //! (`Damage`, `Heal`, `Set Ability Cooldown`, `Set`/`Clear Status`,
 //! `Allow`/`Disallow Button`, a `Health`/`Max Health`/`Ability Cooldown`/
 //! `Has Status` read no `state` key answers) stops the run as
@@ -13,13 +15,15 @@
 //! seconds and ultimate cost are never defaulted or invented. No capture
 //! backs the pool rules; `docs/architecture.md` marks them **modeled**.
 
+use std::collections::BTreeMap;
+
 use workshop_rs::gameplay;
 use workshop_rs::hero_values::{HealthPool, HeroValues};
 use workshop_rs::settings::Settings;
 
 use crate::hero_settings;
 use crate::scenario::Team;
-use crate::{NotModeled, PlayerWorld, PoolState, UltimateState};
+use crate::{NotModeled, PlayerWorld, PoolState, UltimateState, Val};
 
 /// The resolved world state of a scenario player.
 #[derive(Debug, Clone, PartialEq)]
@@ -70,13 +74,18 @@ fn hero_id(spellings: &[String], gameplay: &gameplay::GameplayCatalog) -> Option
 
 /// Build a player's world state from the hero-values catalog and the
 /// program's hero settings. `player` is the scenario `id` and `hero` the
-/// scenario hero name, used only in error text.
+/// scenario hero name, used only in error text. `state` is the player's
+/// version-2 `state` map: a hero setting the simulator does not apply is
+/// skipped rather than failed when the map declares every `state` key the
+/// setting can move — the scenario-supplied value stands, the setting is
+/// not simulated.
 pub(crate) fn resolve(
     player: &str,
     hero: &str,
     spellings: &[String],
     team: Option<Team>,
     settings: Option<&Settings>,
+    state: Option<&BTreeMap<String, Val>>,
     values: &HeroValues,
 ) -> Result<Resolved, NotModeled> {
     let unmodeled = |what: String| NotModeled::new(format!("player `{player}`: {what}"));
@@ -84,7 +93,7 @@ pub(crate) fn resolve(
         .map_err(|error| unmodeled(format!("gameplay dataset unavailable: {error}")))?;
     let hero_id = hero_id(spellings, gameplay)
         .ok_or_else(|| unmodeled(format!("hero `{hero}` is not in the gameplay dataset")))?;
-    let mods = hero_settings::modifiers(settings, team, &hero_id).map_err(unmodeled)?;
+    let mods = hero_settings::modifiers(settings, team, &hero_id, state).map_err(unmodeled)?;
 
     // Every hero has a `health` pool and an ultimate cost; `shield` and
     // `armor` exist only where the catalog records them (a hero without the

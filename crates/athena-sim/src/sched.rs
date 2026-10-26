@@ -63,6 +63,7 @@ pub(crate) fn run(
                 &player.hero_spellings,
                 player.team,
                 program.settings.as_ref(),
+                player.state.as_ref(),
                 hero_values,
             ) {
                 Ok(resolved) => WorldSlot::Resolved(resolved),
