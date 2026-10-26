@@ -1,7 +1,8 @@
 //! Player-roster and player-state values: `All Players`, `Host Player`,
-//! `All Heroes`, the `Hero Of`/`Team Of` and `Is Hero Being Played`
-//! reads, spawn/alive state, and the health/cooldown/status/button
-//! reads a scenario player's resolved world state answers.
+//! `All Heroes`, the `Hero Of`/`Team Of`, `Is Hero Being Played` and
+//! `Players On Hero` reads, spawn/alive state, and the
+//! health/cooldown/status/button reads a scenario player's resolved
+//! world state answers.
 
 use std::collections::BTreeMap;
 
@@ -78,6 +79,57 @@ fn member_id(
     }
 }
 
+/// The `(hero, team)` member ids a roster filter takes, each argument
+/// resolved the way `Hero Of`/`Team Of` yield theirs — an enum literal's
+/// member id or an evaluated member-id text.
+fn hero_team_args(name: &str, args: &[Value], env: &Env) -> Result<(String, String), Stop> {
+    let [hero, team] = arguments::<2>(name, args)?;
+    let hero = member_id(name, "hero", "Hero", hero, env)?;
+    let team = member_id(name, "team", "Team", team, env)?;
+    Ok((hero, team))
+}
+
+/// Visit the scenario players on `team` in roster order — `All Teams`
+/// visits every player — calling `visit` with each player's id and
+/// declared-hero member; `visit` returns `true` to end the visit early.
+/// A player on the team without a declared `hero` ends `missing_input`
+/// naming that player's `hero` — the same read `Hero Of` makes — before
+/// `visit` sees it.
+fn visit_on_team(
+    players: &BTreeMap<String, Player>,
+    team: &str,
+    name: &str,
+    mut visit: impl FnMut(&String, &str) -> bool,
+) -> Result<(), Stop> {
+    for (id, player) in players {
+        let on_team = match team {
+            "ALL" => true,
+            "TEAM_1" => player.team == Some(Team::Team1),
+            "TEAM_2" => player.team == Some(Team::Team2),
+            _ => unreachable!("member_id checked the `Team` domain"),
+        };
+        if !on_team {
+            continue;
+        }
+        match &player.hero_member {
+            Some(member) => {
+                if visit(id, member) {
+                    return Ok(());
+                }
+            }
+            None => {
+                return missing(
+                    MissingInputKind::Hero,
+                    Some(id.clone()),
+                    None,
+                    format!("value {name}"),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The value names this module owns.
 const NAMES: &[&str] = &[
     "allPlayers",
@@ -88,6 +140,7 @@ const NAMES: &[&str] = &[
     "getHero",
     "teamOf",
     "isHeroBeingPlayed",
+    "getPlayersOnHero",
     "getHealth",
     "getMaxHealth",
     "hasStatus",
@@ -200,36 +253,28 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // Modeled, not measured: the declared `hero` stands in for the
         // hero the selection screen shows; the screen is not modeled.
         "isHeroBeingPlayed" => {
-            let [hero, team] = arguments::<2>(name, args)?;
-            let hero = member_id(name, "hero", "Hero", hero, env)?;
-            let team = member_id(name, "team", "Team", team, env)?;
-            // `All Teams` selects every scenario player; `Team 1`/`Team 2`
-            // select the players whose declared `team` it is.
-            for (id, player) in env.players {
-                let on_team = match team.as_str() {
-                    "ALL" => true,
-                    "TEAM_1" => player.team == Some(Team::Team1),
-                    "TEAM_2" => player.team == Some(Team::Team2),
-                    _ => unreachable!("member_id checked the `Team` domain"),
-                };
-                if !on_team {
-                    continue;
+            let (hero, team) = hero_team_args(name, args, env)?;
+            // The first match decides the read.
+            let mut found = false;
+            visit_on_team(env.players, &team, name, |_, member| {
+                found = member == hero;
+                found
+            })?;
+            Ok(Val::Bool(found))
+        }
+        // The same declared-`hero` read `Is Hero Being Played` makes,
+        // yielding the matching players in roster order rather than a
+        // boolean.
+        "getPlayersOnHero" => {
+            let (hero, team) = hero_team_args(name, args, env)?;
+            let mut on_hero = Vec::new();
+            visit_on_team(env.players, &team, name, |id, member| {
+                if member == hero {
+                    on_hero.push(Val::Player(id.clone()));
                 }
-                match &player.hero_member {
-                    // The first match decides the read.
-                    Some(member) if *member == hero => return Ok(Val::Bool(true)),
-                    Some(_) => {}
-                    None => {
-                        return missing(
-                            MissingInputKind::Hero,
-                            Some(id.clone()),
-                            None,
-                            format!("value {name}"),
-                        );
-                    }
-                }
-            }
-            Ok(Val::Bool(false))
+                false
+            })?;
+            Ok(Val::Array(on_hero))
         }
         "getHealth" | "getMaxHealth" => {
             let [player] = arguments::<1>(name, args)?;
