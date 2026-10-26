@@ -75,6 +75,8 @@ pub enum MissingInputKind {
     Button,
     /// The scenario's `random` source.
     Random,
+    /// The scenario's `serverLoad` numbers.
+    ServerLoad,
 }
 
 /// A live input the program read but the scenario did not supply. The run

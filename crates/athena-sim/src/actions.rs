@@ -69,6 +69,7 @@ fn run(
         once: &inst.once,
         last_entity: world.effects.last_created,
         random: world.random.as_ref(),
+        server_load: world.server_load,
         rule: rule_idx,
         changes: &world.changes,
         now,

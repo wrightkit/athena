@@ -38,13 +38,14 @@ pub(crate) fn run(
     scenario: Option<Scenario>,
     hero_values: &HeroValues,
 ) -> Trace {
-    let (mut players, events, expect, random) = scenario
+    let (mut players, events, expect, random, server_load) = scenario
         .map(|scenario| {
             (
                 scenario.players,
                 scenario.events,
                 scenario.expect,
                 scenario.random,
+                scenario.server_load,
             )
         })
         .unwrap_or_default();
@@ -82,6 +83,7 @@ pub(crate) fn run(
         runs: Vec::new(),
         changes: RefCell::new(Vec::new()),
         random: random.map(|seed| RefCell::new(Random::new(seed))),
+        server_load,
         timeline: Timeline::default(),
     };
     let events = events_by_tick(&events);
@@ -376,6 +378,7 @@ fn run_tick(
                     once: &pass,
                     last_entity: world.effects.last_created,
                     random: world.random.as_ref(),
+                    server_load: world.server_load,
                     rule: instance.rule_idx,
                     changes: &world.changes,
                     now,
@@ -478,6 +481,7 @@ fn run_tick(
                         once: &pass,
                         last_entity: world.effects.last_created,
                         random: world.random.as_ref(),
+                        server_load: world.server_load,
                         rule: instance.rule_idx,
                         changes: &world.changes,
                         now,
@@ -513,6 +517,7 @@ fn run_tick(
                         once: &instance.until_once,
                         last_entity: world.effects.last_created,
                         random: world.random.as_ref(),
+                        server_load: world.server_load,
                         rule: frame.rule_idx,
                         changes: &world.changes,
                         now,

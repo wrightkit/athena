@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use workshop_rs::Value;
 
 use crate::eval::{Env, arguments, button_slot, eval, number, player_id, values_equal};
-use crate::scenario::{Player, Team};
+use crate::scenario::{Player, ServerLoad, Team};
 use crate::state::WorldSlot;
 use crate::{
     Change, MissingInput, MissingInputKind, NotModeled, PlayerWorld, PoolState, Stop, Val,
@@ -186,6 +186,30 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
     };
     match name {
         "getTotalTimeElapsed" => Ok(Val::Number(env.now)),
+        // Modeled, not measured: the client measures load per tick; the
+        // simulator reads the scenario's `serverLoad` constants. The
+        // field is optional in the format but there is no default —
+        // without it the read is a missing input.
+        "getServerLoad" | "getAverageServerLoad" | "getPeakServerLoad" => {
+            let [] = arguments::<0>(name, args)?;
+            match env.server_load {
+                Some(ServerLoad {
+                    current,
+                    average,
+                    peak,
+                }) => Ok(Val::Number(match name {
+                    "getServerLoad" => current,
+                    "getAverageServerLoad" => average,
+                    _ => peak,
+                })),
+                None => missing(
+                    MissingInputKind::ServerLoad,
+                    None,
+                    Some("serverLoad".to_string()),
+                    format!("value {name}"),
+                ),
+            }
+        }
         "lastTextId" => {
             let [] = arguments::<0>(name, args)?;
             Ok(env
