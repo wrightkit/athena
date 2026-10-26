@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0](https://github.com/wrightkit/athena/compare/v0.5.0...v0.6.0) (2026-10-26)
+
+
+### Features
+
+* **sim:** model All Heroes from the catalog's Hero members ([#70](https://github.com/wrightkit/athena/issues/70)) ([9551dde](https://github.com/wrightkit/athena/commit/9551dde29d131d789df947475d49ae259e279e61)), closes [#69](https://github.com/wrightkit/athena/issues/69)
+* **sim:** model Current Map from a scenario map input ([#73](https://github.com/wrightkit/athena/issues/73)) ([d013765](https://github.com/wrightkit/athena/commit/d0137651183a464dc5814a1c8939365ece9c5443)), closes [#71](https://github.com/wrightkit/athena/issues/71)
+* **sim:** model vector values and player position/facing ([#76](https://github.com/wrightkit/athena/issues/76)) ([96d0547](https://github.com/wrightkit/athena/commit/96d05473685ab0d6f63ba60a923646c9c14250b1)), closes [#74](https://github.com/wrightkit/athena/issues/74)
+
 ## [0.5.0](https://github.com/wrightkit/athena/compare/v0.4.0...v0.5.0) (2026-10-26)
 
 
