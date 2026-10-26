@@ -237,14 +237,8 @@ fn run(
             // back. `Null` is the catalog's `zeroAsNull` coercion — a
             // teleport to the origin.
             let ids = player_ids(player, &env)?;
-            let destination = match eval(position, &env)? {
-                Val::Null => crate::vector::Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                other => crate::vector::position_value(other, &world.players, name)?,
-            };
+            let destination =
+                crate::vector::position_value(eval(position, &env)?, &world.players, name)?;
             for id in ids {
                 let Some(target) = world.players.get_mut(&id) else {
                     return unsupported(format!("`{id}` is not a scenario player"));

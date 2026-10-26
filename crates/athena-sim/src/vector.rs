@@ -135,6 +135,15 @@ fn vec(value: &Val, construct: &str) -> Result<Vec3, Stop> {
             y: *y,
             z: *z,
         }),
+        // `Null` is the zero vector — the same default-zero read
+        // `number()` makes in a number position, and the read the
+        // catalog's `zeroAsNull`/`nullVectorAsNull` equivalence and
+        // `Teleport`'s position already make of `Null` (athena#108).
+        Val::Null => Ok(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }),
         other => unsupported(format!("{construct} on {other:?}")),
     }
 }

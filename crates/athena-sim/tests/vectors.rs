@@ -89,6 +89,66 @@ fn vector_builds_and_its_components_read_back() {
     }
 }
 
+/// An unset variable reads `Null`; a `Null` where a `Vector` operand is
+/// expected is the zero vector — the same default-zero read `number()`
+/// makes of `Null` in a number position, and the read `Teleport`'s
+/// `zeroAsNull` position already makes (athena#108, modeled not
+/// measured). Other operand types stay `not_modeled`.
+#[test]
+fn a_null_operand_in_a_vector_position_is_the_zero_vector() {
+    // `g` is declared but never set.
+    for component in ["X Component Of", "Y Component Of", "Z Component Of"] {
+        let trace = run(&set_global(&format!("{component}(Global.g)")));
+        assert_eq!(global(&trace), &Val::Number(0.0), "{component}");
+    }
+    // A literal `Null` operand evaluates to the same `Null`.
+    let trace = run(&set_global("Y Component Of(Null)"));
+    assert_eq!(global(&trace), &Val::Number(0.0));
+
+    // The other strict `Vector` positions read the same zero vector;
+    // the zero-length guards still stop where they did.
+    let trace = run(&set_global("Distance Between(Global.g, Vector(3, 4, 0))"));
+    assert_eq!(global(&trace), &Val::Number(5.0));
+    let trace = run(&set_global("Dot Product(Global.g, Vector(1, 2, 3))"));
+    assert_eq!(global(&trace), &Val::Number(0.0));
+    let trace = run(&set_global("Normalize(Global.g)"));
+    assert_not_modeled(&trace, "normalize of a zero-length vector");
+
+    // A number, a boolean, an array or a text is not a vector.
+    let trace = run(&set_global("Y Component Of(5)"));
+    assert_not_modeled(&trace, "__yComponentOf__ on Number(5.0)");
+    let trace = run(&set_global("Y Component Of(Array(1, 2, 3))"));
+    assert_not_modeled(
+        &trace,
+        "__yComponentOf__ on Array([Number(1.0), Number(2.0), Number(3.0)])",
+    );
+
+    // The same read after the variable is set yields the component.
+    let text = r#"
+variables {
+    global:
+        0: g
+        1: before
+        2: after
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Global Variable(before, Y Component Of(Global.g));
+        Set Global Variable(g, Vector(1, 2, 3));
+        Set Global Variable(after, Y Component Of(Global.g));
+    }
+}
+"#;
+    let trace = run(text);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["before"], Val::Number(0.0));
+    assert_eq!(trace.globals["after"], Val::Number(2.0));
+}
+
 #[test]
 fn vector_towards_is_the_displacement_and_direction_towards_its_unit() {
     let trace = run(&set_global(
