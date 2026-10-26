@@ -16,7 +16,7 @@ use crate::step::{World, world_state};
 use crate::{Change, NotModeled, PlayerWorld, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// Execute a modeled status/button/rule action against `world`; `None`

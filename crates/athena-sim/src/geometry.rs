@@ -18,7 +18,7 @@ use crate::vector::{self, Vec3};
 use crate::{NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// The raycast family's shared argument list — two positions, two

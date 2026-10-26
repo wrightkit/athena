@@ -16,7 +16,7 @@ use crate::{NotModeled, Stop, Val};
 pub(crate) const CALL: &str = "__ambiguous_enum";
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// The `Vector` member among a sentinel's candidates: the enum

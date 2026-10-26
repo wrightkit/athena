@@ -11,7 +11,7 @@ use crate::scenario::ServerLoad;
 use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 fn missing<T>(
@@ -20,9 +20,7 @@ fn missing<T>(
     name: Option<String>,
     construct: impl Into<String>,
 ) -> Result<T, Stop> {
-    Err(Stop::MissingInput(MissingInput::new(
-        input, player, name, construct,
-    )))
+    Err(MissingInput::new(input, player, name, construct).into())
 }
 
 /// Event-scoped values the simulator resolves from an injected event's

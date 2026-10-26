@@ -5,7 +5,7 @@ use workshop_rs::Action;
 use crate::{NotModeled, Stop};
 
 fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(Stop::NotModeled(NotModeled::new(what)))
+    Err(NotModeled::new(what).into())
 }
 
 /// Jump targets for the block actions of one rule.
