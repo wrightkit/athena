@@ -41,6 +41,9 @@ pub(crate) struct Env<'a> {
     /// `None` when the scenario supplies none, so a `Current Map` value
     /// is a missing input.
     pub map: Option<&'a str>,
+    /// The scenario's `objectives` positions; `None` when the scenario
+    /// supplies none, so an `Objective Position` value is a missing input.
+    pub objectives: Option<&'a [crate::vector::Vec3]>,
     /// The index of the rule the evaluated value belongs to — inside a
     /// `Call Subroutine`, the subroutine's own. Recorded on each
     /// `randomDraw` change.
