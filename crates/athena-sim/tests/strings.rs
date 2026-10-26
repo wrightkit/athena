@@ -132,11 +132,9 @@ fn index_of_string_char_finds_the_first_index_or_minus_one() {
     }
 }
 
-/// `String Replace` replaces every occurrence of the pattern and clamps
-/// the result to 511 bytes of UTF-8, dropping a character that would
-/// straddle the boundary.
+/// `String Replace` replaces every occurrence of the pattern.
 #[test]
-fn string_replace_replaces_all_occurrences_and_clamps() {
+fn string_replace_replaces_all_occurrences() {
     let trace = run(&set_global(
         "String Replace(Custom String(\"1488 and 1488\"), Custom String(\"1488\"), Custom String(\"x\"))",
     ));
@@ -147,16 +145,35 @@ fn string_replace_replaces_all_occurrences_and_clamps() {
         "String Replace(Empty Array, Custom String(\"a\"), Custom String(\"b\"))",
     ));
     assert_eq!(global(&trace), &text(""));
+}
 
-    let trace = run(&set_global(&format!(
-        "String Replace(Custom String(\"{}\"), Custom String(\"a\"), Custom String(\"垒\"))",
-        "a".repeat(300)
-    )));
-    let Val::Text(replaced) = global(&trace) else {
-        panic!("{:?}", global(&trace));
-    };
-    assert!(replaced.len() <= 511, "{}", replaced.len());
-    assert!(replaced.chars().all(|char| char == '垒'));
+/// Whether the client still caps a produced string at 511 bytes is
+/// unmeasured — the sources conflict — so a produced result past the
+/// boundary stops the run: a `String Replace` result, a `Custom
+/// String` render and a `String Split` part alike.
+#[test]
+fn a_produced_string_over_511_bytes_is_not_modeled() {
+    for value in [
+        // A `Custom String` renders past the boundary.
+        format!("Custom String(\"{}\")", "a".repeat(600)),
+        // `String Replace` expands past it.
+        format!(
+            "String Replace(Custom String(\"{}\"), Custom String(\"a\"), Custom String(\"垒\"))",
+            "a".repeat(300)
+        ),
+        // A `String Split` part carries it; the bare-literal source
+        // enters unproduced so the part itself is what crosses.
+        format!(
+            "String Split(\"{}\", Custom String(\"-\"))",
+            "a".repeat(600)
+        ),
+    ] {
+        let trace = run(&set_global(&value));
+        let Outcome::NotModeled(stop) = &trace.outcome else {
+            panic!("{value}: {:?}", trace.outcome);
+        };
+        assert!(stop.construct.contains("511"), "{}", stop.construct);
+    }
 }
 
 /// An empty `String Replace` pattern names no occurrence; the run

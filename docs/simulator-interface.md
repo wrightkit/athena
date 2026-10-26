@@ -86,8 +86,10 @@ None of these has a client capture; all are **modeled, not measured**.
 - `Char In String` yields the character at the index; an index outside the string's bounds — negative or past the end — yields the empty string, as does the empty string itself.
 - `String Split` splits around the separator; a separator the source does not contain yields the source alone, an empty separator splits into characters, and an empty source yields the empty array.
 - `Index Of String Char` reports the needle's first index, or -1 when absent; an empty needle names no character and reports -1.
-- `String Replace` replaces every occurrence of the pattern and clamps the result to 511 bytes of UTF-8, dropping a character that would straddle the boundary; an empty pattern is `not_modeled`.
+- `String Replace` replaces every occurrence of the pattern; an empty pattern is `not_modeled`.
 - `Custom String` replaces `{0}`/`{1}`/`{2}` with the rendered arguments it was given; a placeholder without an argument stays literal.
+
+Whether the client still caps a produced string at 511 bytes is unmeasured — the sources conflict on whether the limit was removed — so a string a value produces over 511 bytes, a `String Split` part included, is `not_modeled`.
 
 The display-only strings — `Icon String`, `Hero Icon String`, `Ability Icon String`, `Input Binding String` — render client-localized glyphs or per-player key names no capture or documented placeholder text defines; they stay `not_modeled`, as does `Current Map` while the scenario format names no map.
 

@@ -220,6 +220,19 @@ fn render(value: &Val) -> Result<String, Stop> {
     }
 }
 
+/// The produced string a value may return. Whether the client still
+/// caps strings at 511 bytes is unmeasured — the sources conflict on
+/// whether the limit was removed or covers every produced string — so
+/// a produced result past the boundary stops the run rather than pick
+/// a side.
+fn produced(text: String, construct: &str) -> Result<Val, Stop> {
+    if text.len() > 511 {
+        unsupported(format!("{construct} produced a string over 511 bytes"))
+    } else {
+        Ok(Val::Text(text))
+    }
+}
+
 /// The string a string-parameter argument reads as: text as itself, an
 /// empty array as the empty string (the Workshop spells an empty string
 /// `Empty Array` in these parameters), and a number, boolean or `Null`
@@ -701,7 +714,7 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             for (index, value) in rendered.iter().enumerate() {
                 text = text.replace(&format!("{{{index}}}"), value);
             }
-            Ok(Val::Text(text))
+            produced(text, name)
         }
         // `Char In String` reads the character at the index; an index
         // outside the string's bounds yields the empty string.
@@ -731,18 +744,19 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             if source.is_empty() {
                 return Ok(Val::Array(Vec::new()));
             }
-            let parts = if separator.is_empty() {
-                source
-                    .chars()
-                    .map(|char| Val::Text(char.to_string()))
-                    .collect()
+            let parts: Vec<String> = if separator.is_empty() {
+                source.chars().map(|char| char.to_string()).collect()
             } else {
                 source
                     .split(&separator)
-                    .map(|part| Val::Text(part.to_string()))
+                    .map(|part| part.to_string())
                     .collect()
             };
-            Ok(Val::Array(parts))
+            parts
+                .into_iter()
+                .map(|part| produced(part, name))
+                .collect::<Result<_, _>>()
+                .map(Val::Array)
         }
         // `Index Of String Char` reports the needle's first index as a
         // character count, or -1 when the needle is absent — and an
@@ -761,9 +775,8 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     .map_or(-1.0, |byte| source[..byte].chars().count() as f64)
             }))
         }
-        // `String Replace` replaces every occurrence of the pattern and
-        // clamps the result to 511 bytes of UTF-8. An empty pattern's
-        // occurrences are undefined, so the run stops.
+        // `String Replace` replaces every occurrence of the pattern. An
+        // empty pattern's occurrences are undefined, so the run stops.
         "stringReplace" => {
             let [source, pattern, replacement] = arguments::<3>(name, args)?;
             let (source, pattern, replacement) = (
@@ -774,16 +787,7 @@ fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             if pattern.is_empty() {
                 return unsupported("stringReplace with an empty pattern");
             }
-            let mut replaced = source.replace(&pattern, &replacement);
-            if replaced.len() > 511 {
-                let end = replaced
-                    .char_indices()
-                    .take_while(|(index, _)| *index <= 511)
-                    .last()
-                    .map_or(0, |(index, _)| index);
-                replaced.truncate(end);
-            }
-            Ok(Val::Text(replaced))
+            produced(source.replace(&pattern, &replacement), name)
         }
         other => unsupported(format!("value {other}")),
     }
