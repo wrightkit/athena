@@ -14,5 +14,6 @@ Index for the `athena` repository. The root [`README.md`](../README.md) is the e
 | [procedure.zh-CN.md](procedure.zh-CN.md) | Chinese: how to run a probe, expected values, verdict conditions |
 | [findings.md](findings.md) | Behavior currently believed, each tied to the probe that supports it |
 | [releases.md](releases.md) | Release mechanism and the git-tag dependency form for consumers |
+| [LESSONS.md](LESSONS.md) | Short queue of recurring failure classes from merged work, each with its prevention home |
 
 Per-probe status (runs, result, observed values) is not documented in prose. It lives in `probes/<id>/capture.json`.
