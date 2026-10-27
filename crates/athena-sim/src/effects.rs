@@ -20,11 +20,8 @@ use workshop_rs::Value;
 
 use crate::eval::{Env, eval, viewers};
 use crate::hud::enum_member;
-use crate::{Change, EffectArgs, EffectElement, EffectKind, NotModeled, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::unsupported;
+use crate::{Change, EffectArgs, EffectElement, EffectKind, Stop, Val};
 
 /// The entities a run created or played and the `id` of the newest
 /// durable one, which `Last Created Entity` reads.

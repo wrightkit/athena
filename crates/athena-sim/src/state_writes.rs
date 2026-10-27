@@ -11,18 +11,15 @@
 
 use workshop_rs::Value;
 
-use crate::eval::{Env, eval, number, player_ids};
+use crate::eval::{eval, number, player_ids};
 use crate::load::Instance;
 use crate::player::state_read_value;
 use crate::scenario::Team;
 use crate::state_reads::state_key;
 use crate::step::World;
+use crate::unsupported;
 use crate::vector::{Facing, Vec3};
 use crate::{Change, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(crate::NotModeled::new(what).into())
-}
 
 /// The modifier key each stored-modifier action writes on the player.
 fn modifier_key(name: &str) -> &'static str {
@@ -95,26 +92,13 @@ fn run(
     // `world.players` — so the `Env` is built here, as in `actions.rs`.
     // Each arm evaluates its arguments left to right first, then
     // mutates `world` per target player.
-    let env = Env {
-        globals: &world.globals,
-        players: &world.players,
-        event: inst.event.as_ref(),
-        each_player: inst.each_player.as_deref(),
-        hud: &world.hud,
-        element: None,
-        once: &inst.once,
-        effects: &world.effects,
-        random: world.random.as_ref(),
-        server_load: world.server_load,
-        map: world.map.as_deref(),
-        match_phase: world.match_phase,
-        game_mode: world.game_mode.as_deref(),
-        objectives: world.objectives.as_deref(),
-        rule: rule_idx,
-        changes: &world.changes,
+    let env = world.env(
+        inst.event.as_ref(),
+        inst.each_player.as_deref(),
+        &inst.once,
+        rule_idx,
         now,
-        match_time: world.clock.match_time,
-    };
+    );
     match name {
         "setHealth" => {
             let [player, amount] = args else {

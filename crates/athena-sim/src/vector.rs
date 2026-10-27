@@ -16,11 +16,8 @@ use workshop_rs::Value;
 
 use crate::eval::{Env, arguments, eval, number, player_id};
 use crate::scenario::{Player, Team};
-use crate::{MissingInput, MissingInputKind, NotModeled, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::unsupported;
+use crate::{MissingInput, MissingInputKind, Stop, Val};
 
 fn missing<T>(
     input: MissingInputKind,

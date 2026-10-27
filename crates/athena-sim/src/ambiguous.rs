@@ -10,14 +10,11 @@ use std::borrow::Cow;
 
 use workshop_rs::Value;
 
-use crate::{NotModeled, Stop, Val};
+use crate::unsupported;
+use crate::{Stop, Val};
 
 /// The sentinel's call id.
 pub(crate) const CALL: &str = "__ambiguous_enum";
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
 
 /// The `Vector` member among a sentinel's candidates: the enum
 /// candidate with `value_type` `Vector`, when there is one.

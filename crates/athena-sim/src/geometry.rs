@@ -14,12 +14,9 @@
 use workshop_rs::Value;
 
 use crate::eval::{Env, arguments, eval, player_id};
+use crate::unsupported;
 use crate::vector::{self, Vec3};
-use crate::{NotModeled, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::{Stop, Val};
 
 /// The raycast family's shared argument list — two positions, two
 /// player filters and a flag — evaluated left to right. The cast
