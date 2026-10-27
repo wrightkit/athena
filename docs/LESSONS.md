@@ -23,11 +23,11 @@ Short review queue of reusable failure classes from merged athena work. Each ent
 ### An unmeasured edge stops `not_modeled`, never falls back to a plausible value
 - **Rule:** When an argument cannot be read, a range overflows, or a client limit is unconfirmed, stop the run `not_modeled` or `missing_input` before any side effect. Do not skip the argument, clamp, or truncate.
 - **Why:** `Skip If` skipped its unreadable count, `String Replace` truncated at an unconfirmed 511 bytes, and `Random Real` drew from a non-finite range. Each run reported `complete` on behavior nobody measured.
-- **Prevention home:** owner contract — the modeled/not-modeled rule in `docs/architecture.md`; same class as `wright/docs/LESSONS.md` "An out-of-contract input or a failed computation surfaces as an error".
+- **Prevention home:** owner contract — the modeled/not-modeled rule in `docs/architecture.md`.
 - **Incidents:** [athena#59](https://github.com/wrightkit/athena/pull/59), [athena#64](https://github.com/wrightkit/athena/pull/64), [athena#66](https://github.com/wrightkit/athena/pull/66) — observed 2026-10-25, 2026-10-26
 
 ### A scheduler rule holds on every resume and dispatch path
 - **Rule:** A gate or environment field added to one resume path (ongoing, player event, subroutine, `Wait Until` re-check) or one evaluation entry is added to all of them, with one test per path.
-- **Why:** The slow-motion gate missed two of three resume arms, a `Wait Until` re-check built its env without the rule index, and `Evaluate Once` bypassed the argument pass that `call` runs.
+- **Why:** The slow-motion gate stopped new waits at the suspend site but none of the three resume arms, a `Wait Until` re-check built its env without the rule index, and `Evaluate Once` bypassed the argument pass that `call` runs.
 - **Prevention home:** existing policy (`engineering-quality.md` "Hold the change on the whole path") plus per-arm tests in the fixing PRs.
 - **Incidents:** [athena#66](https://github.com/wrightkit/athena/pull/66), [athena#81](https://github.com/wrightkit/athena/pull/81), [athena#121](https://github.com/wrightkit/athena/pull/121) — observed 2026-10-26
