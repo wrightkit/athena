@@ -17,7 +17,8 @@ use crate::load::{Frame, Instance, WaitMode};
 use crate::modify::{apply_modify, modify_at, modify_op, set_at};
 use crate::scenario::{Player, ServerLoad};
 use crate::state::{self, WorldSlot};
-use crate::{Change, LogEntry, NotModeled, RuleRun, Stop, StopIndex, StopLocation, Timeline, Val};
+use crate::unsupported;
+use crate::{Change, LogEntry, RuleRun, Stop, StopIndex, StopLocation, Timeline, Val};
 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
@@ -25,10 +26,6 @@ const STEP_LIMIT: usize = 1_000_000;
 /// Nested subroutine calls a run may make; the limit exists so a recursive
 /// program cannot grow the frame stack without bound.
 const CALL_DEPTH_LIMIT: usize = 128;
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
 
 /// Ticks a `Wait(seconds)` lasts: rounded up, never less than one (P1, P4).
 fn wait_ticks(seconds: f64) -> u64 {
@@ -179,26 +176,13 @@ pub(crate) fn run_instance(
             inst.frames.pop();
             continue;
         };
-        let env = Env {
-            globals: &world.globals,
-            players: &world.players,
-            event: inst.event.as_ref(),
-            each_player: inst.each_player.as_deref(),
-            hud: &world.hud,
-            element: None,
-            once: &inst.once,
-            effects: &world.effects,
-            random: world.random.as_ref(),
-            server_load: world.server_load,
-            map: world.map.as_deref(),
-            match_phase: world.match_phase,
-            game_mode: world.game_mode.as_deref(),
-            objectives: world.objectives.as_deref(),
-            rule: rule_idx,
-            changes: &world.changes,
+        let env = world.env(
+            inst.event.as_ref(),
+            inst.each_player.as_deref(),
+            &inst.once,
+            rule_idx,
             now,
-            match_time: world.clock.match_time,
-        };
+        );
         match action {
             Action::Disabled { .. } => advance(inst),
             Action::SetGlobalVariable { variable, value } => {

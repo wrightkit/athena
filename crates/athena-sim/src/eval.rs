@@ -7,7 +7,9 @@ use crate::call::Random;
 use crate::effects::Effects;
 use crate::hud::Hud;
 use crate::scenario::{EventCtx, Player, ServerLoad};
-use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
+use crate::step::World;
+use crate::unsupported;
+use crate::{Change, MissingInput, MissingInputKind, Stop, Val};
 
 pub(crate) struct Env<'a> {
     pub globals: &'a BTreeMap<String, Val>,
@@ -78,8 +80,38 @@ impl Env<'_> {
     }
 }
 
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
+impl World {
+    /// The evaluation `Env` over this world's current state, for one rule
+    /// run or condition check.
+    pub(crate) fn env<'a>(
+        &'a self,
+        event: Option<&'a EventCtx>,
+        each_player: Option<&'a str>,
+        once: &'a RefCell<BTreeMap<usize, Val>>,
+        rule: usize,
+        now: f64,
+    ) -> Env<'a> {
+        Env {
+            globals: &self.globals,
+            players: &self.players,
+            event,
+            each_player,
+            hud: &self.hud,
+            element: None,
+            once,
+            effects: &self.effects,
+            random: self.random.as_ref(),
+            server_load: self.server_load,
+            map: self.map.as_deref(),
+            match_phase: self.match_phase,
+            game_mode: self.game_mode.as_deref(),
+            objectives: self.objectives.as_deref(),
+            rule,
+            changes: &self.changes,
+            now,
+            match_time: self.clock.match_time,
+        }
+    }
 }
 
 fn missing<T>(

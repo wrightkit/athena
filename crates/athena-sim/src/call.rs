@@ -8,11 +8,8 @@ use workshop_rs::Value;
 use crate::ambiguous;
 use crate::eval::{Env, arguments, eval, number, values_equal};
 use crate::scenario::{Phase, ServerLoad};
-use crate::{Change, MissingInput, MissingInputKind, NotModeled, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::unsupported;
+use crate::{Change, MissingInput, MissingInputKind, Stop, Val};
 
 fn missing<T>(
     input: MissingInputKind,

@@ -2,11 +2,8 @@
 
 use workshop_rs::Action;
 
-use crate::{NotModeled, Stop};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::Stop;
+use crate::unsupported;
 
 /// Jump targets for the block actions of one rule.
 pub(crate) struct Blocks {

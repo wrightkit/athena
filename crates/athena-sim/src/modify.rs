@@ -9,12 +9,9 @@ use workshop_rs::{ModifyOp, Value};
 
 use crate::eval::{number, values_equal};
 use crate::scenario::Player;
+use crate::unsupported;
 use crate::vector::arithmetic;
-use crate::{NotModeled, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::{Stop, Val};
 
 /// The array a `Modify` array operation reads: an array as itself, `Null`
 /// as the empty array. Anything else is not an array.

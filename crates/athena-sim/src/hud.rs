@@ -10,11 +10,8 @@ use std::cell::RefCell;
 use workshop_rs::Value;
 
 use crate::eval::{Env, eval, viewers};
-use crate::{Change, HudArgs, HudElement, HudKind, NotModeled, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::unsupported;
+use crate::{Change, HudArgs, HudElement, HudKind, Stop, Val};
 
 /// The display elements a run created and the text id of the newest one.
 #[derive(Default)]

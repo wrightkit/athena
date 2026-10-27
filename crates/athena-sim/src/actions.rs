@@ -9,15 +9,12 @@ use std::collections::BTreeMap;
 
 use workshop_rs::Value;
 
-use crate::eval::{Env, button_slot, eval, number, player_id, player_ids};
+use crate::eval::{button_slot, eval, number, player_id, player_ids};
 use crate::load::Instance;
 use crate::state;
 use crate::step::{World, world_state};
-use crate::{Change, NotModeled, PlayerWorld, Stop, Val};
-
-fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
-    Err(NotModeled::new(what).into())
-}
+use crate::unsupported;
+use crate::{Change, PlayerWorld, Stop, Val};
 
 /// Execute a modeled status/button/rule action against `world`; `None`
 /// when `name` is not one of them.
@@ -61,26 +58,13 @@ fn run(
     // The caller's `Env` cannot cross this call — it shares a borrow of
     // `world.players` — so the `Env` is built here. Each arm evaluates
     // its arguments through `env` first, then mutates `world`.
-    let env = Env {
-        globals: &world.globals,
-        players: &world.players,
-        event: inst.event.as_ref(),
-        each_player: inst.each_player.as_deref(),
-        hud: &world.hud,
-        element: None,
-        once: &inst.once,
-        effects: &world.effects,
-        random: world.random.as_ref(),
-        server_load: world.server_load,
-        map: world.map.as_deref(),
-        match_phase: world.match_phase,
-        game_mode: world.game_mode.as_deref(),
-        objectives: world.objectives.as_deref(),
-        rule: rule_idx,
-        changes: &world.changes,
+    let env = world.env(
+        inst.event.as_ref(),
+        inst.each_player.as_deref(),
+        &inst.once,
+        rule_idx,
         now,
-        match_time: world.clock.match_time,
-    };
+    );
     match name {
         "damage" => {
             let [player, damager, amount] = args else {

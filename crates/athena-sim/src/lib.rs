@@ -650,6 +650,10 @@ pub(crate) enum Stop {
     MissingInput(Box<MissingInput>),
 }
 
+pub(crate) fn unsupported<T>(what: impl Into<String>) -> Result<T, Stop> {
+    Err(NotModeled::new(what).into())
+}
+
 impl Stop {
     pub(crate) fn at(self, tick: u64) -> Self {
         match self {
