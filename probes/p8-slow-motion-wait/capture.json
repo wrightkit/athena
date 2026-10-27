@@ -1,0 +1,15 @@
+{
+  "probe": "p8-slow-motion-wait",
+  "client": {
+    "version": "",
+    "date": "",
+    "locale": "zh-CN"
+  },
+  "runs": 0,
+  "probe_sha256": "e369040ef4ebb0001975808ef05ae8287a8c21da720585b233bfe792f7898ce5",
+  "hypothesis": "under Set Slow Motion(f) the tick still paces rule evaluation and Total Time Elapsed advances 16*f/100 ms per tick (P8m lines: 8, 14.4 and 16 ms at f=50, 90, 100), and Wait seconds map to ticks in that scaled time, so rounding still rounds up to a whole tick (P8w lines: elapsed_ms is the requested ms rounded up to a multiple of the scaled tick). The f=100 control repeats the P1 readings.",
+  "observed": [],
+  "result": "inconclusive",
+  "notes": "No captures yet; running the probe in the client is an owner step. The expected lines are hypotheses in expect.json. P8 is the one probe that calls Set Slow Motion itself; it must be the only rule loaded and it restores the factor to 100 at the end. If the log lines alone show the f=100 values at every factor, the [hh:mm:ss] timestamps decide whether the tick itself stretched (Wait(1) then takes about 2 s of wall time at f=50) or slow motion never reached the scheduler; the two readings print the same numbers.",
+  "sources": []
+}
