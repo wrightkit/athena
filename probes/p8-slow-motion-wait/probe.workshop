@@ -1,0 +1,67 @@
+variables
+{
+	global:
+		0: w
+		1: mt
+		2: f
+		3: mgo
+		4: m
+		5: k
+		6: i
+}
+
+rule("P8 driver: Wait durations under Set Slow Motion factors 100, 50 and 90")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Wait(3, Ignore Condition);
+		Global.k = 0;
+		While(Global.k < 3);
+			Global.f = Value In Array(Array(100, 50, 90), Global.k);
+			Set Slow Motion(Global.f);
+			Wait(0.5, Ignore Condition);
+			Global.mgo = True;
+			Wait(0.5, Ignore Condition);
+			Global.i = 0;
+			While(Global.i < 4);
+				Global.w = Total Time Elapsed;
+				Wait(Value In Array(Array(0.016, 0.1, 0.5, 1), Global.i), Ignore Condition);
+				Log To Inspector(Custom String("P8w f={0} wait_ms={1} elapsed_ms={2}", Global.f, Value In Array(Array(0.016, 0.1, 0.5, 1), Global.i) * 1000, (Total Time Elapsed - Global.w) * 1000));
+				Global.i += 1;
+			End;
+			Global.k += 1;
+		End;
+		Set Slow Motion(100);
+		Log To Inspector(Custom String("P8 done", Null, Null, Null));
+	}
+}
+
+rule("P8 metronome: Total Time Elapsed per tick under the active factor")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.mgo == True;
+	}
+
+	actions
+	{
+		Global.mt = Total Time Elapsed;
+		Global.m = 0;
+		While(Global.m < 8);
+			Wait(0, Ignore Condition);
+			Log To Inspector(Custom String("P8m f={0} i={1} t_ms={2}", Global.f, Global.m, (Total Time Elapsed - Global.mt) * 1000));
+			Global.m += 1;
+		End;
+		Global.mgo = False;
+	}
+}
