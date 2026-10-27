@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.11.0](https://github.com/wrightkit/athena/compare/v0.10.0...v0.11.0) (2026-10-27)
+
+
+### Features
+
+* **sim:** entity-creating display actions with shared id spaces ([36278a7](https://github.com/wrightkit/athena/commit/36278a7c2fe0c9d70bc8d8a48aeeafbf7be23a46)), closes [#118](https://github.com/wrightkit/athena/issues/118)
+* **sim:** match-clock actions and readers on a world clock ([9c8fde6](https://github.com/wrightkit/athena/commit/9c8fde650e1957379eb9ad5fd2d5813a42bbbc95)), closes [#120](https://github.com/wrightkit/athena/issues/120)
+* **sim:** model display-only producers as opaque display values ([5313c6b](https://github.com/wrightkit/athena/commit/5313c6b2bf98235f99c1e8ff86bac38836379ec4)), closes [#113](https://github.com/wrightkit/athena/issues/113)
+* **sim:** mutable state cells and stored modifiers for action writes ([5ceb4c7](https://github.com/wrightkit/athena/commit/5ceb4c7dd02b3a0358ca230a95cb7b5c738652fe)), closes [#116](https://github.com/wrightkit/athena/issues/116)
+
 ## [0.10.0](https://github.com/wrightkit/athena/compare/v0.9.0...v0.10.0) (2026-10-26)
 
 
