@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.0](https://github.com/wrightkit/athena/compare/v0.11.1...v0.12.0) (2026-10-28)
+
+
+### Features
+
+* **sim:** model Number Of Players and stop non-finite scalar results ([#132](https://github.com/wrightkit/athena/issues/132)) ([6c2ee1c](https://github.com/wrightkit/athena/commit/6c2ee1c78a83c8d529ab2d8ec3bb17360378e205)), closes [#56](https://github.com/wrightkit/athena/issues/56)
+* **sim:** trigger player events from scenario and Damage/Heal ([#130](https://github.com/wrightkit/athena/issues/130)) ([5e16900](https://github.com/wrightkit/athena/commit/5e16900d78b35cde1236264efe48150f613935fe)), closes [#47](https://github.com/wrightkit/athena/issues/47)
+
 ## [0.11.1](https://github.com/wrightkit/athena/compare/v0.11.0...v0.11.1) (2026-10-28)
 
 
