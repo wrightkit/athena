@@ -49,7 +49,7 @@ settings {{
 
 rule ("act") {{
     event {{
-        Player Dealt Damage;
+        Player Joined Match;
         All;
         All;
     }}
@@ -61,12 +61,12 @@ rule ("act") {{
     )
 }
 
-/// A scenario with the given players and one damage event on `event_player`.
+/// A scenario with the given players and one join event on `event_player`.
 fn hero_settings_scenario(players: &str, event_player: &str) -> String {
     format!(
         r#"{{ "scenarioVersion": 1, "seconds": 1,
             "players": [{players}],
-            "events": [{{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "{event_player}" }}] }}"#
+            "events": [{{ "kind": "playerJoined", "time": 0, "eventPlayer": "{event_player}" }}] }}"#
     )
 }
 
@@ -76,7 +76,7 @@ fn hero_settings_scenario_v2(players: &str, event_player: &str) -> String {
     format!(
         r#"{{ "scenarioVersion": 2, "seconds": 1,
             "players": [{players}],
-            "events": [{{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "{event_player}" }}] }}"#
+            "events": [{{ "kind": "playerJoined", "time": 0, "eventPlayer": "{event_player}" }}] }}"#
     )
 }
 

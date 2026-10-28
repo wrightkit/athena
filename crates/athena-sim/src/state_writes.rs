@@ -16,7 +16,7 @@ use crate::load::Instance;
 use crate::player::state_read_value;
 use crate::scenario::Team;
 use crate::state_reads::state_key;
-use crate::step::World;
+use crate::step::{World, dead, world_state};
 use crate::unsupported;
 use crate::vector::{Facing, Vec3};
 use crate::{Change, Stop, Val};
@@ -194,7 +194,20 @@ fn run(
             };
             let ids = player_ids(player, &env)?;
             for id in ids {
-                if name == "respawn" {
+                // Whether the revive restores the health pool to its
+                // max: `Respawn` acts "with full health, even if they
+                // were already alive"; `Resurrect` revives the dead —
+                // "For dead players, use the Resurrect action instead"
+                // — so a living target keeps its health. `Resurrect`'s
+                // `dead` read must come before the `isDead` write
+                // replaces it; it is the same read `Damage`/`Heal` gate
+                // on. A player `dead` cannot answer — no resolved world
+                // — has no pool to refill either way.
+                let revive = if name == "resurrect" {
+                    let was_dead = dead(world, &id).unwrap_or(false);
+                    write_cell(world, &id, "isDead", Val::Bool(false), "action resurrect")?;
+                    was_dead
+                } else {
                     // "with full health": `Health` becomes what
                     // `Max Health` reports. The relocation to a spawn
                     // point is a gameplay effect the model does not
@@ -202,8 +215,25 @@ fn run(
                     let full = read_key(world, &id, "maxHealth", "action respawn")?;
                     write_cell(world, &id, "isDead", Val::Bool(false), "action respawn")?;
                     write_cell(world, &id, "health", full, "action respawn")?;
-                } else {
-                    write_cell(world, &id, "isDead", Val::Bool(false), "action resurrect")?;
+                    true
+                };
+                // The `isDead` write alone leaves a `Damage`-killed
+                // player's health pool at zero — it could never reach
+                // zero, or raise `Player Died`, again — so a revive
+                // refills the resolved `world` pool too, recording the
+                // move as `Damage`/`Heal` do.
+                if revive && let Ok(target) = world_state(world, &id) {
+                    let old = target.world.health.current;
+                    let new = target.world.health.max;
+                    target.world.health.current = new;
+                    if old != new {
+                        world.changes.borrow_mut().push(Change::World {
+                            player: id,
+                            field: "health".to_string(),
+                            old: Val::Number(old),
+                            new: Val::Number(new),
+                        });
+                    }
                 }
             }
         }
@@ -328,7 +358,7 @@ fn read_key(world: &World, id: &str, key: &str, construct: &str) -> Result<Val, 
 /// Write `key`'s cell on player `id` and record the `state` change:
 /// `old` is what the key read before the write, `null` when nothing
 /// answered it.
-fn write_cell(
+pub(crate) fn write_cell(
     world: &mut World,
     id: &str,
     key: &str,

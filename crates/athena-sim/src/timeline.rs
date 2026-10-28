@@ -13,8 +13,8 @@ pub struct RuleRun {
     pub rule: usize,
     /// The rule's name.
     pub name: String,
-    /// The scenario `id` of the run's `Event Player`: an injected event's
-    /// `eventPlayer`, or the player an `Ongoing - Each Player` run is
+    /// The scenario `id` of the run's `Event Player`: the triggering
+    /// event's player, or the player an `Ongoing - Each Player` run is
     /// bound to; `null` for `Ongoing - Global` runs and events without
     /// one.
     pub event_player: Option<String>,
