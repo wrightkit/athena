@@ -344,9 +344,7 @@ fn run(
 /// Whether `Damage`/`Heal` treats player `id` as dead: the `isDead`
 /// read decides where it answers — a cell an action wrote or the
 /// declared `state.isDead`, the same read `Is Alive` makes — and the
-/// health pool decides where `isDead` cannot answer. `construct`
-/// names the action in the stop a fallback `world_state` touch can
-/// raise.
+/// health pool decides where `isDead` cannot answer.
 fn dead(world: &mut World, id: &str, construct: &str) -> Result<bool, Stop> {
     let read = crate::state_reads::state_read("isDead").expect("in STATE_READS");
     match crate::player::state_read_value(&world.players, id, read, construct) {

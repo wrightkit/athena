@@ -416,6 +416,95 @@ fn a_dead_target_takes_no_pool_change_or_events_and_a_revived_one_does() {
     assert_eq!(world.health.current, world.health.max - 30.0);
 }
 
+/// A `Damage` kill leaves the health pool at zero where `Kill` does
+/// not: `Resurrect` and `Respawn` refill it, so a revived player
+/// takes damage and dies — raising `Player Died` — again.
+const DAMAGE_REVIVE: &str = r#"
+variables {
+    global:
+        0: seq
+}
+
+rule ("cause") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Damage(Value In Array(All Players(Team 2), 0), Null, 9999);
+        Resurrect(Value In Array(All Players(Team 2), 0));
+        Damage(Value In Array(All Players(Team 2), 0), Null, 9999);
+        Respawn(Value In Array(All Players(Team 2), 0));
+        Damage(Value In Array(All Players(Team 2), 0), Null, 9999);
+        Damage(Value In Array(All Players(Team 2), 0), Null, 9999);
+        Heal(Value In Array(All Players(Team 2), 0), Null, 30);
+    }
+}
+
+rule ("took") {
+    event {
+        Player Took Damage;
+        All;
+        All;
+    }
+    actions {
+        Modify Global Variable(seq, Append To Array, 1);
+    }
+}
+
+rule ("died") {
+    event {
+        Player Died;
+        All;
+        All;
+    }
+    actions {
+        Modify Global Variable(seq, Append To Array, 3);
+    }
+}
+
+rule ("healed") {
+    event {
+        Player Received Healing;
+        All;
+        All;
+    }
+    actions {
+        Modify Global Variable(seq, Append To Array, 5);
+    }
+}
+"#;
+
+#[test]
+fn a_damage_killed_then_revived_player_dies_again() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [
+            { "id": "p1", "hero": "ana", "team": "team1" },
+            { "id": "p2", "hero": "reaper", "team": "team2" }
+        ]
+    }"#;
+    let trace = run(DAMAGE_REVIVE, scenario);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    // `Player Died` fires once per revive-and-kill cycle — after the
+    // `Resurrect` and after the `Respawn`; the last kill leaves the
+    // target dead, so the trailing `Damage` and `Heal` raise nothing.
+    assert_eq!(
+        trace.globals["seq"],
+        Val::Array(vec![
+            Val::Number(1.0),
+            Val::Number(3.0),
+            Val::Number(1.0),
+            Val::Number(3.0),
+            Val::Number(1.0),
+            Val::Number(3.0)
+        ])
+    );
+    assert_eq!(trace.players["p2"].state["isDead"], Val::Bool(true));
+    let world = trace.players["p2"].world.as_ref().unwrap();
+    assert_eq!(world.health.current, 0.0);
+}
+
 /// `Event Was Critical Hit` has no binding on a `Damage`-raised event
 /// and no scenario `values` path — an unbound read is `not_modeled`.
 const CRITICAL: &str = r#"

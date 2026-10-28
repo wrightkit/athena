@@ -16,7 +16,7 @@ use crate::load::Instance;
 use crate::player::state_read_value;
 use crate::scenario::Team;
 use crate::state_reads::state_key;
-use crate::step::World;
+use crate::step::{World, world_state};
 use crate::unsupported;
 use crate::vector::{Facing, Vec3};
 use crate::{Change, Stop, Val};
@@ -204,6 +204,26 @@ fn run(
                     write_cell(world, &id, "health", full, "action respawn")?;
                 } else {
                     write_cell(world, &id, "isDead", Val::Bool(false), "action resurrect")?;
+                }
+                // The `isDead` write alone leaves a `Damage`-killed
+                // player's health pool at zero, so it could never be
+                // brought to zero — or `Player Died` fire — again:
+                // the revive refills it to `health.max` (`Respawn`'s
+                // "with full health", `Resurrect` the same under
+                // modeled-not-measured) where the player's `world`
+                // resolves, recording the move as `Damage`/`Heal` do.
+                if let Ok(target) = world_state(world, &id) {
+                    let old = target.world.health.current;
+                    let new = target.world.health.max;
+                    target.world.health.current = new;
+                    if old != new {
+                        world.changes.borrow_mut().push(Change::World {
+                            player: id,
+                            field: "health".to_string(),
+                            old: Val::Number(old),
+                            new: Val::Number(new),
+                        });
+                    }
                 }
             }
         }
