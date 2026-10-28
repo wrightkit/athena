@@ -328,7 +328,7 @@ fn read_key(world: &World, id: &str, key: &str, construct: &str) -> Result<Val, 
 /// Write `key`'s cell on player `id` and record the `state` change:
 /// `old` is what the key read before the write, `null` when nothing
 /// answered it.
-fn write_cell(
+pub(crate) fn write_cell(
     world: &mut World,
     id: &str,
     key: &str,

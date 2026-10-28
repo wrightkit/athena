@@ -15,7 +15,7 @@ use crate::eval::{Env, eval, number, player_id};
 use crate::hud::Hud;
 use crate::load::{Frame, Instance, WaitMode};
 use crate::modify::{apply_modify, modify_at, modify_op, set_at};
-use crate::scenario::{Player, ServerLoad};
+use crate::scenario::{EventCtx, Player, ServerLoad};
 use crate::state::{self, WorldSlot};
 use crate::unsupported;
 use crate::{Change, LogEntry, RuleRun, Stop, StopIndex, StopLocation, Timeline, Val};
@@ -23,6 +23,10 @@ use crate::{Change, LogEntry, RuleRun, Stop, StopIndex, StopLocation, Timeline, 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
 const STEP_LIMIT: usize = 1_000_000;
+/// Player events one tick may raise: a `Damage`/`Heal` inside a
+/// triggered rule raises the events that rule fires again, so an
+/// unguarded queue lets one cause fan out without bound.
+pub(crate) const TICK_EVENT_LIMIT: u64 = 1024;
 /// Nested subroutine calls a run may make; the limit exists so a recursive
 /// program cannot grow the frame stack without bound.
 const CALL_DEPTH_LIMIT: usize = 128;
@@ -56,6 +60,13 @@ pub(crate) struct World {
     /// `Start Rule` requests as `(rule index, restart)`; applied when the
     /// target's instance is next visited in the tick loop.
     pub pending_starts: Vec<(usize, bool)>,
+    /// Player events a modeled state change (`Damage`, `Heal`) raised;
+    /// the tick loop delivers them to the instances whose event kind and
+    /// team/player filters match, in queue order.
+    pub pending_events: Vec<EventCtx>,
+    /// Player events raised on the tick in progress; `run_tick` resets
+    /// it, [`TICK_EVENT_LIMIT`] bounds a self-triggering chain.
+    pub tick_events: u64,
     /// The rule executions of the tick in progress — started, resumed or
     /// ended — in execution order; `tick_loop` drains them into the
     /// tick's timeline entry.

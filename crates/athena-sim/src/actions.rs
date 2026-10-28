@@ -11,6 +11,7 @@ use workshop_rs::Value;
 
 use crate::eval::{button_slot, eval, number, player_id, player_ids};
 use crate::load::Instance;
+use crate::scenario::EventCtx;
 use crate::state;
 use crate::step::{World, world_state};
 use crate::unsupported;
@@ -75,26 +76,60 @@ fn run(
             let ids = player_ids(player, &env)?;
             let damager = eval(damager, &env)?;
             let amount = number(&eval(amount, &env)?)?;
-            let dealt = match damager {
-                Val::Null => 1.0,
-                Val::Player(id) => world_state(world, &id)?.damage_dealt,
+            let dealer = match &damager {
+                Val::Null => None,
+                Val::Player(id) => Some(world_state(world, id)?.damage_dealt),
                 other => {
                     return unsupported(format!("{other:?} where a player is needed"));
                 }
             };
             for id in ids {
-                let target = world_state(world, &id)?;
-                let before = pools(&target.world);
-                state::damage(&mut target.world, amount * dealt * target.damage_received);
-                let after = pools(&target.world);
-                for ((field, old), (_, new)) in before.into_iter().zip(after) {
-                    if old != new {
-                        world.changes.borrow_mut().push(Change::World {
-                            player: id.clone(),
-                            field: field.to_string(),
-                            old: old.map_or(Val::Null, Val::Number),
-                            new: new.map_or(Val::Null, Val::Number),
-                        });
+                let (applied, alive, died) = {
+                    let target = world_state(world, &id)?;
+                    let applied = amount * dealer.unwrap_or(1.0) * target.damage_received;
+                    let before = pools(&target.world);
+                    let health = target.world.health.current;
+                    state::damage(&mut target.world, applied);
+                    let died = health > 0.0 && target.world.health.current == 0.0;
+                    let after = pools(&target.world);
+                    for ((field, old), (_, new)) in before.into_iter().zip(after) {
+                        if old != new {
+                            world.changes.borrow_mut().push(Change::World {
+                                player: id.clone(),
+                                field: field.to_string(),
+                                old: old.map_or(Val::Null, Val::Number),
+                                new: new.map_or(Val::Null, Val::Number),
+                            });
+                        }
+                    }
+                    (applied, health > 0.0, died)
+                };
+                // The damage raises the player events the catalog
+                // defines for the cause, in occurrence order: the
+                // victim's `Player Took Damage`, the dealer's `Player
+                // Dealt Damage`, then — when the hit brought health to
+                // zero — the victim's `Player Died` and the dealer's
+                // `Player Dealt Final Blow`. A `Null` dealer raises no
+                // dealer-side event and binds `Attacker` to `Null`; a
+                // player already at zero health takes no damage events.
+                if applied > 0.0 && alive {
+                    let values = event_values(&damager, &id, "eventDamage", applied);
+                    raise(world, "playerTookDamage", &id, values.clone())?;
+                    if let Val::Player(dealer) = &damager {
+                        raise(world, "playerDealtDamage", dealer, values.clone())?;
+                    }
+                    if died {
+                        crate::state_writes::write_cell(
+                            world,
+                            &id,
+                            "isDead",
+                            Val::Bool(true),
+                            "action damage",
+                        )?;
+                        raise(world, "playerDied", &id, values.clone())?;
+                        if let Val::Player(dealer) = &damager {
+                            raise(world, "playerDealtFinalBlow", dealer, values)?;
+                        }
                     }
                 }
             }
@@ -104,29 +139,40 @@ fn run(
                 return unsupported("heal arguments");
             };
             // Same shape as `damage`, with `healingDealt%` and
-            // `healingReceived%` scales.
+            // `healingReceived%` scales. A positive heal on a living
+            // player raises `Player Received Healing` for the healed
+            // and `Player Dealt Healing` for a player healer, in that
+            // order.
             let ids = player_ids(player, &env)?;
             let healer = eval(healer, &env)?;
             let amount = number(&eval(amount, &env)?)?;
-            let dealt = match healer {
-                Val::Null => 1.0,
-                Val::Player(id) => world_state(world, &id)?.healing_dealt,
+            let dealer = match &healer {
+                Val::Null => None,
+                Val::Player(id) => Some(world_state(world, id)?.healing_dealt),
                 other => {
                     return unsupported(format!("{other:?} where a player is needed"));
                 }
             };
             for id in ids {
                 let target = world_state(world, &id)?;
+                let applied = amount * dealer.unwrap_or(1.0) * target.healing_received;
                 let old = target.world.health.current;
-                state::heal(&mut target.world, amount * dealt * target.healing_received);
+                state::heal(&mut target.world, applied);
                 let new = target.world.health.current;
                 if new != old {
                     world.changes.borrow_mut().push(Change::World {
-                        player: id,
+                        player: id.clone(),
                         field: "health".to_string(),
                         old: Val::Number(old),
                         new: Val::Number(new),
                     });
+                }
+                if applied > 0.0 && old > 0.0 {
+                    let values = event_values(&healer, &id, "eventHealing", applied);
+                    raise(world, "playerReceivedHealing", &id, values.clone())?;
+                    if let Val::Player(dealer) = &healer {
+                        raise(world, "playerDealtHealing", dealer, values)?;
+                    }
                 }
             }
         }
@@ -291,4 +337,42 @@ fn pools(world: &PlayerWorld) -> [(&'static str, Option<f64>); 3] {
         ("armor", world.armor.as_ref().map(|pool| pool.current)),
         ("health", Some(world.health.current)),
     ]
+}
+
+/// Queue a player event `cause` raised on `world.pending_events` for
+/// the tick loop to deliver: `player` is the event player the rule's
+/// `Event Player` binds. A raised event counts toward the tick's
+/// [`crate::step::TICK_EVENT_LIMIT`]: a triggered rule that damages or
+/// heals again can fan the queue out without bound without one.
+fn raise(
+    world: &mut World,
+    kind: &str,
+    player: &str,
+    values: BTreeMap<String, Val>,
+) -> Result<(), Stop> {
+    if world.tick_events >= crate::step::TICK_EVENT_LIMIT {
+        return unsupported(format!(
+            "more than {} player events raised in one tick",
+            crate::step::TICK_EVENT_LIMIT
+        ));
+    }
+    world.tick_events += 1;
+    world.pending_events.push(EventCtx {
+        kind: kind.to_string(),
+        player: Some(player.to_string()),
+        values,
+    });
+    Ok(())
+}
+
+/// The `values` a `Damage`/`Heal` event binds: `Attacker` the dealing
+/// or healing player (`Null` when the cause names none), `Victim` the
+/// player the pool moved on, and `key` (`eventDamage`/`eventHealing`)
+/// the applied amount.
+fn event_values(cause: &Val, victim: &str, key: &str, amount: f64) -> BTreeMap<String, Val> {
+    BTreeMap::from([
+        ("attacker".to_string(), cause.clone()),
+        ("victim".to_string(), Val::Player(victim.to_string())),
+        (key.to_string(), Val::Number(amount)),
+    ])
 }

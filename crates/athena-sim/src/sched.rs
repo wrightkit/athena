@@ -2,21 +2,22 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use workshop_rs::hero_values::HeroValues;
-use workshop_rs::{Action, Event, EventTarget, EventTeam, Program, Rule};
+use workshop_rs::{Action, Event, Program, Rule};
 
 use crate::blocks::Blocks;
 use crate::call::Random;
 use crate::eval::{Env, eval};
+use crate::events;
 use crate::expect::Expectation;
 use crate::hud::Hud;
-use crate::load::{Frame, Instance, Loaded, WaitMode, load, player_matches};
+use crate::load::{Frame, Instance, Loaded, WaitMode, load};
 use crate::scenario::{EventCtx, Scenario};
 use crate::state::{self, WorldSlot};
 use crate::step::{World, conditions_hold, flag, run_instance};
 use crate::{
-    ExpectationResult, ExpectationStatus, MissingInput, MissingInputKind, NotModeled, Options,
-    Outcome, PlayerState, RuleRun, RunEnd, Stop, StopIndex, StopLocation, TIMELINE_CHANGE_LIMIT,
-    TIMELINE_ENTRY_LIMIT, TIMELINE_RULE_LIMIT, Timeline, TimelineEntry, Trace, Val,
+    ExpectationResult, ExpectationStatus, NotModeled, Options, Outcome, PlayerState, RuleRun,
+    RunEnd, Stop, StopIndex, StopLocation, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT,
+    TIMELINE_RULE_LIMIT, Timeline, TimelineEntry, Trace, Val,
 };
 
 /// One server tick (P0, P1).
@@ -87,6 +88,8 @@ pub(crate) fn run(
         hud: RefCell::new(Hud::default()),
         effects: RefCell::new(crate::effects::Effects::default()),
         pending_starts: Vec::new(),
+        pending_events: Vec::new(),
+        tick_events: 0,
         runs: Vec::new(),
         changes: RefCell::new(Vec::new()),
         random: random.map(|seed| RefCell::new(Random::new(seed))),
@@ -213,7 +216,7 @@ fn expectations(
 
 /// The run's `Event Player`: an injected event's `eventPlayer`, or the
 /// player an `Ongoing - Each Player` instance is bound to.
-fn event_player(inst: &Instance<'_>) -> Option<String> {
+pub(crate) fn event_player(inst: &Instance<'_>) -> Option<String> {
     inst.event
         .as_ref()
         .and_then(|event| event.player.clone())
@@ -223,7 +226,7 @@ fn event_player(inst: &Instance<'_>) -> Option<String> {
 /// Run one instance and record the execution in `world.runs`: a
 /// `Wait`/`Wait Until` reports `waiting` with its wake tick, a stop
 /// reports `stopped` and gains the failing action's location.
-fn run_and_record(
+pub(crate) fn run_and_record(
     inst: &mut Instance<'_>,
     rule_list: &[&Rule],
     blocks: &[Blocks],
@@ -274,7 +277,12 @@ fn run_and_record(
 /// check or `Wait Until` re-check — still ends a rule's work on the tick:
 /// the tick's `rules` list shows the rule `stopped`, and the stop gains
 /// the same location.
-fn record_stop(runs: &mut Vec<RuleRun>, run: RuleRun, at: Option<StopIndex>, stop: Stop) -> Stop {
+pub(crate) fn record_stop(
+    runs: &mut Vec<RuleRun>,
+    run: RuleRun,
+    at: Option<StopIndex>,
+    stop: Stop,
+) -> Stop {
     let location = StopLocation {
         rule: run.rule,
         name: run.name.clone(),
@@ -395,7 +403,7 @@ fn tick_loop(
 fn run_tick(
     loaded: &mut Loaded<'_>,
     world: &mut World,
-    events: &BTreeMap<u64, Vec<EventCtx>>,
+    by_tick: &BTreeMap<u64, Vec<EventCtx>>,
     tick: u64,
     now: f64,
 ) -> Result<(), Stop> {
@@ -405,70 +413,20 @@ fn run_tick(
         subroutines,
         instances,
     } = loaded;
-    if let Some(due) = events.get(&tick) {
+    world.tick_events = 0;
+    // Events a modeled state change queued on an earlier tick come
+    // first: they happened before this tick's injected events.
+    events::dispatch(instances, rule_list, blocks, subroutines, world, tick, now)?;
+    if let Some(due) = by_tick.get(&tick) {
         for injected in due {
-            for instance in instances.iter_mut() {
-                if let Event::Player { kind, team, target } = &instance.rule.event
-                    && kind.catalog_id() == injected.kind
-                {
-                    // The team/player filters read the event player: an
-                    // event that does not name one can only satisfy
-                    // `All`.
-                    let eligible = match &injected.player {
-                        Some(id) => player_matches(
-                            *team,
-                            target,
-                            world
-                                .players
-                                .get(id)
-                                .expect("the scenario loader checks `eventPlayer` is declared"),
-                        )
-                        .map_err(|stop| {
-                            record_stop(
-                                &mut world.runs,
-                                RuleRun {
-                                    rule: instance.rule_idx,
-                                    name: instance.rule.name.clone(),
-                                    event_player: injected.player.clone(),
-                                    ended: RunEnd::Stopped,
-                                },
-                                None,
-                                stop.at(tick),
-                            )
-                        })?,
-                        None if *team == EventTeam::All && *target == EventTarget::All => true,
-                        None => {
-                            return Err(record_stop(
-                                &mut world.runs,
-                                RuleRun {
-                                    rule: instance.rule_idx,
-                                    name: instance.rule.name.clone(),
-                                    event_player: None,
-                                    ended: RunEnd::Stopped,
-                                },
-                                None,
-                                MissingInput::new(
-                                    MissingInputKind::EventPlayer,
-                                    None,
-                                    None,
-                                    format!(
-                                        "rule `{}`: event team or player filter",
-                                        instance.rule.name
-                                    ),
-                                )
-                                .at(tick)
-                                .into(),
-                            ));
-                        }
-                    };
-                    if eligible {
-                        instance.pending.push_back(injected.clone());
-                    }
-                }
-            }
+            events::queue(instances, world, injected, tick)?;
         }
     }
-    for instance in instances.iter_mut() {
+    for index in 0..instances.len() {
+        // `Damage`/`Heal` in the previous instance's run queued events;
+        // they fire between visits, in the order they occurred.
+        events::dispatch(instances, rule_list, blocks, subroutines, world, tick, now)?;
+        let instance = &mut instances[index];
         // `Start Rule` requests targeting this instance's rule apply when
         // the instance is visited: a rule listed later in the program
         // starts on the same tick, an earlier one on the next tick.
@@ -638,52 +596,7 @@ fn run_tick(
                         break;
                     };
                     instance.event = Some(ctx);
-                    // Each pending event's condition check is its own
-                    // `Evaluate Once` pass.
-                    let pass = RefCell::new(BTreeMap::new());
-                    let env = Env {
-                        globals: &world.globals,
-                        players: &world.players,
-                        event: instance.event.as_ref(),
-                        each_player: None,
-                        hud: &world.hud,
-                        element: None,
-                        once: &pass,
-                        effects: &world.effects,
-                        random: world.random.as_ref(),
-                        server_load: world.server_load,
-                        map: world.map.as_deref(),
-                        match_phase: world.match_phase,
-                        game_mode: world.game_mode.as_deref(),
-                        objectives: world.objectives.as_deref(),
-                        rule: instance.rule_idx,
-                        changes: &world.changes,
-                        now,
-                        match_time: world.clock.match_time,
-                    };
-                    if conditions_hold(instance.rule, &env).map_err(|stop| {
-                        record_stop(
-                            &mut world.runs,
-                            RuleRun {
-                                rule: instance.rule_idx,
-                                name: instance.rule.name.clone(),
-                                event_player: event_player(instance),
-                                ended: RunEnd::Stopped,
-                            },
-                            None,
-                            stop.at(tick),
-                        )
-                    })? {
-                        instance.once.get_mut().clear();
-                        instance.frames.push(Frame {
-                            rule_idx: instance.rule_idx,
-                            pc: 0,
-                        });
-                        run_and_record(instance, rule_list, blocks, subroutines, world, tick, now)
-                            .map_err(|e| e.at(tick))?;
-                    } else {
-                        instance.event = None;
-                    }
+                    events::fire(instance, rule_list, blocks, subroutines, world, tick, now)?;
                 }
             }
             Event::Subroutine(_) => {

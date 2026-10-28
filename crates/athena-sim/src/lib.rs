@@ -5,6 +5,7 @@ mod call;
 mod clock;
 mod effects;
 mod eval;
+mod events;
 mod expect;
 mod geometry;
 mod hero_settings;

@@ -20,15 +20,19 @@ fn missing<T>(
     Err(MissingInput::new(input, player, name, construct).into())
 }
 
-/// Event-scoped values the simulator resolves from an injected event's
-/// `values` map. Player-, enum- and vector-typed event values (`attacker`,
-/// `victim`, `hostPlayer`, `eventAbility`, `eventDirection`) are not modeled.
+/// Event-scoped values the simulator resolves from an event's `values`
+/// map — the scenario `values` of an injected event, or the bindings a
+/// modeled cause (`Damage`/`Heal`) attaches to the events it raises.
+/// Enum- and vector-typed event values (`eventAbility`, `eventDirection`)
+/// are not modeled.
 const EVENT_VALUES: &[&str] = &[
+    "attacker",
     "eventDamage",
     "eventHealing",
     "eventWasCriticalHit",
     "eventWasEnvironment",
     "eventWasHealthPack",
+    "victim",
 ];
 
 /// The truthiness a condition-family value (`and`, `or`, `not`,

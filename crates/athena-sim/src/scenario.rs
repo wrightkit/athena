@@ -554,7 +554,21 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         }
         let mut values = BTreeMap::new();
         for (name, value) in &event.values {
-            values.insert(name.clone(), value_to_val(value)?);
+            // The player-typed event values name a scenario player by
+            // `id`, like `eventPlayer` itself; `null` stays `null`.
+            let value = match (name.as_str(), value) {
+                ("attacker" | "victim", serde_json::Value::String(id)) => {
+                    if !players.contains_key(id) {
+                        return load_error(format!(
+                            "event `{}` value `{name}` names unknown player `{id}`",
+                            event.kind
+                        ));
+                    }
+                    Val::Player(id.clone())
+                }
+                _ => value_to_val(value)?,
+            };
+            values.insert(name.clone(), value);
         }
         events.push(InjectedEvent {
             kind: event.kind,
