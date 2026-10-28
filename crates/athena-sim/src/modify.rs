@@ -10,7 +10,7 @@ use workshop_rs::{ModifyOp, Value};
 use crate::eval::{number, values_equal};
 use crate::scenario::Player;
 use crate::unsupported;
-use crate::vector::arithmetic;
+use crate::vector::{arithmetic, produced_number};
 use crate::{Stop, Val};
 
 /// The array a `Modify` array operation reads: an array as itself, `Null`
@@ -40,10 +40,12 @@ pub(crate) fn apply_modify(
         ModifyOp::Add | ModifyOp::Subtract | ModifyOp::Multiply | ModifyOp::Divide => {
             arithmetic(op.catalog_id(), old, operand, players)?
         }
-        ModifyOp::Modulo => Val::Number(number(&old)? % number(&operand)?),
-        ModifyOp::Min => Val::Number(number(&old)?.min(number(&operand)?)),
-        ModifyOp::Max => Val::Number(number(&old)?.max(number(&operand)?)),
-        ModifyOp::RaiseToPower => Val::Number(number(&old)?.powf(number(&operand)?)),
+        ModifyOp::Modulo => produced_number(number(&old)? % number(&operand)?, op.catalog_id())?,
+        ModifyOp::Min => produced_number(number(&old)?.min(number(&operand)?), op.catalog_id())?,
+        ModifyOp::Max => produced_number(number(&old)?.max(number(&operand)?), op.catalog_id())?,
+        ModifyOp::RaiseToPower => {
+            produced_number(number(&old)?.powf(number(&operand)?), op.catalog_id())?
+        }
         ModifyOp::AppendToArray => {
             let mut items = array_operand(old)?;
             items.push(operand);

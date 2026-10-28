@@ -156,7 +156,9 @@ pub(crate) fn produced(v: Vec3, construct: &str) -> Result<Val, Stop> {
     }
 }
 
-fn produced_number(n: f64, construct: &str) -> Result<Val, Stop> {
+/// A produced number stays a value only while it is finite — the same
+/// stop a non-finite vector component forces.
+pub(crate) fn produced_number(n: f64, construct: &str) -> Result<Val, Stop> {
     if n.is_finite() {
         Ok(Val::Number(n))
     } else {
@@ -267,7 +269,7 @@ pub(crate) fn arithmetic(
         _ => |a, b| a / b,
     };
     match (a, b) {
-        (Operand::Scalar(a), Operand::Scalar(b)) => Ok(Val::Number(op(a, b))),
+        (Operand::Scalar(a), Operand::Scalar(b)) => produced_number(op(a, b), name),
         (Operand::Vector(a), Operand::Vector(b)) => produced(a.zip(b, op), name),
         (Operand::Vector(v), Operand::Scalar(n)) => produced(v.map(|c| op(c, n)), name),
         (Operand::Scalar(n), Operand::Vector(v)) => produced(v.map(|c| op(n, c)), name),

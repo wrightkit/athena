@@ -130,6 +130,7 @@ fn visit_on_team(
 const NAMES: &[&str] = &[
     "allPlayers",
     "allHeroes",
+    "numberOfPlayers",
     "hostPlayer",
     "localPlayer",
     "hasSpawned",
@@ -188,6 +189,31 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 "TEAM_2" => members(Team::Team2),
                 other => return unsupported(format!("allPlayers on {other}")),
             }))
+        }
+        // Modeled, not measured: the count is the length of the same
+        // scenario roster `All Players` enumerates — no action changes
+        // the roster — resolving the `Team` argument the same way.
+        "numberOfPlayers" => {
+            let [team] = arguments::<1>(name, args)?;
+            let filter = match team {
+                Value::Enum { value, .. } => value.clone(),
+                other => match eval(other, env)? {
+                    Val::Text(text) => text,
+                    other => return unsupported(format!("{name} on {other:?}")),
+                },
+            };
+            let on_team = |team: Team| {
+                env.players
+                    .values()
+                    .filter(|player| player.team == Some(team))
+                    .count()
+            };
+            Ok(Val::Number(match filter.as_str() {
+                "ALL" => env.players.len(),
+                "TEAM_1" => on_team(Team::Team1),
+                "TEAM_2" => on_team(Team::Team2),
+                other => return unsupported(format!("{name} on {other}")),
+            } as f64))
         }
         // Modeled, not measured: the client's element order is
         // unmeasured, so the catalog's `Hero` member order is the

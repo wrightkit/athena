@@ -165,10 +165,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
     let args: &[Value] = &resolved;
     let binary = |op: fn(f64, f64) -> f64| -> Result<Val, Stop> {
         let [a, b] = arguments::<2>(name, args)?;
-        Ok(Val::Number(op(
-            number(&eval(a, env)?)?,
-            number(&eval(b, env)?)?,
-        )))
+        crate::vector::produced_number(op(number(&eval(a, env)?)?, number(&eval(b, env)?)?), name)
     };
     match name {
         // Evaluation reached a sentinel no operand position resolved —
@@ -394,12 +391,15 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let Value::Enum { value: mode, .. } = rounding else {
                 return unsupported(format!("{name} rounding {rounding:?}"));
             };
-            Ok(Val::Number(match mode.as_str() {
-                "UP" => n.ceil(),
-                "DOWN" => n.floor(),
-                "NEAREST" => n.round(),
-                other => return unsupported(format!("{name} rounding {other}")),
-            }))
+            crate::vector::produced_number(
+                match mode.as_str() {
+                    "UP" => n.ceil(),
+                    "DOWN" => n.floor(),
+                    "NEAREST" => n.round(),
+                    other => return unsupported(format!("{name} rounding {other}")),
+                },
+                name,
+            )
         }
         "<" | "<=" | ">" | ">=" => {
             let [a, b] = arguments::<2>(name, args)?;

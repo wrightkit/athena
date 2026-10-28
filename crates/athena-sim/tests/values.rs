@@ -33,6 +33,14 @@ fn global(trace: &athena_sim::Trace) -> &Val {
     &trace.globals["g"]
 }
 
+#[track_caller]
+fn assert_not_modeled(trace: &athena_sim::Trace, construct: &str) {
+    match &trace.outcome {
+        Outcome::NotModeled(stop) => assert_eq!(stop.construct, construct),
+        other => panic!("expected not_modeled, got {other:?}"),
+    }
+}
+
 #[test]
 fn if_then_else_reads_only_the_taken_branch() {
     let trace = run(&set_global(
@@ -105,6 +113,70 @@ fn round_to_integer_follows_the_rounding_member() {
         let trace = run(&set_global(value));
         assert_eq!(global(&trace), &Val::Number(expected), "{value}");
     }
+}
+
+/// A `.ow` number literal the `f64` range cannot hold — the lexer
+/// accepts any digit run and `f64::from_str` saturates it to infinity —
+/// stops `not_modeled` at evaluation instead of reaching a store sink
+/// and serializing `null` (athena#56).
+#[test]
+fn a_non_finite_number_literal_stops_at_evaluation() {
+    let digits = "9".repeat(400);
+    for value in [
+        digits.clone(),
+        format!("Append To Array(Empty Array, {digits})"),
+    ] {
+        let trace = run(&set_global(&value));
+        assert_not_modeled(&trace, "number literal produced a non-finite number");
+    }
+
+    // The `For` start argument evaluates the same literal.
+    let text = format!(
+        r#"
+variables {{
+    global:
+        0: i
+}}
+
+rule ("probe") {{
+    event {{
+        Ongoing - Global;
+    }}
+    actions {{
+        For Global Variable(i, {digits}, 0, -1);
+        End;
+    }}
+}}
+"#
+    );
+    let trace = run(&text);
+    assert_not_modeled(&trace, "number literal produced a non-finite number");
+}
+
+/// `Round To Integer` routes its result through the finite check: a
+/// non-finite operand — here a variable the `For` `End` step left
+/// `inf` — stops `not_modeled` instead of serializing `null`.
+#[test]
+fn round_to_integer_stops_on_a_non_finite_operand() {
+    let trace = run(r#"
+variables {
+    global:
+        0: g
+        1: r
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        For Global Variable(g, Raise To Power(10, 308), Multiply(Raise To Power(10, 308), 1.5), Raise To Power(10, 308));
+        End;
+        Set Global Variable(r, Round To Integer(Global.g, Up));
+    }
+}
+"#);
+    assert_not_modeled(&trace, "roundToInteger produced a non-finite number");
 }
 
 #[test]
