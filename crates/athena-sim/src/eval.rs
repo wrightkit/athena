@@ -259,7 +259,10 @@ pub(crate) fn arguments<'a, const N: usize>(
 
 pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
     match value {
-        Value::Number(n) => Ok(Val::Number(*n)),
+        // The lexer accepts any digit run and `f64::from_str` saturates
+        // an overflowing literal to infinity; a non-finite literal stops
+        // here rather than reaching a store sink and serializing `null`.
+        Value::Number(n) => crate::vector::produced_number(*n, "number literal"),
         Value::Bool(b) => Ok(Val::Bool(*b)),
         Value::Null => Ok(Val::Null),
         Value::String(text) => Ok(Val::Text(text.clone())),
