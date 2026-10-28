@@ -408,6 +408,36 @@ fn vector_divide_by_zero_stops_instead_of_serializing_null() {
     assert_not_modeled(&trace, "divide produced a non-finite vector");
 }
 
+/// The scalar forms stop the same way: a `Divide`/`Modulo` by zero or an
+/// overflowing `Raise To Power` produces a non-finite number that would
+/// serialize as `null` — as a value call and as a `Modify` operator.
+#[test]
+fn scalar_arithmetic_non_finite_stops_instead_of_serializing_null() {
+    for (value, construct) in [
+        ("Divide(1, 0)", "divide produced a non-finite number"),
+        ("Modulo(1, 0)", "modulo produced a non-finite number"),
+        (
+            "Raise To Power(10, 400)",
+            "raiseToPower produced a non-finite number",
+        ),
+    ] {
+        let trace = run(&set_global(value));
+        assert_not_modeled(&trace, construct);
+    }
+    for (op, operand, construct) in [
+        ("Divide", "0", "divide produced a non-finite number"),
+        ("Modulo", "0", "modulo produced a non-finite number"),
+        (
+            "Raise To Power",
+            "400",
+            "raiseToPower produced a non-finite number",
+        ),
+    ] {
+        let trace = run(&modify_global("10", op, operand));
+        assert_not_modeled(&trace, construct);
+    }
+}
+
 #[test]
 fn angle_between_vectors_reports_degrees() {
     for (value, expected) in [
