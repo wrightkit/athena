@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/wrightkit/athena/compare/v0.12.0...v0.13.0) (2026-10-28)
+
+
+### Features
+
+* **sim:** model Mapped Array with element context ([#135](https://github.com/wrightkit/athena/issues/135)) ([7c9d431](https://github.com/wrightkit/athena/commit/7c9d4313438120957d62f73ff1c40002995da2c2)), closes [#134](https://github.com/wrightkit/athena/issues/134)
+
+
+### Bug Fixes
+
+* **sim:** stop non-finite produced numbers with one checked path ([#137](https://github.com/wrightkit/athena/issues/137)) ([933f7af](https://github.com/wrightkit/athena/commit/933f7af2e623b6c8fed6bc2ee565d847f65faa34)), closes [#133](https://github.com/wrightkit/athena/issues/133)
+
 ## [0.12.0](https://github.com/wrightkit/athena/compare/v0.11.1...v0.12.0) (2026-10-28)
 
 
