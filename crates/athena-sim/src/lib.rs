@@ -136,7 +136,8 @@ pub enum MissingInputKind {
     Team,
     /// The `eventPlayer` of an injected event.
     EventPlayer,
-    /// An entry of an injected event's `values`.
+    /// An entry of an injected event's `values`; an event value a
+    /// raised event does not bind is `not_modeled`, not a missing input.
     EventValue,
     /// The held state of a player's button.
     Button,

@@ -629,6 +629,14 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let [] = arguments::<0>(name, args)?;
             match env.event.and_then(|event| event.values.get(name)).cloned() {
                 Some(value) => Ok(value),
+                // A raised event binds only what its cause attached;
+                // the scenario `values` an injected event could take
+                // have no path to it, so an unbound read is
+                // `not_modeled` — as `eventAbility` already is —
+                // never a missing input.
+                None if env.event.is_some_and(|event| event.raised) => {
+                    unsupported(format!("value {name}"))
+                }
                 None => missing(
                     MissingInputKind::EventValue,
                     None,

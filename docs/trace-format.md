@@ -23,7 +23,7 @@ Each `rules` element:
 | --- | --- |
 | `rule` | The rule's index among the program's enabled rules, in file order. |
 | `name` | The rule's name. |
-| `eventPlayer` | The scenario `id` of the run's `Event Player`: an injected event's `eventPlayer`, or the player an `Ongoing - Each Player` run is bound to; `null` for `Ongoing - Global` runs and events without one. |
+| `eventPlayer` | The scenario `id` of the run's `Event Player`: the triggering event's player — an injected event's `eventPlayer` or the player a `Damage`/`Heal` raised the event on — or the player an `Ongoing - Each Player` run is bound to; `null` for `Ongoing - Global` runs and events without one. |
 | `ended` | How the execution ended on the tick: `finished` (stepped past its last action), `waiting` with `wake` (suspended; `wake` is the tick the wait expires — the resume tick for `Wait`, the timeout tick for `Wait Until`, whose condition can resume it earlier), `stopped` (the run's `not_modeled`/`missing_input` stop was inside this rule — an action, a condition check or an event filter; `rule` then names the rule that owns the stopped construct, the subroutine's inside `Call Subroutine`) or `aborted` (killed by an `Abort When False` wait going false or an `Abort`/`Abort If` action). |
 
 Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as the `Val` form:

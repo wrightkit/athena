@@ -84,7 +84,14 @@ fn run(
                 }
             };
             for id in ids {
-                let (applied, alive, died) = {
+                // A dead target takes no pool change and raises no
+                // events — `isDead` decides dead, as `Is Alive` reads
+                // it, and the health pool decides where `isDead`
+                // cannot answer.
+                if dead(world, &id, "action damage")? {
+                    continue;
+                }
+                let (applied, died) = {
                     let target = world_state(world, &id)?;
                     let applied = amount * dealer.unwrap_or(1.0) * target.damage_received;
                     let before = pools(&target.world);
@@ -102,7 +109,7 @@ fn run(
                             });
                         }
                     }
-                    (applied, health > 0.0, died)
+                    (applied, died)
                 };
                 // The damage raises the player events the catalog
                 // defines for the cause, in occurrence order: the
@@ -111,8 +118,8 @@ fn run(
                 // zero — the victim's `Player Died` and the dealer's
                 // `Player Dealt Final Blow`. A `Null` dealer raises no
                 // dealer-side event and binds `Attacker` to `Null`; a
-                // player already at zero health takes no damage events.
-                if applied > 0.0 && alive {
+                // `Damage` on an already-dead target raises nothing.
+                if applied > 0.0 {
                     let values = event_values(&damager, &id, "eventDamage", applied);
                     raise(world, "playerTookDamage", &id, values.clone())?;
                     if let Val::Player(dealer) = &damager {
@@ -154,6 +161,11 @@ fn run(
                 }
             };
             for id in ids {
+                // The same death gate as `Damage`: a dead target takes
+                // no pool change and raises no healing events.
+                if dead(world, &id, "action heal")? {
+                    continue;
+                }
                 let target = world_state(world, &id)?;
                 let applied = amount * dealer.unwrap_or(1.0) * target.healing_received;
                 let old = target.world.health.current;
@@ -167,7 +179,7 @@ fn run(
                         new: Val::Number(new),
                     });
                 }
-                if applied > 0.0 && old > 0.0 {
+                if applied > 0.0 {
                     let values = event_values(&healer, &id, "eventHealing", applied);
                     raise(world, "playerReceivedHealing", &id, values.clone())?;
                     if let Val::Player(dealer) = &healer {
@@ -329,6 +341,20 @@ fn run(
     Ok(())
 }
 
+/// Whether `Damage`/`Heal` treats player `id` as dead: the `isDead`
+/// read decides where it answers — a cell an action wrote or the
+/// declared `state.isDead`, the same read `Is Alive` makes — and the
+/// health pool decides where `isDead` cannot answer. `construct`
+/// names the action in the stop a fallback `world_state` touch can
+/// raise.
+fn dead(world: &mut World, id: &str, construct: &str) -> Result<bool, Stop> {
+    let read = crate::state_reads::state_read("isDead").expect("in STATE_READS");
+    match crate::player::state_read_value(&world.players, id, read, construct) {
+        Ok(Val::Bool(dead)) => Ok(dead),
+        _ => Ok(world_state(world, id)?.world.health.current <= 0.0),
+    }
+}
+
 /// The `(field, current)` pairs `Damage` reports for the pools that
 /// exist, in the order the pools absorb damage.
 fn pools(world: &PlayerWorld) -> [(&'static str, Option<f64>); 3] {
@@ -361,6 +387,7 @@ fn raise(
         kind: kind.to_string(),
         player: Some(player.to_string()),
         values,
+        raised: true,
     });
     Ok(())
 }

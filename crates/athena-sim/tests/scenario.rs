@@ -526,6 +526,17 @@ fn the_loader_checks_what_the_schema_cannot() {
         ),
         ScenarioError::Load(_)
     ));
+    // An `attacker`/`victim` event value is a player `id` or `null`.
+    for value in ["5", "true", "[1]", "{ \"x\": 1 }"] {
+        assert!(matches!(
+            scenario_error(&format!(
+                r#"{{ "scenarioVersion": 1, "seconds": 1, "players": [{{ "id": "p1" }}],
+                     "events": [{{ "kind": "playerTookDamage", "time": 0, "eventPlayer": "p1",
+                                  "values": {{ "attacker": {value} }} }}] }}"#
+            )),
+            ScenarioError::Load(_)
+        ));
+    }
     // A hero `workshop-rs` does not know.
     assert!(matches!(
         scenario_error(

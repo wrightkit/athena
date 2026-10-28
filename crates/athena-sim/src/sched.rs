@@ -214,7 +214,7 @@ fn expectations(
         .collect()
 }
 
-/// The run's `Event Player`: an injected event's `eventPlayer`, or the
+/// The run's `Event Player`: the triggering event's player, or the
 /// player an `Ongoing - Each Player` instance is bound to.
 pub(crate) fn event_player(inst: &Instance<'_>) -> Option<String> {
     inst.event
@@ -397,9 +397,10 @@ fn tick_loop(
     Ok(())
 }
 
-/// One tick: fire the injected events due on it, then run every instance
-/// the tick starts or resumes. Rule executions accumulate in `world.runs`,
-/// the state changes they make in `world.changes`.
+/// One tick: deliver the raised events pending on it, queue the injected
+/// events due on it, then run every instance the tick starts or resumes.
+/// Rule executions accumulate in `world.runs`, the state changes they
+/// make in `world.changes`.
 fn run_tick(
     loaded: &mut Loaded<'_>,
     world: &mut World,
@@ -670,6 +671,7 @@ fn events_by_tick(events: &[crate::scenario::InjectedEvent]) -> BTreeMap<u64, Ve
             kind: event.kind.clone(),
             player: event.event_player.clone(),
             values: event.values.clone(),
+            raised: false,
         });
     }
     by_tick

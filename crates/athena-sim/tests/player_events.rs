@@ -334,3 +334,130 @@ fn a_heal_raises_received_then_dealt_healing() {
     );
     assert_eq!(trace.globals["healing"], Val::Number(40.0));
 }
+
+/// `Kill` writes the `isDead` marker the `Damage`/`Heal` gate reads: a
+/// dead target takes no pool change and raises no events, and a
+/// `Resurrect`ed target takes them again.
+const DEAD_GATE: &str = r#"
+variables {
+    global:
+        0: seq
+}
+
+rule ("cause") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Kill(Value In Array(All Players(Team 2), 0), Null);
+        Damage(Value In Array(All Players(Team 2), 0), Null, 9999);
+        Heal(Value In Array(All Players(Team 2), 0), Null, 30);
+        Resurrect(Value In Array(All Players(Team 2), 0));
+        Damage(Value In Array(All Players(Team 2), 0), Null, 60);
+        Heal(Value In Array(All Players(Team 2), 0), Null, 30);
+    }
+}
+
+rule ("took") {
+    event {
+        Player Took Damage;
+        All;
+        All;
+    }
+    actions {
+        Modify Global Variable(seq, Append To Array, 1);
+    }
+}
+
+rule ("died") {
+    event {
+        Player Died;
+        All;
+        All;
+    }
+    actions {
+        Modify Global Variable(seq, Append To Array, 3);
+    }
+}
+
+rule ("healed") {
+    event {
+        Player Received Healing;
+        All;
+        All;
+    }
+    actions {
+        Modify Global Variable(seq, Append To Array, 5);
+    }
+}
+"#;
+
+#[test]
+fn a_dead_target_takes_no_pool_change_or_events_and_a_revived_one_does() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [
+            { "id": "p1", "hero": "ana", "team": "team1" },
+            { "id": "p2", "hero": "reaper", "team": "team2" }
+        ]
+    }"#;
+    let trace = run(DEAD_GATE, scenario);
+    assert_eq!(trace.outcome, Outcome::Complete);
+    // The `Kill`-gated `Damage` and `Heal` raised nothing — no second
+    // `Player Died` either; the post-`Resurrect` actions raised their
+    // events once each.
+    assert_eq!(
+        trace.globals["seq"],
+        Val::Array(vec![Val::Number(1.0), Val::Number(5.0)])
+    );
+    // The gated actions never touched the pool: max − 60 + 30.
+    let world = trace.players["p2"].world.as_ref().unwrap();
+    assert_eq!(world.health.current, world.health.max - 30.0);
+}
+
+/// `Event Was Critical Hit` has no binding on a `Damage`-raised event
+/// and no scenario `values` path — an unbound read is `not_modeled`.
+const CRITICAL: &str = r#"
+variables {
+    global:
+        0: crit
+}
+
+rule ("hit") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Damage(Value In Array(All Players(Team 2), 0), Null, 30);
+    }
+}
+
+rule ("took") {
+    event {
+        Player Took Damage;
+        All;
+        All;
+    }
+    actions {
+        Set Global Variable(crit, Event Was Critical Hit);
+    }
+}
+"#;
+
+#[test]
+fn an_event_value_a_raised_event_does_not_bind_is_not_modeled() {
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [
+            { "id": "p1", "hero": "ana", "team": "team1" },
+            { "id": "p2", "hero": "reaper", "team": "team2" }
+        ]
+    }"#;
+    let trace = run(CRITICAL, scenario);
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(not_modeled.construct, "value eventWasCriticalHit");
+}

@@ -106,7 +106,8 @@ pub(crate) struct Player {
     pub world: crate::state::WorldSlot,
 }
 
-/// The runtime context of an injected event while a rule it triggered runs.
+/// The runtime context of a player event — injected by the scenario or
+/// raised by a modeled state change — while a rule it triggered runs.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct EventCtx {
     /// The Workshop event name.
@@ -115,6 +116,11 @@ pub(crate) struct EventCtx {
     pub player: Option<String>,
     /// The event's `values` map.
     pub values: BTreeMap<String, Val>,
+    /// `true` when a modeled state change (`Damage`/`Heal`) raised the
+    /// event. Only an injected event takes scenario `values`, so an
+    /// event value a raised event does not bind is `not_modeled`,
+    /// never a missing input.
+    pub raised: bool,
 }
 
 /// An event the scenario injects.
@@ -565,6 +571,13 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
                         ));
                     }
                     Val::Player(id.clone())
+                }
+                ("attacker" | "victim", serde_json::Value::Null) => Val::Null,
+                ("attacker" | "victim", _) => {
+                    return load_error(format!(
+                        "event `{}` value `{name}` must be a player `id` or `null`",
+                        event.kind
+                    ));
                 }
                 _ => value_to_val(value)?,
             };

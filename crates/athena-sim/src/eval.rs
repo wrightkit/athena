@@ -14,10 +14,10 @@ use crate::{Change, MissingInput, MissingInputKind, Stop, Val};
 pub(crate) struct Env<'a> {
     pub globals: &'a BTreeMap<String, Val>,
     pub players: &'a BTreeMap<String, Player>,
-    /// The injected event the running rule was triggered by, if any.
+    /// The player event the running rule was triggered by, if any.
     pub event: Option<&'a EventCtx>,
     /// The player an `Ongoing - Each Player` instance runs for; `Event
-    /// Player` reads it when no injected event supplies one.
+    /// Player` reads it when no triggering event supplies one.
     pub each_player: Option<&'a str>,
     /// The display elements the run created; what `Last Text ID` and
     /// `Text Count` read. A `RefCell` so an `Env` — which borrows it —

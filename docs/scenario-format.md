@@ -114,7 +114,7 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 - The `hero` of a player, when the program reads it and the player has no `hero` — `Hero Of`, or a player `Is Hero Being Played` or `Players On Hero` reads on the team.
 - The `team` of a player, when the program reads it and the player has no `team`.
 - The event player, when the program reads it and the event has no `eventPlayer`.
-- An event value, when the program reads it and the event has no such entry in `values`.
+- An event value, when the program reads it and an injected event has no such entry in `values`. An event a `Damage`/`Heal` raised binds only the values its cause attached; a read it does not bind is `not_modeled`, not a missing input — no scenario field supplies it.
 - The held state of a button, when `Is Button Held` reads it and the player's `buttons` does not list the slot.
 - The random source, when a `Random *` value reads it and the scenario has no `random`.
 - The server load, when a `Server Load`, `Server Load Average` or `Server Load Peak` value reads it and the scenario has no `serverLoad`.
