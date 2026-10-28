@@ -22,9 +22,8 @@ fn missing<T>(
 
 /// Event-scoped values the simulator resolves from the triggering
 /// event's `values` map — injected by the scenario or bound by the
-/// modeled state change that raised it. Player- and vector-typed event
-/// values with no modeled source (`hostPlayer`, `eventAbility`,
-/// `eventDirection`) are not modeled.
+/// modeled state change that raised it. Event values with no modeled
+/// source (`eventAbility`, `eventDirection`) are not modeled.
 const EVENT_VALUES: &[&str] = &[
     "attacker",
     "eventDamage",
