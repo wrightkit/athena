@@ -70,7 +70,7 @@ Each item below is a choice made in this proposal. Any of them can change.
 | `kind` | yes | Workshop event name. |
 | `time` | yes | Seconds from the first tick, zero or more. |
 | `eventPlayer` | no | The `id` of the event player. |
-| `values` | no | Map from event-value name to value, for events that carry values. |
+| `values` | no | Map from event-value name to value, for events that carry values. The `attacker`/`victim` entries name a player `id` or `null`. |
 
 ### Values
 
@@ -91,6 +91,7 @@ JSON Schema cannot express some rules. The `athena` loader must check them and r
 - Player `id` values are unique.
 - Player `slot` values are unique.
 - Every `eventPlayer` and every expectation `player` is the `id` of a player in the file.
+- Every `attacker`/`victim` event `values` entry is the `id` of a player in the file or `null`; any other JSON kind is a load error.
 - Every `hero` is a hero name known to `workshop-rs` (decision 3): the canonical `Hero` member id of the catalog (for example `JUNKER_QUEEN`) or its en-US spelling (`Junker Queen`), matched case-insensitively.
 - `map`, when present, is a map name known to `workshop-rs`: the canonical `Map` member id of the catalog (for example `KINGS_ROW`) or its en-US spelling (`King's Row`), matched case-insensitively.
 - `gameMode`, when present, is a game-mode name known to `workshop-rs`: the canonical `Gamemode` member id of the catalog (for example `SKIRMISH`) or its en-US spelling (`Skirmish`), matched case-insensitively.
@@ -114,7 +115,7 @@ The value is `null`, as in decision 13. No report is made. The trace shows the e
 - The `hero` of a player, when the program reads it and the player has no `hero` — `Hero Of`, or a player `Is Hero Being Played` or `Players On Hero` reads on the team.
 - The `team` of a player, when the program reads it and the player has no `team`.
 - The event player, when the program reads it and the event has no `eventPlayer`.
-- An event value, when the program reads it and the event has no such entry in `values`.
+- An event value of an injected event, when the program reads it and the event has no such entry in `values`. (An event a modeled `Damage`/`Heal` raises takes no `values`; an event value its cause does not bind is `not_modeled` — see Player events in [simulator-interface.md](simulator-interface.md).)
 - The held state of a button, when `Is Button Held` reads it and the player's `buttons` does not list the slot.
 - The random source, when a `Random *` value reads it and the scenario has no `random`.
 - The server load, when a `Server Load`, `Server Load Average` or `Server Load Peak` value reads it and the scenario has no `serverLoad`.

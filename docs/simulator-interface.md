@@ -43,7 +43,7 @@ The crate compiles for `wasm32-unknown-unknown`.
 
 ### `players` rows
 
-Each row repeats the declared `hero` (the scenario text, `null` when undeclared) and `team` (`team1`/`team2`, `null` when undeclared), plus `state` — the player's `state` values at the end of the run, the declared map overlaid by the cells the state-write actions wrote — `modifiers` — the modifiers the stored-modifier actions recorded on the player, keyed by the modifier name — and `world`, the catalog-derived state at the end of the run:
+Each row repeats the declared `hero` (the scenario text, `null` when undeclared) and `team` (`team1`/`team2`, `null` when undeclared), plus `state` — the player's `state` values at the end of the run, the declared map overlaid by the cells the state-write actions wrote (a killing `Damage` writes `isDead` the same way) — `modifiers` — the modifiers the stored-modifier actions recorded on the player, keyed by the modifier name — and `world`, the catalog-derived state at the end of the run:
 
 | `world` field | Meaning |
 | --- | --- |
@@ -72,7 +72,11 @@ The simulator never skips an unmodeled construct and never replaces it with a de
 The `team` and player (`target`) filters of a rule event resolve against the scenario players: `All` imposes no constraint, `Team 1`/`Team 2` match the declared `team`, a hero name matches the catalog `Hero` member the declared `hero` resolves to, and `Slot N` matches the declared `slot` — a player that does not declare the filter's field does not match. A `Slot` filter no evaluation reaches — the `team` arm fails first for every player, or no matching event is injected — never fires and is not an error. `Slot Of(player)` reads the same field: the lobby seats players outside the script, so the value yields the declared `slot` as a number, a read on a player without `slot` is a `missing_input` of kind `slot`, and a non-player operand is `not_modeled`.
 
 - An `Ongoing - Each Player` rule becomes one instance per matching scenario player, ordered by scenario `id`. Each instance binds `Event Player` to its player — also inside a subroutine it calls — and has its own condition edge, `Wait`/`Wait Until` and wait-behavior state. A filter matching nobody yields no instance: the rule never fires and is not an error.
-- A player event rule (`Player Died`, `Player Joined Match`, …) runs for an injected event only when the event's `eventPlayer` satisfies the filters. An event that names no `eventPlayer` satisfies only `All`/`All`; evaluating a filtered rule against it is a `missing_input` of kind `eventPlayer`.
+- A player event rule (`Player Died`, `Player Joined Match`, …) runs when the triggering event — injected or raised — satisfies the filters on its event player. An event that names no `eventPlayer` satisfies only `All`/`All`; evaluating a filtered rule against it is a `missing_input` of kind `eventPlayer`.
+
+### Player events
+
+Player events come from the scenario's `events` and the modeled `Damage`/`Heal` actions: `Damage` raises `Player Took Damage` on the target and `Player Dealt Damage` on a player dealer — `Null` raises no dealt-side event and binds `Attacker` to `null`; a hit that empties `health` adds `Player Died` then `Player Dealt Final Blow`; `Heal` raises `Player Received Healing`/`Player Dealt Healing`. Raised events fire in occurrence order and bind `Attacker`, `Victim`, `Event Damage`/`Event Healing` to the cause; an event value the cause does not bind is `not_modeled`, never `missing_input`. The `isDead` read `Is Alive`/`Is Dead`/`Set Player Health` share gates `Damage`/`Heal`/`Resurrect`; a killing `Damage` writes `isDead`, `Respawn` refills the pool unconditionally, `Resurrect` only on a revive. Modeled, not measured.
 
 ### General and array values
 

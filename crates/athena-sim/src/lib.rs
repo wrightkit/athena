@@ -5,6 +5,7 @@ mod call;
 mod clock;
 mod effects;
 mod eval;
+mod events;
 mod expect;
 mod geometry;
 mod hero_settings;
@@ -135,7 +136,8 @@ pub enum MissingInputKind {
     Team,
     /// The `eventPlayer` of an injected event.
     EventPlayer,
-    /// An entry of an injected event's `values`.
+    /// An entry of an injected event's `values`. A raised event's
+    /// unbound event value is `not_modeled`, never a missing input.
     EventValue,
     /// The held state of a player's button.
     Button,

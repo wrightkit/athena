@@ -587,11 +587,12 @@ fn test_values() -> workshop_rs::hero_values::HeroValues {
     .expect("the test hero values load")
 }
 
-/// `Damage`/`Heal` on the event player.
+/// `Damage`/`Heal` on the event player. A `Player Joined Match` trigger
+/// keeps the rule from re-triggering on the events the calls raise.
 const DAMAGE_HEAL: &str = r#"
 rule ("hit") {
     event {
-        Player Dealt Damage;
+        Player Joined Match;
         All;
         All;
     }
@@ -613,7 +614,7 @@ fn damage_consumes_pools_in_shield_armor_health_order_and_heal_caps() {
             { "id": "p1", "hero": "Ana", "team": "team1" },
             { "id": "p2", "hero": "Ashe", "team": "team2" }
         ],
-        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+        "events": [{ "kind": "playerJoined", "time": 0, "eventPlayer": "p1" }]
     }"#;
     let values = test_values();
     let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
@@ -654,7 +655,7 @@ fn heal_does_not_exceed_the_pool_maximum() {
     let text = r#"
 rule ("heal") {
     event {
-        Player Dealt Healing;
+        Player Joined Match;
         All;
         All;
     }
@@ -669,7 +670,7 @@ rule ("heal") {
         "scenarioVersion": 1,
         "seconds": 1,
         "players": [{ "id": "p1", "hero": "ana" }],
-        "events": [{ "kind": "playerDealtHealing", "time": 0, "eventPlayer": "p1" }]
+        "events": [{ "kind": "playerJoined", "time": 0, "eventPlayer": "p1" }]
     }"#;
     let values = test_values();
     let trace = run_scenario_with_hero_values(text, scenario, &values)
@@ -690,7 +691,7 @@ fn a_hero_without_catalog_values_is_not_modeled() {
         "scenarioVersion": 1,
         "seconds": 1,
         "players": [{ "id": "p1", "hero": "baptiste" }],
-        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+        "events": [{ "kind": "playerJoined", "time": 0, "eventPlayer": "p1" }]
     }"#;
     let values = test_values();
     let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
@@ -717,7 +718,7 @@ fn a_hero_without_an_ultimate_cost_is_not_modeled() {
         "scenarioVersion": 1,
         "seconds": 1,
         "players": [{ "id": "p1", "hero": "D.Va" }],
-        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+        "events": [{ "kind": "playerJoined", "time": 0, "eventPlayer": "p1" }]
     }"#;
     let values = test_values();
     let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
@@ -739,7 +740,7 @@ fn damage_on_a_player_without_a_hero_is_not_modeled() {
         "scenarioVersion": 1,
         "seconds": 1,
         "players": [{ "id": "p1", "team": "team1" }],
-        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+        "events": [{ "kind": "playerJoined", "time": 0, "eventPlayer": "p1" }]
     }"#;
     let values = test_values();
     let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)
@@ -761,7 +762,7 @@ fn the_trace_json_carries_the_player_table() {
             { "id": "p1", "hero": "Ana", "team": "team1" },
             { "id": "p2" }
         ],
-        "events": [{ "kind": "playerDealtDamage", "time": 0, "eventPlayer": "p1" }]
+        "events": [{ "kind": "playerJoined", "time": 0, "eventPlayer": "p1" }]
     }"#;
     let values = test_values();
     let trace = run_scenario_with_hero_values(DAMAGE_HEAL, scenario, &values)

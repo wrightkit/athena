@@ -15,7 +15,7 @@ use crate::eval::{Env, eval, number, player_id};
 use crate::hud::Hud;
 use crate::load::{Frame, Instance, WaitMode};
 use crate::modify::{apply_modify, modify_at, modify_op, set_at};
-use crate::scenario::{Player, ServerLoad};
+use crate::scenario::{EventCtx, Player, ServerLoad};
 use crate::state::{self, WorldSlot};
 use crate::unsupported;
 use crate::{Change, LogEntry, RuleRun, Stop, StopIndex, StopLocation, Timeline, Val};
@@ -23,6 +23,10 @@ use crate::{Change, LogEntry, RuleRun, Stop, StopIndex, StopLocation, Timeline, 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
 const STEP_LIMIT: usize = 1_000_000;
+/// Player events one tick may raise: a `Damage`/`Heal` inside a
+/// triggered rule raises the events that rule fires again, so an
+/// unguarded queue lets one cause fan out without bound.
+pub(crate) const TICK_EVENT_LIMIT: u64 = 1024;
 /// Nested subroutine calls a run may make; the limit exists so a recursive
 /// program cannot grow the frame stack without bound.
 const CALL_DEPTH_LIMIT: usize = 128;
@@ -56,6 +60,13 @@ pub(crate) struct World {
     /// `Start Rule` requests as `(rule index, restart)`; applied when the
     /// target's instance is next visited in the tick loop.
     pub pending_starts: Vec<(usize, bool)>,
+    /// Player events a modeled state change (`Damage`, `Heal`) raised;
+    /// the tick loop delivers them to the instances whose event kind and
+    /// team/player filters match, in queue order.
+    pub pending_events: Vec<EventCtx>,
+    /// Player events raised on the tick in progress; `run_tick` resets
+    /// it, [`TICK_EVENT_LIMIT`] bounds a self-triggering chain.
+    pub tick_events: u64,
     /// The rule executions of the tick in progress — started, resumed or
     /// ended — in execution order; `tick_loop` drains them into the
     /// tick's timeline entry.
@@ -110,6 +121,22 @@ pub(crate) fn flag(value: Val) -> Result<bool, Stop> {
     match value {
         Val::Bool(b) => Ok(b),
         other => unsupported(format!("condition value {other:?}")),
+    }
+}
+
+/// Whether the model's death predicate holds for player `id`: the
+/// `isDead` read — a cell an action wrote or the declared `state.isDead`,
+/// the same read `Is Alive`/`Is Dead`/`Set Health` make — decides where
+/// it answers, and the health pool decides where `isDead` cannot answer.
+/// `Damage`, `Heal` and `Resurrect` all gate on this one predicate, so a
+/// death or revive never leaves the marker and the pool disagreeing.
+pub(crate) fn dead(world: &mut World, id: &str) -> Result<bool, Stop> {
+    let read = crate::state_reads::state_read("isDead").expect("in STATE_READS");
+    // The construct text `state_read_value` would put in a missing-input
+    // error never surfaces: every failed read falls back to the pool.
+    match crate::player::state_read_value(&world.players, id, read, "a liveness check") {
+        Ok(Val::Bool(dead)) => Ok(dead),
+        _ => Ok(world_state(world, id)?.world.health.current <= 0.0),
     }
 }
 

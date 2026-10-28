@@ -40,9 +40,10 @@ pub(crate) struct Instance<'a> {
     pub wake: Option<u64>,
     pub wait_mode: WaitMode,
     pub prev: bool,
-    /// Injected events that triggered this rule and wait for it to be idle.
+    /// Player events — injected or raised — that triggered this rule and
+    /// wait for it to be idle.
     pub pending: VecDeque<EventCtx>,
-    /// The injected event the current run executes for, if event-triggered.
+    /// The player event the current run executes for, if event-triggered.
     pub event: Option<EventCtx>,
     /// The clause head a false `If`/`Else If` jumped to, as a frame
     /// position. A head that is not this target was reached by fall-through

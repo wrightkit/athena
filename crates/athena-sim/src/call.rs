@@ -20,15 +20,19 @@ fn missing<T>(
     Err(MissingInput::new(input, player, name, construct).into())
 }
 
-/// Event-scoped values the simulator resolves from an injected event's
-/// `values` map. Player-, enum- and vector-typed event values (`attacker`,
-/// `victim`, `hostPlayer`, `eventAbility`, `eventDirection`) are not modeled.
+/// Event-scoped values the simulator resolves from the triggering
+/// event's `values` map — injected by the scenario or bound by the
+/// modeled state change that raised it. Player- and vector-typed event
+/// values with no modeled source (`hostPlayer`, `eventAbility`,
+/// `eventDirection`) are not modeled.
 const EVENT_VALUES: &[&str] = &[
+    "attacker",
     "eventDamage",
     "eventHealing",
     "eventWasCriticalHit",
     "eventWasEnvironment",
     "eventWasHealthPack",
+    "victim",
 ];
 
 /// The truthiness a condition-family value (`and`, `or`, `not`,
@@ -623,9 +627,13 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         }
         name if EVENT_VALUES.contains(&name) => {
             let [] = arguments::<0>(name, args)?;
-            match env.event.and_then(|event| event.values.get(name)).cloned() {
-                Some(value) => Ok(value),
-                None => missing(
+            let value = env.event.and_then(|event| event.values.get(name)).cloned();
+            match (value, env.event.is_some_and(|event| event.raised)) {
+                (Some(value), _) => Ok(value),
+                // A raised event carries no scenario `values`: what the
+                // modeled cause did not bind has no input path at all.
+                (None, true) => unsupported(format!("value {name}")),
+                (None, false) => missing(
                     MissingInputKind::EventValue,
                     None,
                     Some(name.to_string()),
