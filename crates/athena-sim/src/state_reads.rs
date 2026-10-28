@@ -211,10 +211,11 @@ pub(crate) fn state_value(
     };
     Ok(match (read.ty, value) {
         (StateType::Bool, serde_json::Value::Bool(b)) => Val::Bool(*b),
-        (StateType::Number, serde_json::Value::Number(n)) => Val::Number(
+        (StateType::Number, serde_json::Value::Number(n)) => Val::Number(crate::Finite::new(
             n.as_f64()
+                .filter(|number| number.is_finite())
                 .ok_or_else(|| ScenarioError::Format(format!("number {n} is too large")))?,
-        ),
+        )),
         (StateType::Vector, serde_json::Value::Object(object)) => match state_vector(object) {
             Some(vector) => vector.into(),
             None => return Err(mistyped()),

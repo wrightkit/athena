@@ -128,7 +128,7 @@ fn index_of_string_char_finds_the_first_index_or_minus_one() {
         ),
     ] {
         let trace = run(&set_global(value));
-        assert_eq!(global(&trace), &Val::Number(expected), "{value}");
+        assert_eq!(global(&trace), &Val::number(expected), "{value}");
     }
 }
 

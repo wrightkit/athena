@@ -128,6 +128,6 @@ Each `changes` element has `kind` plus its own fields; `old`/`new` serialize as 
 }
 ```
 
-`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ..., "location": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`, `display`; `null` has no `value`. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
+`outcome` is `{"status": "complete"}`, `{"status": "not_modeled", "construct": ..., "tick": ..., "location": ...}` or `{"status": "missing_input"}`. A value is `{"type": ..., "value": ...}` with `type` one of `null`, `bool`, `number`, `text`, `array`, `player`, `vector`, `display`; `null` has no `value`. `number` holds a finite `f64` — a computation that would produce `NaN` or an infinity stops the run `not_modeled` before the value can enter the trace. `player` holds the scenario `id` that declared the player; `vector` holds `{ "x": n, "y": n, "z": n }`. `players` is a map keyed by the scenario player `id`; a row's `world` is `null` when the player's catalog state could not be resolved.
 
 Adding a field is compatible. Removing or renaming one, or changing a value's meaning, is a breaking change and needs a version bump of this crate.

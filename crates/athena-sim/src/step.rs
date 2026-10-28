@@ -18,7 +18,7 @@ use crate::modify::{apply_modify, modify_at, modify_op, set_at};
 use crate::scenario::{EventCtx, Player, ServerLoad};
 use crate::state::{self, WorldSlot};
 use crate::unsupported;
-use crate::{Change, LogEntry, RuleRun, Stop, StopIndex, StopLocation, Timeline, Val};
+use crate::{Change, Finite, LogEntry, RuleRun, Stop, StopIndex, StopLocation, Timeline, Val};
 
 /// One server tick (P0, P1).
 const TICK_S: f64 = 0.016;
@@ -136,7 +136,7 @@ pub(crate) fn dead(world: &mut World, id: &str) -> Result<bool, Stop> {
     // error never surfaces: every failed read falls back to the pool.
     match crate::player::state_read_value(&world.players, id, read, "a liveness check") {
         Ok(Val::Bool(dead)) => Ok(dead),
-        _ => Ok(world_state(world, id)?.world.health.current <= 0.0),
+        _ => Ok(world_state(world, id)?.world.health.current.get() <= 0.0),
     }
 }
 
@@ -172,7 +172,7 @@ pub(crate) fn conditions_hold(rule: &Rule, env: &Env) -> Result<bool, Stop> {
 /// nothing.
 fn skip_count(value: &Val) -> Result<usize, Stop> {
     match value {
-        Val::Number(n) => Ok(n.max(0.0) as usize),
+        Val::Number(n) => Ok(n.get().max(0.0) as usize),
         Val::Bool(b) => Ok(*b as usize),
         Val::Null => Ok(0),
         other => unsupported(format!("skip count {other:?}")),
@@ -191,7 +191,7 @@ pub(crate) fn run_instance(
     subroutines: &BTreeMap<String, usize>,
     world: &mut World,
     tick: u64,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     for _ in 0..STEP_LIMIT {
         let Some(Frame { rule_idx, pc }) = inst.frames.last().copied() else {
@@ -351,6 +351,7 @@ pub(crate) fn run_instance(
                     number(&eval(stop, &env)?)?,
                     number(&eval(step, &env)?)?,
                 );
+                let start = Finite::produced(start, "forGlobalVariable")?;
                 let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
                 world.globals.insert(variable.clone(), Val::Number(start));
                 world.changes.borrow_mut().push(Change::GlobalVariable {
@@ -361,12 +362,12 @@ pub(crate) fn run_instance(
                 });
                 // The loop-exit check runs at the `For` line once, then at
                 // each `End`; a value already past the stop never enters.
-                inst.frames.last_mut().expect("a running frame").pc = if for_done(start, stop, step)
-                {
-                    map.pairs[pc].expect("paired at load") + 1
-                } else {
-                    pc + 1
-                };
+                inst.frames.last_mut().expect("a running frame").pc =
+                    if for_done(start.get(), stop, step) {
+                        map.pairs[pc].expect("paired at load") + 1
+                    } else {
+                        pc + 1
+                    };
             }
             Action::ForPlayerVariable {
                 player,
@@ -384,6 +385,7 @@ pub(crate) fn run_instance(
                 let Some(target) = world.players.get_mut(&id) else {
                     return unsupported(format!("player variable of undeclared player `{id}`"));
                 };
+                let start = Finite::produced(start, "forPlayerVariable")?;
                 let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
                 target.vars.insert(variable.clone(), Val::Number(start));
                 world.changes.borrow_mut().push(Change::PlayerVariable {
@@ -393,12 +395,12 @@ pub(crate) fn run_instance(
                     old,
                     new: Val::Number(start),
                 });
-                inst.frames.last_mut().expect("a running frame").pc = if for_done(start, stop, step)
-                {
-                    map.pairs[pc].expect("paired at load") + 1
-                } else {
-                    pc + 1
-                };
+                inst.frames.last_mut().expect("a running frame").pc =
+                    if for_done(start.get(), stop, step) {
+                        map.pairs[pc].expect("paired at load") + 1
+                    } else {
+                        pc + 1
+                    };
             }
             Action::End => {
                 let open = map.pairs[pc].expect("paired at load");
@@ -415,19 +417,16 @@ pub(crate) fn run_instance(
                         let (stop, step) =
                             (number(&eval(stop, &env)?)?, number(&eval(step, &env)?)?);
                         let old = world.globals.get(variable).cloned().unwrap_or(Val::Null);
-                        let updated = number(&old)? + step;
+                        let updated = Finite::produced(number(&old)? + step, "forGlobalVariable")?;
                         world.globals.insert(variable.clone(), Val::Number(updated));
+                        let done = for_done(updated.get(), stop, step);
                         world.changes.borrow_mut().push(Change::GlobalVariable {
                             name: variable.clone(),
                             index: None,
                             old,
                             new: Val::Number(updated),
                         });
-                        if for_done(updated, stop, step) {
-                            pc + 1
-                        } else {
-                            open + 1
-                        }
+                        if done { pc + 1 } else { open + 1 }
                     }
                     Action::ForPlayerVariable {
                         player,
@@ -445,8 +444,9 @@ pub(crate) fn run_instance(
                             ));
                         };
                         let old = target.vars.get(variable).cloned().unwrap_or(Val::Null);
-                        let updated = number(&old)? + step;
+                        let updated = Finite::produced(number(&old)? + step, "forPlayerVariable")?;
                         target.vars.insert(variable.clone(), Val::Number(updated));
+                        let done = for_done(updated.get(), stop, step);
                         world.changes.borrow_mut().push(Change::PlayerVariable {
                             player: id,
                             name: variable.clone(),
@@ -454,11 +454,7 @@ pub(crate) fn run_instance(
                             old,
                             new: Val::Number(updated),
                         });
-                        if for_done(updated, stop, step) {
-                            pc + 1
-                        } else {
-                            open + 1
-                        }
+                        if done { pc + 1 } else { open + 1 }
                     }
                     _ => pc + 1,
                 };
@@ -601,10 +597,10 @@ pub(crate) fn run_instance(
                     // The catalog's seconds-to-ticks mapping under a
                     // non-100 `Set Slow Motion` factor is unmeasured —
                     // stop rather than guess it (athena#120).
-                    if world.clock.slow_motion != 100.0 {
+                    if world.clock.slow_motion.get() != 100.0 {
                         return unsupported(format!(
                             "action wait under a {}% simulation rate",
-                            world.clock.slow_motion
+                            world.clock.slow_motion.get()
                         ));
                     }
                     inst.wake = Some(tick + ticks);
@@ -639,10 +635,10 @@ pub(crate) fn run_instance(
                     }
                     // The same unmeasured seconds-to-ticks mapping as
                     // `wait` gates a suspending `Wait Until`.
-                    if world.clock.slow_motion != 100.0 {
+                    if world.clock.slow_motion.get() != 100.0 {
                         return unsupported(format!(
                             "action waitUntil under a {}% simulation rate",
-                            world.clock.slow_motion
+                            world.clock.slow_motion.get()
                         ));
                     }
                     inst.wake = Some(tick + wait_ticks(timeout));

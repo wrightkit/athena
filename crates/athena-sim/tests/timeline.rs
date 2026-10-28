@@ -38,7 +38,7 @@ fn writes_around_a_wait_land_on_their_ticks() {
         panic!("expected two entries, got {:?}", trace.timeline.entries);
     };
     assert_eq!(start.tick, 0);
-    assert_eq!(start.time, 15.0);
+    assert_eq!(start.time.get(), 15.0);
     let [run] = start.rules.as_slice() else {
         panic!("expected one rule run, got {:?}", start.rules);
     };
@@ -52,11 +52,11 @@ fn writes_around_a_wait_land_on_their_ticks() {
             name: "a".into(),
             index: None,
             old: Val::Null,
-            new: Val::Number(1.0),
+            new: Val::number(1.0),
         }]
     );
     assert_eq!(resume.tick, 32);
-    assert_eq!(resume.time, 527.0);
+    assert_eq!(resume.time.get(), 527.0);
     let [run] = resume.rules.as_slice() else {
         panic!("expected one rule run, got {:?}", resume.rules);
     };
@@ -66,8 +66,8 @@ fn writes_around_a_wait_land_on_their_ticks() {
         [Change::GlobalVariable {
             name: "a".into(),
             index: None,
-            old: Val::Number(1.0),
-            new: Val::Number(2.0),
+            old: Val::number(1.0),
+            new: Val::number(2.0),
         }]
     );
 }
@@ -109,8 +109,8 @@ rule ("init") {
         [Change::GlobalVariable {
             name: "a".into(),
             index: None,
-            old: Val::Number(1.0),
-            new: Val::Number(2.0),
+            old: Val::number(1.0),
+            new: Val::number(2.0),
         }]
     );
 }
@@ -296,7 +296,7 @@ rule ("init") {
             name: "s".into(),
             index: None,
             old: Val::Null,
-            new: Val::Number(2.0),
+            new: Val::number(2.0),
         }
     );
     assert_eq!(
@@ -311,8 +311,8 @@ rule ("init") {
         Change::World {
             player: "p1".into(),
             field: "health".into(),
-            old: Val::Number(200.0),
-            new: Val::Number(190.0),
+            old: Val::number(200.0),
+            new: Val::number(190.0),
         }
     );
 }

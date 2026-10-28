@@ -70,7 +70,7 @@ fn creates_record_elements_and_hand_out_shared_ids() {
             z: 3.0
         })
     );
-    assert_eq!(in_world.args.scale, Some(Val::Number(0.7)));
+    assert_eq!(in_world.args.scale, Some(Val::number(0.7)));
     assert_eq!(
         in_world.args.clipping.as_deref(),
         Some("CLIP_AGAINST_SURFACES")
@@ -82,7 +82,7 @@ fn creates_record_elements_and_hand_out_shared_ids() {
         Some("VISIBLE_ALWAYS")
     );
     assert_eq!(bar.kind, HudKind::ProgressBarInWorldText);
-    assert_eq!(bar.args.value, Some(Val::Number(25.0)));
+    assert_eq!(bar.args.value, Some(Val::number(25.0)));
     assert_eq!(bar.args.progress_bar_color, Some(Val::Text("BLUE".into())));
     assert_eq!(
         bar.args.reevaluation.as_deref(),
@@ -112,10 +112,10 @@ fn creates_record_elements_and_hand_out_shared_ids() {
     // `Last Text ID` is the newest text element across the four
     // creates — the in-world progress bar — and `Last Created Entity`
     // the newest entity, the icon.
-    assert_eq!(trace.globals["t"], Val::Number(2.0));
-    assert_eq!(trace.globals["e"], Val::Number(2.0));
-    assert_eq!(trace.globals["tc"], Val::Number(3.0));
-    assert_eq!(trace.globals["ec"], Val::Number(3.0));
+    assert_eq!(trace.globals["t"], Val::number(2.0));
+    assert_eq!(trace.globals["e"], Val::number(2.0));
+    assert_eq!(trace.globals["tc"], Val::number(3.0));
+    assert_eq!(trace.globals["ec"], Val::number(3.0));
 }
 
 /// A projectile effect is a durable entity `Last Created Entity` reads;
@@ -146,8 +146,8 @@ rule ("init") {
 "#;
     let trace = run(text, &scenario(TWO_TEAMS));
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["e"], Val::Number(0.0));
-    assert_eq!(trace.globals["ec"], Val::Number(0.0));
+    assert_eq!(trace.globals["e"], Val::number(0.0));
+    assert_eq!(trace.globals["ec"], Val::number(0.0));
     assert_eq!(trace.globals["exists"], Val::Bool(true));
     let [projectile] = trace.effects.as_slice() else {
         panic!("expected one entity, got {:?}", trace.effects);
@@ -155,7 +155,7 @@ rule ("init") {
     assert_eq!(projectile.kind, EffectKind::ProjectileEffect);
     assert_eq!(projectile.args.effect.as_deref(), Some("ORB"));
     assert_eq!(projectile.args.friendly_to, Some(vec!["p1".to_string()]));
-    assert_eq!(projectile.args.oversize, Some(Val::Number(0.5)));
+    assert_eq!(projectile.args.oversize, Some(Val::number(0.5)));
     assert_eq!(projectile.destroyed_tick, None);
 }
 

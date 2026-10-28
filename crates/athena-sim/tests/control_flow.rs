@@ -45,8 +45,8 @@ rule ("t") {
 fn skip_steps_over_exactly_its_count() {
     let trace = run(SKIP);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
-    assert_eq!(trace.globals["b"], Val::Number(7.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
+    assert_eq!(trace.globals["b"], Val::number(7.0));
 }
 
 /// `Skip(0)` skips nothing; `Skip` past the list ends the run.
@@ -73,7 +73,7 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
     assert_eq!(trace.globals["b"], Val::Null);
     assert_eq!(*ended(&trace), RunEnd::Finished);
 }
@@ -104,9 +104,9 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
     assert_eq!(trace.globals["b"], Val::Null);
-    assert_eq!(trace.globals["c"], Val::Number(3.0));
+    assert_eq!(trace.globals["c"], Val::number(3.0));
 }
 
 /// The client reads a `Skip If` count even when the condition is false,
@@ -155,8 +155,8 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["a"], Val::Number(99.0));
-    assert_eq!(trace.globals["b"], Val::Number(2.0));
+    assert_eq!(trace.globals["a"], Val::number(99.0));
+    assert_eq!(trace.globals["b"], Val::number(2.0));
 }
 
 /// `Abort` ends the action list and records `aborted`.
@@ -182,7 +182,7 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
     assert_eq!(trace.globals["b"], Val::Null);
     assert_eq!(*ended(&trace), RunEnd::Aborted);
 }
@@ -210,7 +210,7 @@ rule ("t") {
 }
 "#;
     let trace = run(text);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
     assert_eq!(trace.globals["b"], Val::Null);
     assert_eq!(*ended(&trace), RunEnd::Aborted);
 }
@@ -252,7 +252,7 @@ rule ("Subroutine die") {
 }
 "#;
     let trace = run(text);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
     assert_eq!(trace.globals["b"], Val::Null);
     assert_eq!(*ended(&trace), RunEnd::Aborted);
 }
@@ -304,7 +304,7 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["i"], Val::Number(3.0));
+    assert_eq!(trace.globals["i"], Val::number(3.0));
     assert_eq!(*ended(&trace), RunEnd::Finished);
 }
 
@@ -335,8 +335,8 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["i"], Val::Number(3.0));
-    assert_eq!(trace.globals["passes"], Val::Number(3.0));
+    assert_eq!(trace.globals["i"], Val::number(3.0));
+    assert_eq!(trace.globals["passes"], Val::number(3.0));
 }
 
 /// `Loop If Condition Is False` falls through while the conditions hold
@@ -366,7 +366,7 @@ rule ("t") {
     let trace = run(holds);
     assert_eq!(trace.outcome, Outcome::Complete);
     // The conditions held, so no restart and the action after ran once.
-    assert_eq!(trace.globals["i"], Val::Number(11.0));
+    assert_eq!(trace.globals["i"], Val::number(11.0));
 
     let fails = r#"
 variables {
@@ -425,8 +425,8 @@ rule ("t") {
         panic!("i must be a number");
     };
     assert!(
-        i > 10.0,
-        "the loop should have restarted many times, got {i}"
+        i.get() > 10.0,
+        "the loop should have restarted many times, got {i:?}"
     );
 }
 
@@ -470,10 +470,10 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["i"], Val::Number(3.0));
-    assert_eq!(trace.globals["x"], Val::Number(2.0));
-    assert_eq!(trace.globals["j"], Val::Number(5.0));
-    assert_eq!(trace.globals["y"], Val::Number(3.0));
+    assert_eq!(trace.globals["i"], Val::number(3.0));
+    assert_eq!(trace.globals["x"], Val::number(2.0));
+    assert_eq!(trace.globals["j"], Val::number(5.0));
+    assert_eq!(trace.globals["y"], Val::number(3.0));
 }
 
 /// `Continue` in a `For` lands on its `End`, which steps the variable —
@@ -506,8 +506,8 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["i"], Val::Number(4.0));
-    assert_eq!(trace.globals["x"], Val::Number(2.0));
+    assert_eq!(trace.globals["i"], Val::number(4.0));
+    assert_eq!(trace.globals["x"], Val::number(2.0));
 }
 
 /// `Break` outside any loop is not modeled.
@@ -565,6 +565,6 @@ rule ("t") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["i"], Val::Number(10.0));
-    assert_eq!(trace.globals["a"], Val::Number(2.0));
+    assert_eq!(trace.globals["i"], Val::number(10.0));
+    assert_eq!(trace.globals["a"], Val::number(2.0));
 }

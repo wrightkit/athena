@@ -35,10 +35,10 @@ rule ("defaults") {
 fn each_setting_kind_evaluates_to_its_default() {
     let trace = run(DEFAULTS);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["real"], Val::Number(3.5));
-    assert_eq!(trace.globals["int"], Val::Number(7.0));
+    assert_eq!(trace.globals["real"], Val::number(3.5));
+    assert_eq!(trace.globals["int"], Val::number(7.0));
     assert_eq!(trace.globals["toggle"], Val::Bool(true));
-    assert_eq!(trace.globals["combo"], Val::Number(2.0));
+    assert_eq!(trace.globals["combo"], Val::number(2.0));
     assert_eq!(trace.globals["hero"], Val::Text("ANA".into()));
 }
 
@@ -67,7 +67,7 @@ rule ("gated") {
 fn a_setting_reads_inside_a_condition_and_an_action_argument() {
     let trace = run(CONDITION_AND_ARGUMENT);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["fired"], Val::Number(1.0));
+    assert_eq!(trace.globals["fired"], Val::number(1.0));
     assert_eq!(trace.logs.len(), 1);
     assert_eq!(trace.logs[0].text, "bonus 25.00");
 }

@@ -37,5 +37,5 @@ fn the_builtin_hero_values_resolve_a_scenario_player() {
         .world
         .as_ref()
         .expect("p1 has world state");
-    assert!(world.health.max > 0.0);
+    assert!(world.health.max.get() > 0.0);
 }

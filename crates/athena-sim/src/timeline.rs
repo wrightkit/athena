@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::{EffectKind, HudKind, Val};
+use crate::{EffectKind, Finite, HudKind, Val};
 
 /// One rule execution that started, resumed or ended on a tick.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -143,7 +143,7 @@ pub struct TimelineEntry {
     /// The tick's `Total Time Elapsed` in milliseconds: 15 + the
     /// elapsed game-time seconds. The match clock drives it, so a
     /// paused or slowed clock repeats values across ticks.
-    pub time: f64,
+    pub time: Finite,
     pub rules: Vec<RuleRun>,
     pub changes: Vec<Change>,
 }

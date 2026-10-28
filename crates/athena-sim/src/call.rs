@@ -9,7 +9,7 @@ use crate::ambiguous;
 use crate::eval::{Env, arguments, eval, number, values_equal};
 use crate::scenario::{Phase, ServerLoad};
 use crate::unsupported;
-use crate::{Change, MissingInput, MissingInputKind, Stop, Val};
+use crate::{Change, Finite, MissingInput, MissingInputKind, Stop, Val};
 
 fn missing<T>(
     input: MissingInputKind,
@@ -40,7 +40,7 @@ const EVENT_VALUES: &[&str] = &[
 fn truthy(value: &Val) -> Result<bool, Stop> {
     match value {
         Val::Bool(b) => Ok(*b),
-        Val::Number(n) => Ok(*n != 0.0),
+        Val::Number(n) => Ok(n.get() != 0.0),
         Val::Null => Ok(false),
         other => unsupported(format!("condition value {other:?}")),
     }
@@ -58,7 +58,7 @@ fn items(value: Val, construct: &str) -> Result<Vec<Val>, Stop> {
 
 fn render(value: &Val) -> Result<String, Stop> {
     match value {
-        Val::Number(n) => Ok(format!("{n:.2}")),
+        Val::Number(n) => Ok(format!("{:.2}", n.get())),
         Val::Null => Ok("0".into()),
         Val::Bool(b) => Ok(b.to_string()),
         Val::Text(text) => Ok(text.clone()),
@@ -165,7 +165,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
     let args: &[Value] = &resolved;
     let binary = |op: fn(f64, f64) -> f64| -> Result<Val, Stop> {
         let [a, b] = arguments::<2>(name, args)?;
-        crate::vector::produced_number(op(number(&eval(a, env)?)?, number(&eval(b, env)?)?), name)
+        crate::produced_number(op(number(&eval(a, env)?)?, number(&eval(b, env)?)?), name)
     };
     match name {
         // Evaluation reached a sentinel no operand position resolved —
@@ -194,11 +194,14 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     current,
                     average,
                     peak,
-                }) => Ok(Val::Number(match name {
-                    "getServerLoad" => current,
-                    "getAverageServerLoad" => average,
-                    _ => peak,
-                })),
+                }) => crate::produced_number(
+                    match name {
+                        "getServerLoad" => current,
+                        "getAverageServerLoad" => average,
+                        _ => peak,
+                    },
+                    name,
+                ),
                 None => missing(
                     MissingInputKind::ServerLoad,
                     None,
@@ -286,7 +289,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 .hud
                 .borrow()
                 .last_text_id
-                .map_or(Val::Null, |id| Val::Number(id as f64)))
+                .map_or(Val::Null, |id| Val::Number(Finite::from(id))))
         }
         // `Last Created Entity` is the id of the newest durable entity;
         // a `playEffect` has no entity id to hand out.
@@ -296,7 +299,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 .effects
                 .borrow()
                 .last_created
-                .map_or(Val::Null, |id| Val::Number(id as f64)))
+                .map_or(Val::Null, |id| Val::Number(Finite::from(id))))
         }
         // The catalog's `Player|EntityId` names "the specified player,
         // icon entity, or effect entity". A scenario player exists for
@@ -306,7 +309,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let [entity] = arguments::<1>(name, args)?;
             match eval(entity, env)? {
                 Val::Player(_) => Ok(Val::Bool(true)),
-                Val::Number(id) => Ok(Val::Bool(env.effects.borrow().entity_exists(id))),
+                Val::Number(id) => Ok(Val::Bool(env.effects.borrow().entity_exists(id.get()))),
                 Val::Null => Ok(Val::Bool(false)),
                 other => unsupported(format!("{name} on {other:?}")),
             }
@@ -315,11 +318,13 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // one is no longer an instance.
         "getNumberOfEntityIds" => {
             let [] = arguments::<0>(name, args)?;
-            Ok(Val::Number(env.effects.borrow().entity_count() as f64))
+            Ok(Val::Number(Finite::from(
+                env.effects.borrow().entity_count(),
+            )))
         }
         "getNumberOfTextIds" => {
             let [] = arguments::<0>(name, args)?;
-            Ok(Val::Number(env.hud.borrow().text_count() as f64))
+            Ok(Val::Number(Finite::from(env.hud.borrow().text_count())))
         }
         "and" | "or" => {
             let [a, b] = arguments::<2>(name, args)?;
@@ -379,11 +384,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // non-finite argument has no sine to report.
         "sin" => {
             let [value] = arguments::<1>(name, args)?;
-            let sine = number(&eval(value, env)?)?.sin();
-            if !sine.is_finite() {
-                return unsupported(format!("{name} produced a non-finite number"));
-            }
-            Ok(Val::Number(sine))
+            crate::produced_number(number(&eval(value, env)?)?.sin(), name)
         }
         "roundToInteger" => {
             let [value, rounding] = arguments::<2>(name, args)?;
@@ -391,7 +392,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let Value::Enum { value: mode, .. } = rounding else {
                 return unsupported(format!("{name} rounding {rounding:?}"));
             };
-            crate::vector::produced_number(
+            crate::produced_number(
                 match mode.as_str() {
                     "UP" => n.ceil(),
                     "DOWN" => n.floor(),
@@ -441,7 +442,9 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         }
         "countOf" => {
             let [array] = arguments::<1>(name, args)?;
-            Ok(Val::Number(items(eval(array, env)?, name)?.len() as f64))
+            Ok(Val::Number(Finite::from(
+                items(eval(array, env)?, name)?.len(),
+            )))
         }
         "appendToArray" => {
             let [array, value] = arguments::<2>(name, args)?;
@@ -490,7 +493,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             }
             Ok(match name {
                 "arrayContains" => Val::Bool(found.is_some()),
-                _ => Val::Number(found.map_or(-1.0, |index| index as f64)),
+                _ => Val::Number(found.map_or(Finite::from(-1), Finite::from)),
             })
         }
         "slice" => {
@@ -525,14 +528,10 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "randomInteger" | "randomReal" => {
             let [min, max] = arguments::<2>(name, args)?;
             let (min, max) = (number(&eval(min, env)?)?, number(&eval(max, env)?)?);
-            if !min.is_finite() || !max.is_finite() {
-                return unsupported(format!("{name} on a non-finite bound"));
-            }
             // A `Min` past `Max` swaps the bounds; unmeasured.
             let (min, max) = if min > max { (max, min) } else { (min, max) };
             // Finite bounds still overflow the range: `Max - Min` is
-            // `inf` from `-1e308` to `1e308`, and a non-finite value
-            // serializes as `null` in the trace.
+            // `inf` from `-1e308` to `1e308`.
             if !(max - min).is_finite() {
                 return unsupported(format!("{name} on a non-finite range"));
             }
@@ -540,9 +539,9 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let value = if name == "randomInteger" {
                 // The bounds floor to integers; the range is inclusive.
                 let (lo, hi) = (min.floor(), max.floor());
-                Val::Number(lo + (u * (hi - lo + 1.0)).floor())
+                crate::produced_number(lo + (u * (hi - lo + 1.0)).floor(), name)?
             } else {
-                Val::Number(min + (max - min) * u)
+                crate::produced_number(min + (max - min) * u, name)?
             };
             Ok(drawn(env, name, value))
         }
@@ -577,7 +576,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 Some((element, index)) => Ok(if name == "currentArrayElement" {
                     element.clone()
                 } else {
-                    Val::Number(index as f64)
+                    Val::Number(Finite::from(index))
                 }),
                 None => unsupported(format!("{name} outside an element context")),
             }
@@ -611,16 +610,11 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                         keyed.into_iter().map(|(_, item)| item.clone()).collect(),
                     ))
                 }
-                // `Mapped Array` collects the operand's per-element
-                // result; a produced number stays a value only while
-                // finite, as everywhere one is produced.
+                // `Mapped Array` collects the operand's per-element result.
                 "mappedArray" => {
                     let mut mapped = Vec::with_capacity(items.len());
                     for (index, item) in items.iter().enumerate() {
-                        match eval(operand, &element_env(env, item, index))? {
-                            Val::Number(n) => mapped.push(crate::vector::produced_number(n, name)?),
-                            element => mapped.push(element),
-                        }
+                        mapped.push(eval(operand, &element_env(env, item, index))?);
                     }
                     Ok(Val::Array(mapped))
                 }
@@ -765,11 +759,11 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                 string(&eval(character, env)?)?,
             );
             Ok(Val::Number(if character.is_empty() {
-                -1.0
+                Finite::from(-1)
             } else {
-                source
-                    .find(&character)
-                    .map_or(-1.0, |byte| source[..byte].chars().count() as f64)
+                source.find(&character).map_or(Finite::from(-1), |byte| {
+                    Finite::from(source[..byte].chars().count())
+                })
             }))
         }
         // `String Replace` replaces every occurrence of the pattern. An

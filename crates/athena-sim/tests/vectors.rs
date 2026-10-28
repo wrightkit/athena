@@ -85,7 +85,7 @@ fn vector_builds_and_its_components_read_back() {
         ("Z Component Of", 3.0),
     ] {
         let trace = run(&set_global(&format!("{component}(Vector(1, 2, 3))")));
-        assert_eq!(global(&trace), &Val::Number(expected), "{component}");
+        assert_eq!(global(&trace), &Val::number(expected), "{component}");
     }
 }
 
@@ -99,18 +99,18 @@ fn a_null_operand_in_a_vector_position_is_the_zero_vector() {
     // `g` is declared but never set.
     for component in ["X Component Of", "Y Component Of", "Z Component Of"] {
         let trace = run(&set_global(&format!("{component}(Global.g)")));
-        assert_eq!(global(&trace), &Val::Number(0.0), "{component}");
+        assert_eq!(global(&trace), &Val::number(0.0), "{component}");
     }
     // A literal `Null` operand evaluates to the same `Null`.
     let trace = run(&set_global("Y Component Of(Null)"));
-    assert_eq!(global(&trace), &Val::Number(0.0));
+    assert_eq!(global(&trace), &Val::number(0.0));
 
     // The other strict `Vector` positions read the same zero vector;
     // the zero-length guards still stop where they did.
     let trace = run(&set_global("Distance Between(Global.g, Vector(3, 4, 0))"));
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
     let trace = run(&set_global("Dot Product(Global.g, Vector(1, 2, 3))"));
-    assert_eq!(global(&trace), &Val::Number(0.0));
+    assert_eq!(global(&trace), &Val::number(0.0));
     let trace = run(&set_global("Normalize(Global.g)"));
     assert_not_modeled(&trace, "normalize of a zero-length vector");
 
@@ -145,8 +145,8 @@ rule ("probe") {
 "#;
     let trace = run(text);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["before"], Val::Number(0.0));
-    assert_eq!(trace.globals["after"], Val::Number(2.0));
+    assert_eq!(trace.globals["before"], Val::number(0.0));
+    assert_eq!(trace.globals["after"], Val::number(2.0));
 }
 
 #[test]
@@ -174,7 +174,7 @@ fn distance_between_is_the_displacement_magnitude() {
     let trace = run(&set_global(
         "Distance Between(Vector(1, 2, 3), Vector(4, 6, 3))",
     ));
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
 }
 
 #[test]
@@ -210,8 +210,8 @@ fn angles_from_direction_invert_the_frame() {
             panic!("{:?}", trace.globals["g"])
         };
         assert!(
-            (h - horizontal).abs() < 1e-9,
-            "{direction}: {h} != {horizontal}"
+            (h.get() - horizontal).abs() < 1e-9,
+            "{direction}: {h:?} != {horizontal}"
         );
         let trace = run(&set_global(&format!(
             "Vertical Angle From Direction({direction})"
@@ -220,8 +220,8 @@ fn angles_from_direction_invert_the_frame() {
             panic!("{:?}", trace.globals["g"])
         };
         assert!(
-            (v - vertical).abs() < 1e-9,
-            "{direction}: {v} != {vertical}"
+            (v.get() - vertical).abs() < 1e-9,
+            "{direction}: {v:?} != {vertical}"
         );
     }
 }
@@ -229,7 +229,7 @@ fn angles_from_direction_invert_the_frame() {
 #[test]
 fn dot_and_cross_product() {
     let trace = run(&set_global("Dot Product(Vector(1, 2, 3), Vector(4, 5, 6))"));
-    assert_eq!(global(&trace), &Val::Number(32.0));
+    assert_eq!(global(&trace), &Val::number(32.0));
     // x̂ × ŷ = ẑ.
     let trace = run(&set_global(
         "Cross Product(Vector(1, 0, 0), Vector(0, 1, 0))",
@@ -246,7 +246,7 @@ fn normalize_and_magnitude() {
     let trace = run(&set_global("Normalize(Vector(3, 0, 4))"));
     assert_eq!(global(&trace), &vec(0.6, 0.0, 0.8));
     let trace = run(&set_global("Magnitude Of(Vector(3, 0, 4))"));
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
 
     // A zero-length vector has no unit direction; unmeasured.
     let trace = run(&set_global("Normalize(Vector(0, 0, 0))"));
@@ -275,8 +275,8 @@ fn vector_arithmetic_is_componentwise_with_scalar_broadcast() {
         ("Subtract(10, Vector(1, 2, 3))", vec(9.0, 8.0, 7.0)),
         ("Divide(1, Vector(1, 2, 4))", vec(1.0, 0.5, 0.25)),
         // Purely numeric operands still yield a number.
-        ("Add(2, 3)", Val::Number(5.0)),
-        ("Divide(10, 4)", Val::Number(2.5)),
+        ("Add(2, 3)", Val::number(5.0)),
+        ("Divide(10, 4)", Val::number(2.5)),
     ] {
         let trace = run(&set_global(value));
         assert_eq!(global(&trace), &expected, "{value}");
@@ -328,7 +328,7 @@ fn modify_variable_arithmetic_is_the_same_vector_math() {
             "Vector(4, 5, 6)",
             vec(1.0, 2.0, 3.0),
         ),
-        ("2", "Raise To Power", "8", Val::Number(256.0)),
+        ("2", "Raise To Power", "8", Val::number(256.0)),
     ] {
         let trace = run(&modify_global(initial, op, operand));
         assert_eq!(global(&trace), &expected, "{op} on {initial}");
@@ -360,7 +360,7 @@ rule ("probe") {
     let trace = run(text);
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![vec(11.0, 22.0, 33.0), Val::Number(0.0)])
+        &Val::Array(vec![vec(11.0, 22.0, 33.0), Val::number(0.0)])
     );
 }
 
@@ -459,8 +459,8 @@ fn angle_between_vectors_reports_degrees() {
             panic!("{:?}", trace.globals["g"])
         };
         assert!(
-            (angle - expected).abs() < 1e-9,
-            "{value}: {angle} != {expected}"
+            (angle.get() - expected).abs() < 1e-9,
+            "{value}: {angle:?} != {expected}"
         );
     }
     // A zero-length vector has no direction.
@@ -500,7 +500,7 @@ fn position_of_reads_the_scenario_field() {
         &set_global("Distance Between(Host Player, Vector(4, 6, 3))"),
         r#"{ "id": "p1", "host": true, "position": { "x": 1, "y": 2, "z": 3 } }"#,
     );
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
     let trace = run_with(
         &set_global("Add(Host Player, Vector(1, 1, 1))"),
         r#"{ "id": "p1", "host": true, "position": { "x": 1, "y": 2, "z": 3 } }"#,
@@ -671,7 +671,7 @@ rule ("probe") {
 }
 "#;
     let trace = run(text);
-    assert_eq!(global(&trace), &Val::Number(1.0));
+    assert_eq!(global(&trace), &Val::number(1.0));
 }
 
 /// An ambiguous spelling in a position the catalog does not type as a
@@ -726,7 +726,7 @@ fn vertical_facing_angle_of_reads_the_scenario_facing() {
         &set_global("Vertical Facing Angle Of(Host Player)"),
         r#"{ "id": "p1", "host": true, "facing": { "horizontal": 90, "vertical": 45 } }"#,
     );
-    assert_eq!(global(&trace), &Val::Number(45.0));
+    assert_eq!(global(&trace), &Val::number(45.0));
 
     // A player without `facing` is the same missing input
     // `Facing Direction Of` reports.

@@ -33,8 +33,8 @@ fn a_for_global_variable_containing_an_if_runs_to_the_expected_values() {
     let trace = run(FOR_IF);
     assert_eq!(trace.outcome, Outcome::Complete);
     // i runs 0..=4 (the exit check at `End` stops at 5); the `If` admits 3+4.
-    assert_eq!(trace.globals["i"], Val::Number(5.0));
-    assert_eq!(trace.globals["total"], Val::Number(7.0));
+    assert_eq!(trace.globals["i"], Val::number(5.0));
+    assert_eq!(trace.globals["total"], Val::number(7.0));
 }
 
 /// A `For` inside each branch of an `If`/`Else` chain.
@@ -84,9 +84,9 @@ fn a_for_inside_an_if_pairs_its_end_with_the_for_not_the_if() {
     assert_eq!(trace.outcome, Outcome::Complete);
     // The taken branch's `For` iterates; the skipped branch's `For` never
     // writes `j`, and the `Else` runs instead.
-    assert_eq!(trace.globals["hits"], Val::Number(3.0));
-    assert_eq!(trace.globals["i"], Val::Number(3.0));
-    assert_eq!(trace.globals["misses"], Val::Number(99.0));
+    assert_eq!(trace.globals["hits"], Val::number(3.0));
+    assert_eq!(trace.globals["i"], Val::number(3.0));
+    assert_eq!(trace.globals["misses"], Val::number(99.0));
     assert_eq!(trace.globals["j"], Val::Null);
 }
 
@@ -115,8 +115,8 @@ rule ("slow loop") {
 fn a_for_resumes_each_iteration_across_a_wait() {
     let trace = run(FOR_WAIT);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["hits"], Val::Number(3.0));
-    assert_eq!(trace.globals["i"], Val::Number(3.0));
+    assert_eq!(trace.globals["hits"], Val::number(3.0));
+    assert_eq!(trace.globals["i"], Val::number(3.0));
 }
 
 /// A descending `For` (negative step) and one whose start already passed the
@@ -150,9 +150,9 @@ fn a_for_counts_down_and_skips_an_already_passed_range() {
     assert_eq!(trace.outcome, Outcome::Complete);
     // 5, 3, 1 run (i lands on -1); `never` is written 5 and the body is
     // skipped, so `down` counts only the first loop.
-    assert_eq!(trace.globals["down"], Val::Number(3.0));
-    assert_eq!(trace.globals["i"], Val::Number(-1.0));
-    assert_eq!(trace.globals["never"], Val::Number(5.0));
+    assert_eq!(trace.globals["down"], Val::number(3.0));
+    assert_eq!(trace.globals["i"], Val::number(-1.0));
+    assert_eq!(trace.globals["never"], Val::number(5.0));
 }
 
 /// `For Player Variable` on the `Event Player`.
@@ -198,6 +198,39 @@ fn a_for_player_variable_counts_on_each_player() {
     );
 }
 
+/// A `For Player Variable` `End` step routes the written increment
+/// through the finite check: `old + step` overflowing to `inf` stops
+/// `not_modeled` instead of storing a value that serializes `null`
+/// (athena#133).
+#[test]
+fn a_for_player_variable_end_stops_on_a_non_finite_increment() {
+    let text = r#"
+variables {
+    player:
+        0: i
+}
+
+rule ("per player") {
+    event {
+        Ongoing - Each Player;
+    }
+    actions {
+        For Player Variable(Event Player, i, Raise To Power(10, 308), Multiply(Raise To Power(10, 308), 1.5), Raise To Power(10, 308));
+        End;
+    }
+}
+"#;
+    let scenario = r#"{ "scenarioVersion": 1, "seconds": 1, "players": [{ "id": "p1" }] }"#;
+    let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(stop) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        stop.construct,
+        "forPlayerVariable produced a non-finite number"
+    );
+}
+
 /// Two `If`/`Else If` chains in a row: the first ends on a false clause.
 const CONSECUTIVE_CHAINS: &str = r#"
 variables {
@@ -227,7 +260,7 @@ fn a_fresh_chain_does_not_inherit_a_previous_chains_clause_jump() {
     let trace = run(CONSECUTIVE_CHAINS);
     assert_eq!(trace.outcome, Outcome::Complete);
     // Only the true clause of the second chain runs.
-    assert_eq!(trace.globals["hits"], Val::Number(1.0));
+    assert_eq!(trace.globals["hits"], Val::number(1.0));
 }
 
 /// An `If`/`End` nested in a matched clause body exhausts its chain on a
@@ -275,7 +308,7 @@ rule ("nested else-if") {
 fn an_exhausted_if_inside_a_clause_does_not_trigger_the_outer_else() {
     let trace = run(NESTED_EXHAUSTED_IF);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["hits"], Val::Number(2.0));
+    assert_eq!(trace.globals["hits"], Val::number(2.0));
 }
 
 /// The nested `If` must not deliver the run to the `Else If` head either: a
@@ -307,7 +340,7 @@ rule ("nested else-if") {
 fn an_exhausted_if_inside_a_clause_does_not_evaluate_the_outer_else_if() {
     let trace = run(NESTED_EXHAUSTED_IF_UNEVALUATED);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["hits"], Val::Number(1.0));
+    assert_eq!(trace.globals["hits"], Val::number(1.0));
 }
 
 /// A subroutine ending in an exhausted `If`/`End` returns with a pending
@@ -353,7 +386,7 @@ rule ("caller") {
 fn an_if_exhausted_inside_a_subroutine_does_not_trigger_the_callers_else() {
     let trace = run(SUBROUTINE_EXHAUSTED_IF);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["hits"], Val::Number(1.0));
+    assert_eq!(trace.globals["hits"], Val::number(1.0));
 }
 
 /// A stray `End` line: the parser keeps it as a raw action, and reaching it

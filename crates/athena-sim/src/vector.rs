@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use workshop_rs::Value;
 
 use crate::eval::{Env, arguments, eval, number, player_id};
+use crate::produced_number;
 use crate::scenario::{Player, Team};
 use crate::unsupported;
 use crate::{MissingInput, MissingInputKind, Stop, Val};
@@ -153,16 +154,6 @@ pub(crate) fn produced(v: Vec3, construct: &str) -> Result<Val, Stop> {
         Ok(v.into())
     } else {
         unsupported(format!("{construct} produced a non-finite vector"))
-    }
-}
-
-/// A produced number stays a value only while it is finite — the same
-/// stop a non-finite vector component forces.
-pub(crate) fn produced_number(n: f64, construct: &str) -> Result<Val, Stop> {
-    if n.is_finite() {
-        Ok(Val::Number(n))
-    } else {
-        unsupported(format!("{construct} produced a non-finite number"))
     }
 }
 
@@ -349,11 +340,14 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "__xComponentOf__" | "__yComponentOf__" | "__zComponentOf__" => {
             let [arg] = arguments::<1>(name, args)?;
             let v = vec(&eval(arg, env)?, name)?;
-            Ok(Val::Number(match name {
-                "__xComponentOf__" => v.x,
-                "__yComponentOf__" => v.y,
-                _ => v.z,
-            }))
+            produced_number(
+                match name {
+                    "__xComponentOf__" => v.x,
+                    "__yComponentOf__" => v.y,
+                    _ => v.z,
+                },
+                name,
+            )
         }
         // `Vector Towards` is the raw displacement, `Direction Towards`
         // its unit direction — the same operand pair `Distance Between`
@@ -499,9 +493,10 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         "getVerticalFacingAngle" => {
             let [player] = arguments::<1>(name, args)?;
             let id = player_id(player, env)?;
-            Ok(Val::Number(
+            produced_number(
                 facing(env.players, &id, &format!("value {name}"))?.vertical,
-            ))
+                name,
+            )
         }
         // `Players Within Radius`: the scenario players on the team
         // whose declared `position` is within `radius` of the evaluated

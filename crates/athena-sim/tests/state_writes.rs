@@ -61,8 +61,8 @@ fn a_state_write_defines_the_key_for_later_reads() {
         &scenario(PLAYER),
     );
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["g"], Val::Number(42.0));
-    assert_eq!(trace.players["p1"].state["ultCharge"], Val::Number(42.0));
+    assert_eq!(trace.globals["g"], Val::number(42.0));
+    assert_eq!(trace.players["p1"].state["ultCharge"], Val::number(42.0));
 }
 
 /// `True`/`False` coerce to `1`/`0` under the `Number|Boolean`
@@ -76,7 +76,7 @@ fn set_ultimate_charge_accepts_the_boolean_coercion() {
         ),
         &scenario(PLAYER),
     );
-    assert_eq!(trace.globals["g"], Val::Number(0.0));
+    assert_eq!(trace.globals["g"], Val::number(0.0));
 }
 
 /// A read of a key nothing wrote and the scenario does not supply is
@@ -116,8 +116,8 @@ fn a_state_write_is_a_change_naming_player_and_key() {
         .expect("a state change");
     assert_eq!(*change.0, "p1");
     assert_eq!(*change.1, "ultCharge");
-    assert_eq!(*change.2, Val::Number(12.0));
-    assert_eq!(*change.3, Val::Number(40.0));
+    assert_eq!(*change.2, Val::number(12.0));
+    assert_eq!(*change.3, Val::number(40.0));
 }
 
 /// A write on a key nothing answered records `old: null`.
@@ -146,14 +146,14 @@ fn set_health_writes_living_players_only() {
         &program("Set Player Health(Host Player, 80);"),
         &scenario(HEALTHY),
     );
-    assert_eq!(trace.players["p1"].state["health"], Val::Number(80.0));
+    assert_eq!(trace.players["p1"].state["health"], Val::number(80.0));
     let dead = scenario(
         r#"{ "id": "p1", "host": true, "hero": "ana",
             "state": { "health": 175, "maxHealth": 200, "isDead": true } }"#,
     );
     let trace = run(&program("Set Player Health(Host Player, 80);"), &dead);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.players["p1"].state["health"], Val::Number(175.0));
+    assert_eq!(trace.players["p1"].state["health"], Val::number(175.0));
     assert!(
         !trace.timeline.entries[0]
             .changes
@@ -170,8 +170,8 @@ fn set_max_health_scales_and_clamps_health() {
         &program("Set Max Health(Host Player, 50);"),
         &scenario(HEALTHY),
     );
-    assert_eq!(trace.players["p1"].state["maxHealth"], Val::Number(100.0));
-    assert_eq!(trace.players["p1"].state["health"], Val::Number(100.0));
+    assert_eq!(trace.players["p1"].state["maxHealth"], Val::number(100.0));
+    assert_eq!(trace.players["p1"].state["health"], Val::number(100.0));
     let trace = run(
         &program("Set Max Health(Host Player, 50);"),
         &scenario(
@@ -179,7 +179,25 @@ fn set_max_health_scales_and_clamps_health() {
                 "state": { "health": 50, "maxHealth": 200, "isDead": false } }"#,
         ),
     );
-    assert_eq!(trace.players["p1"].state["health"], Val::Number(50.0));
+    assert_eq!(trace.players["p1"].state["health"], Val::number(50.0));
+}
+
+/// `Set Max Health` scales the max by the percent: a product that
+/// overflows to `inf` stops `not_modeled` instead of writing a value
+/// that serializes `null` (athena#133).
+#[test]
+fn set_max_health_stops_on_a_non_finite_result() {
+    let trace = run(
+        &program("Set Max Health(Host Player, Raise To Power(10, 308));"),
+        &scenario(HEALTHY),
+    );
+    let Outcome::NotModeled(stop) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        stop.construct,
+        "action setMaxHealth produced a non-finite number"
+    );
 }
 
 /// `Kill` writes `isDead`; `Respawn` clears it and restores `health`
@@ -190,10 +208,10 @@ fn kill_respawn_and_resurrect_write_is_dead() {
     assert_eq!(dead.players["p1"].state["isDead"], Val::Bool(true));
     let trace = run(&program("Respawn(Host Player);"), &dead_scenario());
     assert_eq!(trace.players["p1"].state["isDead"], Val::Bool(false));
-    assert_eq!(trace.players["p1"].state["health"], Val::Number(200.0));
+    assert_eq!(trace.players["p1"].state["health"], Val::number(200.0));
     let trace = run(&program("Resurrect(Host Player);"), &dead_scenario());
     assert_eq!(trace.players["p1"].state["isDead"], Val::Bool(false));
-    assert_eq!(trace.players["p1"].state["health"], Val::Number(0.0));
+    assert_eq!(trace.players["p1"].state["health"], Val::number(0.0));
 }
 
 fn dead_scenario() -> String {
@@ -250,7 +268,7 @@ fn set_facing_writes_the_scenario_facing() {
         ),
         &scenario(PLAYER),
     );
-    assert_eq!(trace.globals["g"], Val::Number(0.0));
+    assert_eq!(trace.globals["g"], Val::number(0.0));
     let change = trace.timeline.entries[0]
         .changes
         .iter()
@@ -303,50 +321,50 @@ fn every_stored_modifier_records_its_effect() {
             "Set Damage Dealt(Host Player, 20)",
             "setDamageDealt",
             "damageDealt",
-            Val::Number(20.0),
-            vec![Val::Number(20.0)],
+            Val::number(20.0),
+            vec![Val::number(20.0)],
         ),
         (
             "Set Damage Received(Host Player, 20)",
             "setDamageReceived",
             "damageReceived",
-            Val::Number(20.0),
-            vec![Val::Number(20.0)],
+            Val::number(20.0),
+            vec![Val::number(20.0)],
         ),
         (
             "Set Healing Dealt(Host Player, 20)",
             "setHealingDealt",
             "healingDealt",
-            Val::Number(20.0),
-            vec![Val::Number(20.0)],
+            Val::number(20.0),
+            vec![Val::number(20.0)],
         ),
         (
             "Set Healing Received(Host Player, 20)",
             "setHealingReceived",
             "healingReceived",
-            Val::Number(20.0),
-            vec![Val::Number(20.0)],
+            Val::number(20.0),
+            vec![Val::number(20.0)],
         ),
         (
             "Set Move Speed(Host Player, 20)",
             "setMoveSpeed",
             "moveSpeed",
-            Val::Number(20.0),
-            vec![Val::Number(20.0)],
+            Val::number(20.0),
+            vec![Val::number(20.0)],
         ),
         (
             "Set Gravity(Host Player, 20)",
             "setGravity",
             "gravity",
-            Val::Number(20.0),
-            vec![Val::Number(20.0)],
+            Val::number(20.0),
+            vec![Val::number(20.0)],
         ),
         (
             "Set Knockback Received(Host Player, 20)",
             "setKnockbackReceived",
             "knockbackReceived",
-            Val::Number(20.0),
-            vec![Val::Number(20.0)],
+            Val::number(20.0),
+            vec![Val::number(20.0)],
         ),
         (
             "Set Player Allowed Heroes(Host Player, Array(Hero(Ana)))",
@@ -366,8 +384,8 @@ fn every_stored_modifier_records_its_effect() {
             "Start Forcing Spawn Room(Team 1, 0)",
             "startForcingSpawn",
             "forcedSpawnRoom",
-            Val::Number(0.0),
-            vec![Val::Number(0.0)],
+            Val::number(0.0),
+            vec![Val::number(0.0)],
         ),
     ];
     for (call, id, key, stored, args) in cases {
@@ -445,7 +463,7 @@ fn start_forcing_spawn_targets_the_team() {
     );
     assert_eq!(
         trace.players["p2"].modifiers["forcedSpawnRoom"],
-        Val::Number(0.0)
+        Val::number(0.0)
     );
 }
 
@@ -460,7 +478,7 @@ fn a_stored_modifier_changes_no_read() {
         ),
         &scenario(r#"{ "id": "p1", "host": true, "hero": "ana", "state": { "ultCharge": 30 } }"#),
     );
-    assert_eq!(trace.globals["g"], Val::Number(30.0));
+    assert_eq!(trace.globals["g"], Val::number(30.0));
 }
 
 /// The class-3 actions still stop `not_modeled`: each moves a value or

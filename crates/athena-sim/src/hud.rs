@@ -429,7 +429,7 @@ fn destroy(
     // An unknown, `null` or already-destroyed text id destroys nothing.
     match eval(text_id, env)? {
         Val::Null => {}
-        Val::Number(id) => destroy_element(hud, kind, id, tick, changes),
+        Val::Number(id) => destroy_element(hud, kind, id.get(), tick, changes),
         other => return unsupported(format!("{name} of {other:?}")),
     }
     Ok(())

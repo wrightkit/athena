@@ -103,24 +103,30 @@ fn health_percent_scales_every_pool_for_all_teams() {
     assert_eq!(trace.outcome, Outcome::Complete);
     // ana: 200 health, 100 shield, 50 armor at 150%.
     let world = trace.players["p1"].world.as_ref().expect("p1 world");
-    assert_eq!((world.health.current, world.health.max), (300.0, 300.0));
+    assert_eq!(
+        (world.health.current.get(), world.health.max.get()),
+        (300.0, 300.0)
+    );
     assert_eq!(
         (
-            world.shield.as_ref().unwrap().current,
-            world.shield.as_ref().unwrap().max
+            world.shield.as_ref().unwrap().current.get(),
+            world.shield.as_ref().unwrap().max.get()
         ),
         (150.0, 150.0)
     );
     assert_eq!(
         (
-            world.armor.as_ref().unwrap().current,
-            world.armor.as_ref().unwrap().max
+            world.armor.as_ref().unwrap().current.get(),
+            world.armor.as_ref().unwrap().max.get()
         ),
         (75.0, 75.0)
     );
     // ashe is on the other team but `allTeams` still applies.
     let world = trace.players["p2"].world.as_ref().expect("p2 world");
-    assert_eq!((world.health.current, world.health.max), (300.0, 300.0));
+    assert_eq!(
+        (world.health.current.get(), world.health.max.get()),
+        (300.0, 300.0)
+    );
 }
 
 #[test]
@@ -139,11 +145,11 @@ fn a_team_scoped_setting_applies_only_to_that_team() {
     let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(
-        trace.players["p1"].world.as_ref().unwrap().health.max,
+        trace.players["p1"].world.as_ref().unwrap().health.max.get(),
         300.0
     );
     assert_eq!(
-        trace.players["p2"].world.as_ref().unwrap().health.max,
+        trace.players["p2"].world.as_ref().unwrap().health.max.get(),
         200.0
     );
 }
@@ -172,7 +178,7 @@ fn a_hero_and_team_setting_requires_both() {
     );
     let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
         .unwrap_or_else(|error| panic!("{error}"));
-    let max = |id: &str| trace.players[id].world.as_ref().unwrap().health.max;
+    let max = |id: &str| trace.players[id].world.as_ref().unwrap().health.max.get();
     // `Team 1 / Ana` applies to p1 only; `General / Ashe` applies to both
     // ashe players regardless of team.
     assert_eq!(max("p1"), 300.0);
@@ -207,12 +213,15 @@ fn damage_dealt_and_received_scale_the_damage_amount() {
     assert_eq!(trace.outcome, Outcome::Complete);
     // p1 ana deals 100 at 200% to p2 ashe at 50% received: 100 lands.
     let p2 = trace.players["p2"].world.as_ref().unwrap();
-    assert_eq!((p2.health.current, p2.health.max), (100.0, 200.0));
+    assert_eq!(
+        (p2.health.current.get(), p2.health.max.get()),
+        (100.0, 200.0)
+    );
     // p2 ashe deals 40 with no `damageDealt%` to p1 ana with no
     // `damageReceived%`: 40 lands on the shield pool.
     let p1 = trace.players["p1"].world.as_ref().unwrap();
-    assert_eq!(p1.shield.as_ref().unwrap().current, 60.0);
-    assert_eq!(p1.health.current, 200.0);
+    assert_eq!(p1.shield.as_ref().unwrap().current.get(), 60.0);
+    assert_eq!(p1.health.current.get(), 200.0);
 }
 
 #[test]
@@ -244,11 +253,11 @@ fn healing_dealt_and_received_scale_the_heal_amount() {
     // The 100 heal is dealt by ana at 150% and received by ashe at 50%:
     // 75 on top of the 50 left by the 150 damage.
     let p2 = trace.players["p2"].world.as_ref().unwrap();
-    assert_eq!(p2.health.current, 125.0);
+    assert_eq!(p2.health.current.get(), 125.0);
     // ana took 300 through shield and armor down to 50 health; the 40 heal
     // dealt by ana lands at 150%: 110.
     let p1 = trace.players["p1"].world.as_ref().unwrap();
-    assert_eq!(p1.health.current, 110.0);
+    assert_eq!(p1.health.current.get(), 110.0);
 }
 
 #[test]
@@ -274,12 +283,12 @@ fn ability_cooldown_scales_stack_across_scopes() {
     let cooldowns = &trace.players["p1"].world.as_ref().unwrap().cooldowns;
     // p1 ana (team1): team `abilityCooldown%` halves every slot and the
     // hero `ability1Cooldown%` halves ability1 again.
-    assert_eq!(cooldowns["ability1"], 2.5);
-    assert_eq!(cooldowns["ability2"], 6.0);
+    assert_eq!(cooldowns["ability1"].get(), 2.5);
+    assert_eq!(cooldowns["ability2"].get(), 6.0);
     // p2 ana (team2): only the hero-scope scalar applies.
     let cooldowns = &trace.players["p2"].world.as_ref().unwrap().cooldowns;
-    assert_eq!(cooldowns["ability1"], 5.0);
-    assert_eq!(cooldowns["ability2"], 12.0);
+    assert_eq!(cooldowns["ability1"].get(), 5.0);
+    assert_eq!(cooldowns["ability2"].get(), 12.0);
 }
 
 #[test]
@@ -354,7 +363,11 @@ fn an_unapplied_ult_setting_is_skipped_when_state_supplies_the_charge() {
         assert_eq!(trace.outcome, Outcome::Complete, "{setting}");
         // The world resolved: `Damage` lands on ana's shield pool.
         let world = trace.players["p1"].world.as_ref().expect("p1 world");
-        assert_eq!(world.shield.as_ref().unwrap().current, 90.0, "{setting}");
+        assert_eq!(
+            world.shield.as_ref().unwrap().current.get(),
+            90.0,
+            "{setting}"
+        );
     }
 }
 
@@ -389,7 +402,8 @@ fn an_unapplied_health_setting_needs_every_mapped_state_key() {
             .shield
             .as_ref()
             .unwrap()
-            .current,
+            .current
+            .get(),
         90.0
     );
 
@@ -506,6 +520,112 @@ fn an_applied_setting_still_scales_with_state_declared() {
     assert_eq!(trace.outcome, Outcome::Complete);
     // 150% pools; the 10 damage lands on the shield pool.
     let world = trace.players["p1"].world.as_ref().expect("p1 world");
-    assert_eq!((world.health.current, world.health.max), (300.0, 300.0));
-    assert_eq!(world.shield.as_ref().unwrap().current, 140.0);
+    assert_eq!(
+        (world.health.current.get(), world.health.max.get()),
+        (300.0, 300.0)
+    );
+    assert_eq!(world.shield.as_ref().unwrap().current.get(), 140.0);
+}
+
+/// A `health%` literal so large it saturates to `inf` makes the pool
+/// scaling overflow: the player's world resolution fails `not_modeled`,
+/// and touching it stops the run naming the conversion (athena#133).
+#[test]
+fn an_overflowing_health_percent_is_not_modeled_when_touched() {
+    let big = "9".repeat(320);
+    let text = hero_settings_program(
+        &format!("        General {{\n            health%: {big}\n        }}"),
+        "        Damage(Event Player, Null, 10);",
+    );
+    let scenario =
+        hero_settings_scenario(r#"{ "id": "p1", "hero": "ana", "team": "team1" }"#, "p1");
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert!(
+        not_modeled
+            .construct
+            .contains("hero settings produced a non-finite number"),
+        "{}",
+        not_modeled.construct
+    );
+}
+
+/// Same for the cooldown setter: an `abilityCooldown%` literal that
+/// saturates to `inf` overflows the `seconds * scale` write into the
+/// player's `cooldowns` (athena#133).
+#[test]
+fn an_overflowing_cooldown_percent_is_not_modeled_when_touched() {
+    let big = "9".repeat(320);
+    let text = hero_settings_program(
+        &format!("        Team 1 {{\n            abilityCooldown%: {big}\n        }}"),
+        "        Damage(Event Player, Null, 10);",
+    );
+    let scenario =
+        hero_settings_scenario(r#"{ "id": "p1", "hero": "ana", "team": "team1" }"#, "p1");
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert!(
+        not_modeled
+            .construct
+            .contains("hero settings produced a non-finite number"),
+        "{}",
+        not_modeled.construct
+    );
+}
+
+/// A finite `Damage` amount that overflows once the hero-setting scales
+/// are applied stops `not_modeled` naming the action — the `applied`
+/// amount bound into `Event Damage` is a produced number (athena#133).
+#[test]
+fn a_damage_amount_that_overflows_the_scales_is_not_modeled() {
+    let text = hero_settings_program(
+        r#"        Team 1 {
+            Ana {
+                damageReceived%: 200
+            }
+        }"#,
+        "        Damage(Event Player, Null, Raise To Power(10, 308));",
+    );
+    let scenario =
+        hero_settings_scenario(r#"{ "id": "p1", "hero": "ana", "team": "team1" }"#, "p1");
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "action damage produced a non-finite number"
+    );
+}
+
+/// Same for `Heal` through `healingReceived%` — the amount bound into
+/// `Event Healing` is checked the same way (athena#133).
+#[test]
+fn a_heal_amount_that_overflows_the_scales_is_not_modeled() {
+    let text = hero_settings_program(
+        r#"        Team 1 {
+            Ana {
+                healingReceived%: 200
+            }
+        }"#,
+        "        Heal(Event Player, Null, Raise To Power(10, 308));",
+    );
+    let scenario =
+        hero_settings_scenario(r#"{ "id": "p1", "hero": "ana", "team": "team1" }"#, "p1");
+    let trace = run_scenario_with_hero_values(&text, &scenario, &test_values())
+        .unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "action heal produced a non-finite number"
+    );
 }

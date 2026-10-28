@@ -44,7 +44,7 @@ fn the_count_of_players_on_the_team() {
     for (team, count) in [("Team 1", 2.0), ("Team 2", 1.0), ("All Teams", 3.0)] {
         let trace = run(&set_global(&format!("Number Of Players({team})")), ROSTER);
         assert_eq!(trace.outcome, Outcome::Complete, "{team}");
-        assert_eq!(trace.globals["g"], Val::Number(count), "{team}");
+        assert_eq!(trace.globals["g"], Val::number(count), "{team}");
     }
 }
 
@@ -67,7 +67,7 @@ fn an_empty_team_or_roster_counts_zero() {
     ] {
         let trace = run(&set_global(value), scenario);
         assert_eq!(trace.outcome, Outcome::Complete, "{value}");
-        assert_eq!(trace.globals["g"], Val::Number(0.0), "{value}");
+        assert_eq!(trace.globals["g"], Val::number(0.0), "{value}");
 
         let trace = run(
             &set_global(&format!("Compare({value}, ==, Null)")),
@@ -88,7 +88,7 @@ fn a_player_without_a_team_counts_only_for_all_teams() {
         ] }"#;
     for (team, count) in [("Team 1", 1.0), ("Team 2", 0.0), ("All Teams", 2.0)] {
         let trace = run(&set_global(&format!("Number Of Players({team})")), scenario);
-        assert_eq!(trace.globals["g"], Val::Number(count), "{team}");
+        assert_eq!(trace.globals["g"], Val::number(count), "{team}");
     }
 }
 
@@ -100,7 +100,7 @@ fn an_evaluated_member_id_names_the_team() {
         &set_global("Number Of Players(Team Of(Host Player))"),
         ROSTER,
     );
-    assert_eq!(trace.globals["g"], Val::Number(2.0));
+    assert_eq!(trace.globals["g"], Val::number(2.0));
 }
 
 /// An argument that is not a catalog `Team` member after evaluation is

@@ -37,7 +37,7 @@ fn global(trace: &athena_sim::Trace) -> &Val {
 #[test]
 fn evaluate_once_evaluates_its_operand() {
     let trace = run(&set_global("Evaluate Once(First Of(Array(5, 6)))"));
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
 
     let trace = run(&set_global("Evaluate Once(Null)"));
     assert_eq!(global(&trace), &Val::Null);
@@ -91,7 +91,7 @@ rule ("probe") {
     }
 }
 "#);
-    assert_eq!(global(&trace), &Val::Number(0.0));
+    assert_eq!(global(&trace), &Val::number(0.0));
 
     let trace = run(r#"
 variables {
@@ -113,7 +113,7 @@ rule ("probe") {
     }
 }
 "#);
-    assert_eq!(global(&trace), &Val::Number(0.0));
+    assert_eq!(global(&trace), &Val::number(0.0));
 }
 
 /// The pin clears when the instance's next run starts, so a rule that
@@ -152,7 +152,7 @@ rule ("bump") {
     }
 }
 "#);
-    assert_eq!(global(&trace), &Val::Number(2.0));
+    assert_eq!(global(&trace), &Val::number(2.0));
 }
 
 /// A rule-condition check is its own scope: the site re-reads every
@@ -188,7 +188,7 @@ rule ("bump") {
     }
 }
 "#);
-    assert_eq!(global(&trace), &Val::Number(1.0));
+    assert_eq!(global(&trace), &Val::number(1.0));
 }
 
 /// A `Wait Until` call is one scope: its per-tick re-checks read the
@@ -233,7 +233,7 @@ fn filtered_array_keeps_the_elements_the_condition_holds_for() {
     ));
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![Val::Number(3.0), Val::Number(4.0)])
+        &Val::Array(vec![Val::number(3.0), Val::number(4.0)])
     );
 
     // `Null` reads as the empty array.
@@ -244,7 +244,7 @@ fn filtered_array_keeps_the_elements_the_condition_holds_for() {
     let trace = run(&set_global(
         "Filtered Array(Array(1, 2), Array Contains(Array(2, 3), Current Array Element))",
     ));
-    assert_eq!(global(&trace), &Val::Array(vec![Val::Number(2.0)]));
+    assert_eq!(global(&trace), &Val::Array(vec![Val::number(2.0)]));
 }
 
 #[test]
@@ -255,9 +255,9 @@ fn sorted_array_orders_by_the_per_element_key() {
     assert_eq!(
         global(&trace),
         &Val::Array(vec![
-            Val::Number(10.0),
-            Val::Number(20.0),
-            Val::Number(30.0)
+            Val::number(10.0),
+            Val::number(20.0),
+            Val::number(30.0)
         ])
     );
 
@@ -269,9 +269,9 @@ fn sorted_array_orders_by_the_per_element_key() {
     assert_eq!(
         global(&trace),
         &Val::Array(vec![
-            Val::Number(20.0),
-            Val::Number(10.0),
-            Val::Number(30.0)
+            Val::number(20.0),
+            Val::number(10.0),
+            Val::number(30.0)
         ])
     );
 
@@ -319,9 +319,9 @@ fn mapped_array_collects_the_per_element_result() {
     assert_eq!(
         global(&trace),
         &Val::Array(vec![
-            Val::Number(10.0),
-            Val::Number(21.0),
-            Val::Number(32.0)
+            Val::number(10.0),
+            Val::number(21.0),
+            Val::number(32.0)
         ])
     );
 
@@ -344,7 +344,7 @@ fn mapped_array_collects_the_per_element_result() {
     let trace = run(&set_global("Mapped Array(Array(1, 2), -30)"));
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![Val::Number(-30.0), Val::Number(-30.0)])
+        &Val::Array(vec![Val::number(-30.0), Val::number(-30.0)])
     );
 
     // A nested element-context value rebinds the pair for its own
@@ -355,22 +355,21 @@ fn mapped_array_collects_the_per_element_result() {
     assert_eq!(
         global(&trace),
         &Val::Array(vec![
-            Val::Array(vec![Val::Number(1.0), Val::Number(1.0)]),
-            Val::Array(vec![Val::Number(2.0), Val::Number(1.0)]),
+            Val::Array(vec![Val::number(1.0), Val::number(1.0)]),
+            Val::Array(vec![Val::number(2.0), Val::number(1.0)]),
         ])
     );
 }
 
-/// A mapped number is a produced number: one that is not finite — here
-/// the variable a `For` `End` step left `inf` — stops `not_modeled`
-/// instead of serializing `null` (athena#134).
+/// A mapped number is a produced number: a non-finite result inside the
+/// per-element operand stops `not_modeled` at the producing construct
+/// instead of serializing `null` (athena#133).
 #[test]
 fn mapped_array_stops_on_a_non_finite_result() {
     let trace = run(r#"
 variables {
     global:
-        0: g
-        1: r
+        0: r
 }
 
 rule ("probe") {
@@ -378,16 +377,14 @@ rule ("probe") {
         Ongoing - Global;
     }
     actions {
-        For Global Variable(g, Raise To Power(10, 308), Multiply(Raise To Power(10, 308), 1.5), Raise To Power(10, 308));
-        End;
-        Set Global Variable(r, Mapped Array(Array(1), Global.g));
+        Set Global Variable(r, Mapped Array(Array(Raise To Power(10, 308)), Multiply(Current Array Element, Raise To Power(10, 308))));
     }
 }
 "#);
     let Outcome::NotModeled(stop) = &trace.outcome else {
         panic!("{:?}", trace.outcome);
     };
-    assert_eq!(stop.construct, "mappedArray produced a non-finite number");
+    assert_eq!(stop.construct, "multiply produced a non-finite number");
 }
 
 #[test]

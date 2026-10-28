@@ -7,6 +7,7 @@ mod effects;
 mod eval;
 mod events;
 mod expect;
+mod finite;
 mod geometry;
 mod hero_settings;
 mod hud;
@@ -23,6 +24,8 @@ mod step;
 mod timeline;
 mod vector;
 
+pub use finite::Finite;
+pub(crate) use finite::produced_number;
 pub use timeline::{
     Change, RuleRun, RunEnd, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT, TIMELINE_RULE_LIMIT,
     Timeline, TimelineEntry,
@@ -38,7 +41,7 @@ use serde::Serialize;
 pub enum Val {
     Null,
     Bool(bool),
-    Number(f64),
+    Number(Finite),
     Text(String),
     Array(Vec<Val>),
     /// A mocked player, identified by the scenario `id` that declared it.
@@ -56,6 +59,15 @@ pub enum Val {
         producer: String,
         args: Vec<Val>,
     },
+}
+
+impl Val {
+    /// A number `Val` for a value the caller asserts finite — test and
+    /// boundary construction. A computed value uses
+    /// [`Finite::produced`].
+    pub fn number(value: f64) -> Self {
+        Self::Number(Finite::new(value))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -244,15 +256,15 @@ pub struct ExpectationResult {
 /// One health pool: `current` points out of `max`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PoolState {
-    pub current: f64,
-    pub max: f64,
+    pub current: Finite,
+    pub max: Finite,
 }
 
 /// Ultimate charge: `charge` points toward `cost`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct UltimateState {
-    pub charge: f64,
-    pub cost: f64,
+    pub charge: Finite,
+    pub cost: Finite,
 }
 
 /// A player's catalog-derived world state: health pools, ability cooldowns,
@@ -270,12 +282,12 @@ pub struct PlayerWorld {
     pub armor: Option<PoolState>,
     /// Cooldown seconds per ability slot the catalog records a value for;
     /// keys are `slot` or `slot/variant`.
-    pub cooldowns: BTreeMap<String, f64>,
+    pub cooldowns: BTreeMap<String, Finite>,
     /// Ultimate charge toward the catalog's cost.
     pub ultimate: UltimateState,
     /// Status effects `Set Status` applied: `Status` member id to the
     /// `Total Time Elapsed` seconds at which the status ends.
-    pub statuses: BTreeMap<String, f64>,
+    pub statuses: BTreeMap<String, Finite>,
     /// The `Allow Button`/`Disallow Button` writes per button slot; a
     /// slot never written is allowed.
     pub buttons: BTreeMap<String, bool>,

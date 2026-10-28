@@ -201,7 +201,7 @@ fn the_table_drives_every_listed_read() {
                 z: 0.0,
             },
             ("boolean", _) => Val::Bool(value.parse::<bool>().unwrap()),
-            _ => Val::Number(value.parse::<f64>().unwrap()),
+            _ => Val::number(value.parse::<f64>().unwrap()),
         };
         assert_eq!(global(&trace), &expected, "{id}");
     }
@@ -218,7 +218,7 @@ fn boolean_number_and_vector_reads_come_from_state() {
         &set_global("Health(Host Player)"),
         &scenario(&player(r#""health": 175"#)),
     );
-    assert_eq!(global(&trace), &Val::Number(175.0));
+    assert_eq!(global(&trace), &Val::number(175.0));
     let trace = run(
         &set_global("Velocity Of(Host Player)"),
         &scenario(&player(r#""velocity": { "x": 1, "y": 2, "z": 3 }"#)),
@@ -239,7 +239,25 @@ fn speed_of_is_the_length_of_velocity() {
         &set_global("Speed Of(Host Player)"),
         &scenario(&player(r#""velocity": { "x": 3, "y": 4, "z": 0 }"#)),
     );
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
+}
+
+/// `Speed Of` squares the components before rooting: a component so
+/// large the sum of squares overflows stops `not_modeled` instead of
+/// serializing `null` (athena#133).
+#[test]
+fn speed_of_stops_on_a_non_finite_magnitude() {
+    let trace = run(
+        &set_global("Speed Of(Host Player)"),
+        &scenario(&player(r#""velocity": { "x": 1e308, "y": 1e308, "z": 0 }"#)),
+    );
+    let Outcome::NotModeled(stop) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        stop.construct,
+        "value getSpeed produced a non-finite number"
+    );
 }
 
 #[test]
@@ -331,7 +349,7 @@ fn an_absent_state_field_keeps_the_established_models() {
         &values,
     )
     .expect("the run resolves");
-    assert_eq!(global(&trace), &Val::Number(250.0));
+    assert_eq!(global(&trace), &Val::number(250.0));
     let trace = run(&set_global("Is Moving(Host Player)"), &scenario);
     assert_eq!(trace.outcome, Outcome::MissingInput);
     assert_eq!(
@@ -381,7 +399,7 @@ fn version_1_state_still_means_variables() {
     let scenario = r#"{ "scenarioVersion": 1, "seconds": 1,
         "players": [{ "id": "p1", "host": true, "state": { "streak": 2 } }] }"#;
     let trace = run(PROGRAM_VARIABLE, scenario);
-    assert_eq!(global(&trace), &Val::Number(2.0));
+    assert_eq!(global(&trace), &Val::number(2.0));
 }
 
 #[test]
@@ -389,7 +407,7 @@ fn version_2_reads_variables_from_vars() {
     let scenario = r#"{ "scenarioVersion": 2, "seconds": 1,
         "players": [{ "id": "p1", "host": true, "vars": { "streak": 3 } }] }"#;
     let trace = run(PROGRAM_VARIABLE, scenario);
-    assert_eq!(global(&trace), &Val::Number(3.0));
+    assert_eq!(global(&trace), &Val::number(3.0));
 }
 
 #[test]

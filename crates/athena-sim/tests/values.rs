@@ -46,11 +46,11 @@ fn if_then_else_reads_only_the_taken_branch() {
     let trace = run(&set_global(
         "If-Then-Else(Compare(1, <, 2), 10, Position Of(Null))",
     ));
-    assert_eq!(global(&trace), &Val::Number(10.0));
+    assert_eq!(global(&trace), &Val::number(10.0));
 
     // A `Null` condition reads as `0`, so the else branch wins.
     let trace = run(&set_global("If-Then-Else(Null, 10, 20)"));
-    assert_eq!(global(&trace), &Val::Number(20.0));
+    assert_eq!(global(&trace), &Val::number(20.0));
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn divide_modulo_min_max_and_raise_to_power_do_arithmetic() {
         ("Raise To Power(2, 10)", 1024.0),
     ] {
         let trace = run(&set_global(value));
-        assert_eq!(global(&trace), &Val::Number(expected), "{value}");
+        assert_eq!(global(&trace), &Val::number(expected), "{value}");
     }
 }
 
@@ -111,7 +111,7 @@ fn round_to_integer_follows_the_rounding_member() {
         ("Round To Integer(-2.5, Nearest)", -3.0),
     ] {
         let trace = run(&set_global(value));
-        assert_eq!(global(&trace), &Val::Number(expected), "{value}");
+        assert_eq!(global(&trace), &Val::number(expected), "{value}");
     }
 }
 
@@ -153,11 +153,11 @@ rule ("probe") {{
     assert_not_modeled(&trace, "number literal produced a non-finite number");
 }
 
-/// `Round To Integer` routes its result through the finite check: a
-/// non-finite operand — here a variable the `For` `End` step left
-/// `inf` — stops `not_modeled` instead of serializing `null`.
+/// A `For` `End` step routes its written value through the finite check:
+/// `old + step` overflowing to `inf` stops `not_modeled` at the `End`
+/// instead of storing a value that would serialize `null` (athena#133).
 #[test]
-fn round_to_integer_stops_on_a_non_finite_operand() {
+fn for_end_stops_on_a_non_finite_increment() {
     let trace = run(r#"
 variables {
     global:
@@ -176,13 +176,56 @@ rule ("probe") {
     }
 }
 "#);
-    assert_not_modeled(&trace, "roundToInteger produced a non-finite number");
+    assert_not_modeled(&trace, "forGlobalVariable produced a non-finite number");
+}
+
+/// `Val::Number` can only hold a `Finite`: the serialized trace can
+/// never carry `{"type":"number","value":null}` — every produced
+/// number is checked before it becomes a value (athena#133).
+#[test]
+fn a_serialized_trace_never_carries_a_null_number() {
+    // The scenario trace covers the structures a `number` can live in:
+    // globals, change `old`/`new`s, clock and pool fields, event
+    // values, the timeline `time`.
+    let program = r#"
+variables {
+    global:
+        0: g
+}
+
+rule ("probe") {
+    event {
+        Player Joined Match;
+        All;
+        All;
+    }
+    actions {
+        Damage(Event Player, Null, 25);
+        Set Slow Motion(50);
+        Set Match Time(60);
+        Set Global Variable(g, Add(1, 2));
+    }
+}
+"#;
+    let scenario = r#"{
+        "scenarioVersion": 1,
+        "seconds": 1,
+        "players": [{ "id": "p1", "host": true, "hero": "ana" }],
+        "events": [{ "kind": "playerJoined", "time": 0, "eventPlayer": "p1" }]
+    }"#;
+    for trace in [
+        run(&set_global("Add(1, 2)")),
+        run_scenario(program, scenario).unwrap_or_else(|error| panic!("{error}")),
+    ] {
+        let json = serde_json::to_string(&trace).expect("trace serializes");
+        assert!(!json.contains(r#"{"type":"number","value":null}"#));
+    }
 }
 
 #[test]
 fn first_of_and_count_of_see_null_as_the_empty_array() {
     let trace = run(&set_global("First Of(Array(5, 6))"));
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
 
     let trace = run(&set_global("First Of(Empty Array)"));
     assert_eq!(global(&trace), &Val::Null);
@@ -191,10 +234,10 @@ fn first_of_and_count_of_see_null_as_the_empty_array() {
     assert_eq!(global(&trace), &Val::Null);
 
     let trace = run(&set_global("Count Of(Array(1, 2, 3))"));
-    assert_eq!(global(&trace), &Val::Number(3.0));
+    assert_eq!(global(&trace), &Val::number(3.0));
 
     let trace = run(&set_global("Count Of(Null)"));
-    assert_eq!(global(&trace), &Val::Number(0.0));
+    assert_eq!(global(&trace), &Val::number(0.0));
 }
 
 /// `Last Of` is the array tail, symmetric to `First Of` (athena#105):
@@ -203,10 +246,10 @@ fn first_of_and_count_of_see_null_as_the_empty_array() {
 #[test]
 fn last_of_sees_null_as_the_empty_array() {
     let trace = run(&set_global("Last Of(Array(5, 6))"));
-    assert_eq!(global(&trace), &Val::Number(6.0));
+    assert_eq!(global(&trace), &Val::number(6.0));
 
     let trace = run(&set_global("Last Of(Array(5))"));
-    assert_eq!(global(&trace), &Val::Number(5.0));
+    assert_eq!(global(&trace), &Val::number(5.0));
 
     let trace = run(&set_global("Last Of(Empty Array)"));
     assert_eq!(global(&trace), &Val::Null);
@@ -228,7 +271,11 @@ fn sine_from_radians_evaluates_its_argument() {
         let Val::Number(sine) = global(&trace) else {
             panic!("{value}: {:?}", global(&trace));
         };
-        assert!((sine - expected).abs() < 1e-9, "{value}: {sine}");
+        assert!(
+            (sine.get() - expected).abs() < 1e-9,
+            "{value}: {}",
+            sine.get()
+        );
     }
 }
 
@@ -239,7 +286,7 @@ fn sine_from_radians_evaluates_its_argument() {
 #[test]
 fn value_in_array_yields_null_when_no_element_exists() {
     let trace = run(&set_global("Value In Array(Array(1, 2), 0)"));
-    assert_eq!(global(&trace), &Val::Number(1.0));
+    assert_eq!(global(&trace), &Val::number(1.0));
 
     // Out-of-range and negative indexes already yielded `Null`.
     let trace = run(&set_global("Value In Array(Array(1, 2), 9)"));
@@ -295,13 +342,13 @@ fn array_contains_and_index_of_array_value_search_by_compare_equality() {
     assert_eq!(global(&trace), &Val::Bool(true));
 
     let trace = run(&set_global("Index Of Array Value(Array(4, 5), 5)"));
-    assert_eq!(global(&trace), &Val::Number(1.0));
+    assert_eq!(global(&trace), &Val::number(1.0));
 
     let trace = run(&set_global("Index Of Array Value(Array(4, 5), 9)"));
-    assert_eq!(global(&trace), &Val::Number(-1.0));
+    assert_eq!(global(&trace), &Val::number(-1.0));
 
     let trace = run(&set_global("Index Of Array Value(Null, 9)"));
-    assert_eq!(global(&trace), &Val::Number(-1.0));
+    assert_eq!(global(&trace), &Val::number(-1.0));
 }
 
 #[test]
@@ -309,7 +356,7 @@ fn array_slice_clamps_its_bounds() {
     let trace = run(&set_global("Array Slice(Array(1, 2, 3, 4), 1, 2)"));
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![Val::Number(2.0), Val::Number(3.0)])
+        &Val::Array(vec![Val::number(2.0), Val::number(3.0)])
     );
 
     // A start past the end yields the empty array.
@@ -320,7 +367,7 @@ fn array_slice_clamps_its_bounds() {
     let trace = run(&set_global("Array Slice(Array(1, 2, 3), 1, 99)"));
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![Val::Number(2.0), Val::Number(3.0)])
+        &Val::Array(vec![Val::number(2.0), Val::number(3.0)])
     );
 }
 
@@ -329,11 +376,11 @@ fn append_to_array_grows_arrays_and_null() {
     let trace = run(&set_global("Append To Array(Array(1), 2)"));
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![Val::Number(1.0), Val::Number(2.0)])
+        &Val::Array(vec![Val::number(1.0), Val::number(2.0)])
     );
 
     let trace = run(&set_global("Append To Array(Null, 2)"));
-    assert_eq!(global(&trace), &Val::Array(vec![Val::Number(2.0)]));
+    assert_eq!(global(&trace), &Val::Array(vec![Val::number(2.0)]));
 }
 
 /// `Remove From Array` drops every element equal to the operand — the
@@ -345,7 +392,7 @@ fn remove_from_array_drops_every_match() {
     let trace = run(&set_global("Remove From Array(Array(1, 2, 1, 3), 1)"));
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![Val::Number(2.0), Val::Number(3.0)])
+        &Val::Array(vec![Val::number(2.0), Val::number(3.0)])
     );
 
     // `Null` reads as the empty array.
@@ -356,18 +403,18 @@ fn remove_from_array_drops_every_match() {
     let trace = run(&set_global("Remove From Array(Array(1, 2), 9)"));
     assert_eq!(
         global(&trace),
-        &Val::Array(vec![Val::Number(1.0), Val::Number(2.0)])
+        &Val::Array(vec![Val::number(1.0), Val::number(2.0)])
     );
 
     // `Null` equals `0` under the `Compare` coercion.
     let trace = run(&set_global("Remove From Array(Array(Null, 0, 1), Null)"));
-    assert_eq!(global(&trace), &Val::Array(vec![Val::Number(1.0)]));
+    assert_eq!(global(&trace), &Val::Array(vec![Val::number(1.0)]));
 
     // An array operand drops each element it holds.
     let trace = run(&set_global(
         "Remove From Array(Array(1, 2, 3, 2), Array(2, 3))",
     ));
-    assert_eq!(global(&trace), &Val::Array(vec![Val::Number(1.0)]));
+    assert_eq!(global(&trace), &Val::Array(vec![Val::number(1.0)]));
 
     // The Bastion form: a player operand out of a player array.
     let scenario = r#"{
@@ -392,28 +439,28 @@ fn remove_from_array_drops_every_match() {
 #[test]
 fn modify_global_variable_covers_the_operator_set() {
     for (op, initial, operand, expected) in [
-        ("Divide", "10", "4", Val::Number(2.5)),
-        ("Modulo", "10", "4", Val::Number(2.0)),
-        ("Min", "10", "4", Val::Number(4.0)),
-        ("Max", "10", "4", Val::Number(10.0)),
-        ("Raise To Power", "2", "8", Val::Number(256.0)),
+        ("Divide", "10", "4", Val::number(2.5)),
+        ("Modulo", "10", "4", Val::number(2.0)),
+        ("Min", "10", "4", Val::number(4.0)),
+        ("Max", "10", "4", Val::number(10.0)),
+        ("Raise To Power", "2", "8", Val::number(256.0)),
         (
             "Append To Array",
             "Null",
             "7",
-            Val::Array(vec![Val::Number(7.0)]),
+            Val::Array(vec![Val::number(7.0)]),
         ),
         (
             "Remove From Array By Value",
             "Array(1, 2, 1, 3)",
             "1",
-            Val::Array(vec![Val::Number(2.0), Val::Number(3.0)]),
+            Val::Array(vec![Val::number(2.0), Val::number(3.0)]),
         ),
         (
             "Remove From Array By Index",
             "Array(1, 2, 3)",
             "9",
-            Val::Array(vec![Val::Number(1.0), Val::Number(2.0), Val::Number(3.0)]),
+            Val::Array(vec![Val::number(1.0), Val::number(2.0), Val::number(3.0)]),
         ),
     ] {
         let text = format!(
@@ -474,13 +521,13 @@ fn at_index_writes_append_clamp_or_skip() {
     // the end appends, index 1 replaces that element.
     assert_eq!(
         trace.globals["g"],
-        Val::Array(vec![Val::Number(10.0), Val::Number(15.0)])
+        Val::Array(vec![Val::number(10.0), Val::number(15.0)])
     );
     assert_eq!(trace.globals["skipped"], Val::Null);
     // Index 1 is modified; index 9 writes nothing.
     assert_eq!(
         trace.globals["m"],
-        Val::Array(vec![Val::Number(1.0), Val::Number(12.0)])
+        Val::Array(vec![Val::number(1.0), Val::number(12.0)])
     );
     // The element writes record their effective index.
     let indices: Vec<_> = trace
@@ -625,5 +672,5 @@ rule ("probe") {
     assert_eq!(trace.globals["same"], Val::Bool(true));
     assert_eq!(trace.globals["other"], Val::Bool(false));
     assert_eq!(trace.globals["inside"], Val::Bool(true));
-    assert_eq!(trace.globals["members"], Val::Number(1.0));
+    assert_eq!(trace.globals["members"], Val::number(1.0));
 }

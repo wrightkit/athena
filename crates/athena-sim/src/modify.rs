@@ -8,9 +8,10 @@ use std::collections::BTreeMap;
 use workshop_rs::{ModifyOp, Value};
 
 use crate::eval::{number, values_equal};
+use crate::produced_number;
 use crate::scenario::Player;
 use crate::unsupported;
-use crate::vector::{arithmetic, produced_number};
+use crate::vector::arithmetic;
 use crate::{Stop, Val};
 
 /// The array a `Modify` array operation reads: an array as itself, `Null`
