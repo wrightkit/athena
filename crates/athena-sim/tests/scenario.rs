@@ -218,22 +218,22 @@ fn practice_range_completes_with_the_modeled_hud() {
             .iter()
             .all(|result| result.status == ExpectationStatus::Pass)
     );
-    assert_eq!(trace.globals["score"], Val::Number(2.0));
+    assert_eq!(trace.globals["score"], Val::number(2.0));
 }
 
 #[test]
 fn practice_range_scenario_passes_when_the_hud_rule_is_not_present() {
     let trace = run(KILL_RULE, &example("practice-range.json"));
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["score"], Val::Number(2.0));
-    assert_eq!(trace.globals["delta"], Val::Number(2.0));
+    assert_eq!(trace.globals["score"], Val::number(2.0));
+    assert_eq!(trace.globals["delta"], Val::number(2.0));
     let [score, streak] = trace.expectations.as_slice() else {
         panic!("expected two results, got {:?}", trace.expectations);
     };
     assert_eq!(score.status, ExpectationStatus::Pass);
-    assert_eq!(score.actual, Val::Number(2.0));
+    assert_eq!(score.actual, Val::number(2.0));
     assert_eq!(streak.status, ExpectationStatus::Pass);
-    assert_eq!(streak.actual, Val::Number(3.0));
+    assert_eq!(streak.actual, Val::number(3.0));
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn an_undeclared_variable_starts_as_null() {
     assert_eq!(trace.outcome, Outcome::Complete);
     // `streak` starts as `null`, which reads as 0: after one final blow it is
     // 1, so `delta` is 1 and `score` goes to 1.
-    assert_eq!(trace.globals["score"], Val::Number(1.0));
+    assert_eq!(trace.globals["score"], Val::number(1.0));
     assert!(
         trace
             .expectations
@@ -353,7 +353,7 @@ fn a_supplied_event_value_is_read() {
     }"#;
     let trace = run(DAMAGE_RULE, scenario);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["dmg"], Val::Number(12.5));
+    assert_eq!(trace.globals["dmg"], Val::number(12.5));
 }
 
 #[test]
@@ -370,7 +370,7 @@ fn two_events_at_the_same_time_fire_in_file_order() {
     let trace = run(KILL_RULE, scenario);
     assert_eq!(trace.outcome, Outcome::Complete);
     // Two final blows: streak 0 + 1 + 1, delta 1 twice.
-    assert_eq!(trace.globals["score"], Val::Number(2.0));
+    assert_eq!(trace.globals["score"], Val::number(2.0));
 }
 
 #[test]
@@ -417,7 +417,7 @@ fn a_failing_expectation_reports_the_observed_value() {
         panic!("expected two results, got {:?}", trace.expectations);
     };
     assert_eq!(score.status, ExpectationStatus::Fail);
-    assert_eq!(score.actual, Val::Number(2.0));
+    assert_eq!(score.actual, Val::number(2.0));
     assert_eq!(undeclared.status, ExpectationStatus::Pass);
 }
 
@@ -629,14 +629,16 @@ fn damage_consumes_pools_in_shield_armor_health_order_and_heal_caps() {
     // finishes the 30 armor left and takes 70 health, leaving 130. The
     // heals of 50 and 10 raise it to 190.
     let shield = world.shield.as_ref().expect("ana has a shield pool");
-    assert_eq!((shield.current, shield.max), (0.0, 100.0));
+    assert_eq!((shield.current.get(), shield.max.get()), (0.0, 100.0));
     let armor = world.armor.as_ref().expect("ana has an armor pool");
-    assert_eq!((armor.current, armor.max), (0.0, 50.0));
-    assert_eq!((world.health.current, world.health.max), (190.0, 200.0));
+    assert_eq!((armor.current.get(), armor.max.get()), (0.0, 50.0));
+    assert_eq!(world.health.current.get(), 190.0);
+    assert_eq!(world.health.max.get(), 200.0);
     // Cooldowns and ultimate are read-only catalog values.
-    assert_eq!(world.cooldowns["ability1"], 10.0);
-    assert_eq!(world.cooldowns["ability2"], 12.0);
-    assert_eq!((world.ultimate.charge, world.ultimate.cost), (0.0, 2100.0));
+    assert_eq!(world.cooldowns["ability1"].get(), 10.0);
+    assert_eq!(world.cooldowns["ability2"].get(), 12.0);
+    assert_eq!(world.ultimate.charge.get(), 0.0);
+    assert_eq!(world.ultimate.cost.get(), 2100.0);
 
     // `p2` was not the event player: its pools are untouched, and the
     // catalog records no shield or armor for it.
@@ -644,10 +646,12 @@ fn damage_consumes_pools_in_shield_armor_health_order_and_heal_caps() {
     assert_eq!(p2.hero.as_deref(), Some("Ashe"));
     assert_eq!(p2.team.as_deref(), Some("team2"));
     let world = p2.world.as_ref().expect("p2 has world state");
-    assert_eq!((world.health.current, world.health.max), (200.0, 200.0));
+    assert_eq!(world.health.current.get(), 200.0);
+    assert_eq!(world.health.max.get(), 200.0);
     assert_eq!(world.shield, None);
     assert_eq!(world.armor, None);
-    assert_eq!((world.ultimate.charge, world.ultimate.cost), (0.0, 2400.0));
+    assert_eq!(world.ultimate.charge.get(), 0.0);
+    assert_eq!(world.ultimate.cost.get(), 2400.0);
 }
 
 #[test]
@@ -680,9 +684,10 @@ rule ("heal") {
     // 200 damage leaves 150 health (through the 100 shield and 50 armor).
     // The heal of 500 stops at the 200 maximum; the next heal has no effect.
     // Neither heal restores the shield or armor pools.
-    assert_eq!((world.health.current, world.health.max), (200.0, 200.0));
-    assert_eq!(world.shield.as_ref().unwrap().current, 0.0);
-    assert_eq!(world.armor.as_ref().unwrap().current, 0.0);
+    assert_eq!(world.health.current.get(), 200.0);
+    assert_eq!(world.health.max.get(), 200.0);
+    assert_eq!(world.shield.as_ref().unwrap().current.get(), 0.0);
+    assert_eq!(world.armor.as_ref().unwrap().current.get(), 0.0);
 }
 
 #[test]

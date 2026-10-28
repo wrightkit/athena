@@ -13,7 +13,9 @@ use crate::eval::{Env, arguments, button_slot, eval, player_id};
 use crate::scenario::{Player, Team};
 use crate::state::WorldSlot;
 use crate::unsupported;
-use crate::{MissingInput, MissingInputKind, NotModeled, PlayerWorld, PoolState, Stop, Val};
+use crate::{
+    Finite, MissingInput, MissingInputKind, NotModeled, PlayerWorld, PoolState, Stop, Val,
+};
 
 fn missing<T>(
     input: MissingInputKind,
@@ -208,12 +210,12 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     .filter(|player| player.team == Some(team))
                     .count()
             };
-            Ok(Val::Number(match filter.as_str() {
+            Ok(Val::Number(Finite::from(match filter.as_str() {
                 "ALL" => env.players.len(),
                 "TEAM_1" => on_team(Team::Team1),
                 "TEAM_2" => on_team(Team::Team2),
                 other => return unsupported(format!("{name} on {other}")),
-            } as f64))
+            })))
         }
         // Modeled, not measured: the client's element order is
         // unmeasured, so the catalog's `Hero` member order is the
@@ -313,7 +315,7 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             let id = player_id(player, env)?;
             match env.players.get(&id) {
                 Some(player) => match player.slot {
-                    Some(slot) => Ok(Val::Number(f64::from(slot))),
+                    Some(slot) => Ok(Val::Number(Finite::from(slot))),
                     None => missing(
                         MissingInputKind::Slot,
                         Some(id),
@@ -403,7 +405,7 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             {
                 return unsupported(format!("ability cooldown on variant-keyed slot {slot}"));
             }
-            Ok(Val::Number(0.0))
+            Ok(Val::Number(Finite::from(0)))
         }
         // A live input: the value comes from the scenario player's
         // `state` map, keyed by [`crate::state_reads::STATE_READS`] —
@@ -444,11 +446,13 @@ pub(crate) fn state_read_value(
         .get(read.key)
         .or_else(|| player.state.as_ref().and_then(|state| state.get(read.key)));
     if let Some(value) = stored {
-        return Ok(match (value, read.derived) {
-            (Val::Vector { x, y, z }, true) => Val::Number((x * x + y * y + z * z).sqrt()),
-            (value, false) => value.clone(),
+        return match (value, read.derived) {
+            (Val::Vector { x, y, z }, true) => {
+                crate::produced_number((x * x + y * y + z * z).sqrt(), construct)
+            }
+            (value, false) => Ok(value.clone()),
             _ => unreachable!("a derived read's key is a vector"),
-        });
+        };
     }
     // A declared `state` map opts the player into scenario-supplied
     // reads: a key it does not list — and no action wrote — is a
@@ -475,7 +479,14 @@ pub(crate) fn state_read_value(
             } else {
                 |pool: &PoolState| pool.max
             };
-            Ok(Val::Number(pools.into_iter().flatten().map(pick).sum()))
+            crate::produced_number(
+                pools
+                    .into_iter()
+                    .flatten()
+                    .map(|pool| pick(pool).get())
+                    .sum(),
+                construct,
+            )
         }
         "isInSpawnRoom" => Ok(Val::Bool(false)),
         _ => missing(

@@ -368,7 +368,7 @@ fn destroy(
     };
     match eval(entity, env)? {
         Val::Null => {}
-        Val::Number(id) => destroy_kinds(effects, kinds, id, tick, changes),
+        Val::Number(id) => destroy_kinds(effects, kinds, id.get(), tick, changes),
         other => return unsupported(format!("{name} of {other:?}")),
     }
     Ok(())

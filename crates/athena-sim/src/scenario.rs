@@ -331,10 +331,11 @@ pub(crate) fn value_to_val(value: &serde_json::Value) -> Result<Val, ScenarioErr
     Ok(match value {
         serde_json::Value::Null => Val::Null,
         serde_json::Value::Bool(b) => Val::Bool(*b),
-        serde_json::Value::Number(n) => Val::Number(
+        serde_json::Value::Number(n) => Val::Number(crate::Finite::new(
             n.as_f64()
+                .filter(|number| number.is_finite())
                 .ok_or_else(|| ScenarioError::Format(format!("number {n} is too large")))?,
-        ),
+        )),
         serde_json::Value::String(text) => Val::Text(text.clone()),
         serde_json::Value::Array(items) => {
             Val::Array(items.iter().map(value_to_val).collect::<Result<_, _>>()?)

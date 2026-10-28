@@ -16,7 +16,7 @@ use crate::state;
 use crate::state_writes::write_cell;
 use crate::step::{TICK_EVENT_LIMIT, World, dead, world_state};
 use crate::unsupported;
-use crate::{Change, PlayerWorld, Stop, Val};
+use crate::{Change, Finite, PlayerWorld, Stop, Val};
 
 /// Execute a modeled status/button/rule action against `world`; `None`
 /// when `name` is not one of them.
@@ -27,7 +27,7 @@ pub(crate) fn action(
     inst: &Instance<'_>,
     rule_idx: usize,
     subroutines: &BTreeMap<String, usize>,
-    now: f64,
+    now: Finite,
 ) -> Option<Result<(), Stop>> {
     if !matches!(
         name,
@@ -55,7 +55,7 @@ fn run(
     inst: &Instance<'_>,
     rule_idx: usize,
     subroutines: &BTreeMap<String, usize>,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     // The caller's `Env` cannot cross this call — it shares a borrow of
     // `world.players` — so the `Env` is built here. Each arm evaluates
@@ -94,13 +94,14 @@ fn run(
                 }
                 let (applied, died) = {
                     let target = world_state(world, &id)?;
-                    let applied = amount * dealt * target.damage_received;
+                    let applied =
+                        Finite::produced(amount * dealt * target.damage_received, "action damage")?;
                     let before = pools(&target.world);
                     let health = target.world.health.current;
-                    state::damage(&mut target.world, applied);
+                    state::damage(&mut target.world, applied.get(), "action damage")?;
                     // The hit kills when the pool had health and now has
                     // none; the gate already ruled out a declared death.
-                    let died = health > 0.0 && target.world.health.current == 0.0;
+                    let died = health.get() > 0.0 && target.world.health.current.get() == 0.0;
                     let after = pools(&target.world);
                     for ((field, old), (_, new)) in before.into_iter().zip(after) {
                         if old != new {
@@ -114,7 +115,7 @@ fn run(
                     }
                     (applied, died)
                 };
-                if applied > 0.0 {
+                if applied.get() > 0.0 {
                     // The events a modeled damage hit causes, in the
                     // order they occur: the victim's event, the dealer's,
                     // then the death the hit caused. `Event Damage`,
@@ -158,9 +159,10 @@ fn run(
                     continue;
                 }
                 let target = world_state(world, &id)?;
-                let applied = amount * dealt * target.healing_received;
+                let applied =
+                    Finite::produced(amount * dealt * target.healing_received, "action heal")?;
                 let old = target.world.health.current;
-                state::heal(&mut target.world, applied);
+                state::heal(&mut target.world, applied.get(), "action heal")?;
                 let new = target.world.health.current;
                 if new != old {
                     world.changes.borrow_mut().push(Change::World {
@@ -170,7 +172,7 @@ fn run(
                         new: Val::Number(new),
                     });
                 }
-                if applied > 0.0 {
+                if applied.get() > 0.0 {
                     let values = event_values(&healer, &id, "eventHealing", applied);
                     raise(world, "playerReceivedHealing", &id, values.clone())?;
                     if let Val::Player(dealer_id) = &healer {
@@ -188,7 +190,8 @@ fn run(
             // scales it is what P7 is for.
             let ids = player_ids(player, &env)?;
             let slot = button_slot(button)?;
-            let seconds = number(&eval(cooldown, &env)?)?;
+            let seconds =
+                Finite::produced(number(&eval(cooldown, &env)?)?, "action setAbilityCooldown")?;
             for id in ids {
                 let target = world_state(world, &id)?;
                 let old = target.world.cooldowns.get(slot).copied();
@@ -218,7 +221,14 @@ fn run(
                             return unsupported(format!("{other:?} where a player is needed"));
                         }
                     }
-                    (ids, status, Some(now + number(&eval(duration, &env)?)?))
+                    (
+                        ids,
+                        status,
+                        Some(Finite::produced(
+                            now.get() + number(&eval(duration, &env)?)?,
+                            "action setStatusEffect",
+                        )?),
+                    )
                 }
                 ("clearStatusEffect", [player, status]) => {
                     (player_ids(player, &env)?, status, None)
@@ -334,7 +344,7 @@ fn run(
 
 /// The `(field, current)` pairs `Damage` reports for the pools that
 /// exist, in the order the pools absorb damage.
-fn pools(world: &PlayerWorld) -> [(&'static str, Option<f64>); 3] {
+fn pools(world: &PlayerWorld) -> [(&'static str, Option<Finite>); 3] {
     [
         ("shield", world.shield.as_ref().map(|pool| pool.current)),
         ("armor", world.armor.as_ref().map(|pool| pool.current)),
@@ -371,7 +381,7 @@ fn raise(
 /// The event values a `Damage`/`Heal` raise binds: `Attacker` is the
 /// action's dealer (`Null` for the environment), `Victim` the target,
 /// and `key` — `eventDamage` or `eventHealing` — the applied amount.
-fn event_values(cause: &Val, victim: &str, key: &str, amount: f64) -> BTreeMap<String, Val> {
+fn event_values(cause: &Val, victim: &str, key: &str, amount: Finite) -> BTreeMap<String, Val> {
     BTreeMap::from([
         ("attacker".to_string(), cause.clone()),
         ("victim".to_string(), Val::Player(victim.to_string())),

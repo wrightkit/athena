@@ -19,7 +19,7 @@ use crate::state_reads::state_key;
 use crate::step::{World, dead, world_state};
 use crate::unsupported;
 use crate::vector::{Facing, Vec3};
-use crate::{Change, Stop, Val};
+use crate::{Change, Finite, Stop, Val};
 
 /// The modifier key each stored-modifier action writes on the player.
 fn modifier_key(name: &str) -> &'static str {
@@ -49,7 +49,7 @@ pub(crate) fn action(
     world: &mut World,
     inst: &Instance<'_>,
     rule_idx: usize,
-    now: f64,
+    now: Finite,
 ) -> Option<Result<(), Stop>> {
     if !matches!(
         name,
@@ -86,7 +86,7 @@ fn run(
     world: &mut World,
     inst: &Instance<'_>,
     rule_idx: usize,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     // The caller's `Env` cannot cross this call — it shares a borrow of
     // `world.players` — so the `Env` is built here, as in `actions.rs`.
@@ -105,7 +105,7 @@ fn run(
                 return unsupported("setHealth arguments");
             };
             let ids = player_ids(player, &env)?;
-            let amount = number(&eval(amount, &env)?)?;
+            let amount = crate::produced_number(number(&eval(amount, &env)?)?, "action setHealth")?;
             for id in ids {
                 // The catalog: "only has an effect on living players" —
                 // the gate reads `isDead` the way a program read would,
@@ -114,13 +114,7 @@ fn run(
                 if dead == Val::Bool(true) {
                     continue;
                 }
-                write_cell(
-                    world,
-                    &id,
-                    "health",
-                    Val::Number(amount),
-                    "action setHealth",
-                )?;
+                write_cell(world, &id, "health", amount.clone(), "action setHealth")?;
             }
         }
         "setMaxHealth" => {
@@ -133,8 +127,10 @@ fn run(
                 // "a percentage of their max health": the current value
                 // the same read would report — cell, declared `state`,
                 // or the no-`state` pool fallback.
-                let max = number(&read_key(world, &id, "maxHealth", "action setMaxHealth")?)?;
-                let max = max * percent / 100.0;
+                let max = number(&read_key(world, &id, "maxHealth", "action setMaxHealth")?)?
+                    * percent
+                    / 100.0;
+                let new_max = crate::produced_number(max, "action setMaxHealth")?;
                 // "will ensure that a player's current health will not
                 // exceed the new max health".
                 let health = number(&read_key(world, &id, "health", "action setMaxHealth")?)?;
@@ -142,17 +138,11 @@ fn run(
                     world,
                     &id,
                     "maxHealth",
-                    Val::Number(max),
+                    new_max.clone(),
                     "action setMaxHealth",
                 )?;
                 if health > max {
-                    write_cell(
-                        world,
-                        &id,
-                        "health",
-                        Val::Number(max),
-                        "action setMaxHealth",
-                    )?;
+                    write_cell(world, &id, "health", new_max, "action setMaxHealth")?;
                 }
             }
         }
@@ -162,13 +152,14 @@ fn run(
             };
             let ids = player_ids(player, &env)?;
             // `Number|Boolean`: `False` writes 0, `True` writes 1.
-            let charge = number(&eval(percent, &env)?)?;
+            let charge =
+                crate::produced_number(number(&eval(percent, &env)?)?, "action setUltCharge")?;
             for id in ids {
                 write_cell(
                     world,
                     &id,
                     "ultCharge",
-                    Val::Number(charge),
+                    charge.clone(),
                     "action setUltCharge",
                 )?;
             }

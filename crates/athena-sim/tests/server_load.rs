@@ -45,7 +45,7 @@ fn each_value_returns_the_supplied_number() {
     ] {
         let trace = loaded(&set_global(value));
         assert_eq!(trace.outcome, Outcome::Complete, "{value}");
-        assert_eq!(trace.globals["g"], Val::Number(expected), "{value}");
+        assert_eq!(trace.globals["g"], Val::number(expected), "{value}");
     }
 }
 
@@ -104,7 +104,7 @@ rule ("probe") {
             name: "g".into(),
             index: None,
             old: Val::Null,
-            new: Val::Number(1.0),
+            new: Val::number(1.0),
         }]
     );
 }

@@ -15,8 +15,8 @@ use crate::scenario::{EventCtx, Scenario};
 use crate::state::{self, WorldSlot};
 use crate::step::{World, conditions_hold, flag, run_instance};
 use crate::{
-    ExpectationResult, ExpectationStatus, NotModeled, Options, Outcome, PlayerState, RuleRun,
-    RunEnd, Stop, StopIndex, StopLocation, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT,
+    ExpectationResult, ExpectationStatus, Finite, NotModeled, Options, Outcome, PlayerState,
+    RuleRun, RunEnd, Stop, StopIndex, StopLocation, TIMELINE_CHANGE_LIMIT, TIMELINE_ENTRY_LIMIT,
     TIMELINE_RULE_LIMIT, Timeline, TimelineEntry, Trace, Val,
 };
 
@@ -233,7 +233,7 @@ pub(crate) fn run_and_record(
     subroutines: &BTreeMap<String, usize>,
     world: &mut World,
     tick: u64,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     // A flag left by an earlier `Abort` would mislabel the next run.
     inst.aborted = false;
@@ -306,7 +306,7 @@ fn stale_wake(
     live: bool,
     tick: u64,
 ) -> Result<(), Stop> {
-    if live || world.clock.slow_motion == 100.0 {
+    if live || world.clock.slow_motion.get() == 100.0 {
         return Ok(());
     }
     // A `Wait Until` frame names its action; a `Wait`'s suspending
@@ -337,7 +337,7 @@ fn stale_wake(
         at,
         NotModeled::new(format!(
             "action {construct} under a {}% simulation rate",
-            world.clock.slow_motion
+            world.clock.slow_motion.get()
         ))
         .at(tick)
         .into(),
@@ -363,7 +363,8 @@ fn tick_loop(
         if tick > 0 {
             world.clock.advance(TICK_S).map_err(|stop| stop.at(tick))?;
         }
-        let now = START_OFFSET_S + world.clock.elapsed;
+        let now = Finite::produced(START_OFFSET_S + world.clock.elapsed.get(), "match clock")
+            .map_err(|error| Stop::from(error).at(tick))?;
         let result = run_tick(&mut loaded, world, events, tick, now);
         // A tick that stopped the run still records what it did.
         let mut rules = std::mem::take(&mut world.runs);
@@ -384,9 +385,11 @@ fn tick_loop(
             if world.timeline.entries.len() == TIMELINE_ENTRY_LIMIT {
                 world.timeline.truncated = true;
             } else {
+                let time = Finite::produced((now.get() * 1000.0).round(), "match clock")
+                    .map_err(|error| Stop::from(error).at(tick))?;
                 world.timeline.entries.push(TimelineEntry {
                     tick,
-                    time: (now * 1000.0).round(),
+                    time,
                     rules,
                     changes,
                 });
@@ -406,7 +409,7 @@ fn run_tick(
     world: &mut World,
     by_tick: &BTreeMap<u64, Vec<EventCtx>>,
     tick: u64,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     let Loaded {
         rules: rule_list,

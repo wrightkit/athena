@@ -55,7 +55,7 @@ fn slot_of_reads_the_declared_slot() {
     }"#;
     let trace = run(SLOT_OF, scenario);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["s"], Val::Number(5.0));
+    assert_eq!(trace.globals["s"], Val::number(5.0));
 }
 
 #[test]

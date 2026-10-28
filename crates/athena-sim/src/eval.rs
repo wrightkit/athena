@@ -9,7 +9,7 @@ use crate::hud::Hud;
 use crate::scenario::{EventCtx, Player, ServerLoad};
 use crate::step::World;
 use crate::unsupported;
-use crate::{Change, MissingInput, MissingInputKind, Stop, Val};
+use crate::{Change, Finite, MissingInput, MissingInputKind, Stop, Val};
 
 pub(crate) struct Env<'a> {
     pub globals: &'a BTreeMap<String, Val>,
@@ -66,10 +66,10 @@ pub(crate) struct Env<'a> {
     pub changes: &'a RefCell<Vec<Change>>,
     /// The `Total Time Elapsed` seconds: the start offset plus the
     /// match clock's elapsed game time.
-    pub now: f64,
+    pub now: Finite,
     /// The seconds `Match Time` reports; `None` until a `Set Match
     /// Time` writes the clock's countdown, so the read is `not_modeled`.
-    pub match_time: Option<f64>,
+    pub match_time: Option<Finite>,
 }
 
 impl Env<'_> {
@@ -90,7 +90,7 @@ impl World {
         each_player: Option<&'a str>,
         once: &'a RefCell<BTreeMap<usize, Val>>,
         rule: usize,
-        now: f64,
+        now: Finite,
     ) -> Env<'a> {
         Env {
             globals: &self.globals,
@@ -204,7 +204,7 @@ pub(crate) fn button_slot(button: &Value) -> Result<&'static str, Stop> {
 
 pub(crate) fn number(value: &Val) -> Result<f64, Stop> {
     match value {
-        Val::Number(n) => Ok(*n),
+        Val::Number(n) => Ok(n.get()),
         Val::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Val::Null => Ok(0.0),
         other => unsupported(format!("arithmetic on {other:?}")),
@@ -262,7 +262,7 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
         // The lexer accepts any digit run and `f64::from_str` saturates
         // an overflowing literal to infinity; a non-finite literal stops
         // here rather than reaching a store sink and serializing `null`.
-        Value::Number(n) => crate::vector::produced_number(*n, "number literal"),
+        Value::Number(n) => crate::produced_number(*n, "number literal"),
         Value::Bool(b) => Ok(Val::Bool(*b)),
         Value::Null => Ok(Val::Null),
         Value::String(text) => Ok(Val::Text(text.clone())),

@@ -244,8 +244,8 @@ rule ("Subroutine sub") {
 "#;
     let trace = run(text, ANA);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
-    assert_eq!(trace.globals["b"], Val::Number(2.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
+    assert_eq!(trace.globals["b"], Val::number(2.0));
     let entry = &trace.timeline.entries[0];
     assert!(
         entry
@@ -301,13 +301,13 @@ rule ("Subroutine sub") {{
     // Do Nothing: the second start is dropped while `sub` waits.
     let trace = run(&program("Do Nothing"), ANA);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["c"], Val::Number(1.0));
-    assert_eq!(trace.globals["b"], Val::Number(1.0));
+    assert_eq!(trace.globals["c"], Val::number(1.0));
+    assert_eq!(trace.globals["b"], Val::number(1.0));
     // Restart Rule: the second start re-runs the head, so `c` counts twice.
     let trace = run(&program("Restart Rule"), ANA);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["c"], Val::Number(2.0));
-    assert_eq!(trace.globals["b"], Val::Number(1.0));
+    assert_eq!(trace.globals["c"], Val::number(2.0));
+    assert_eq!(trace.globals["b"], Val::number(1.0));
 }
 
 /// A `Wait Until` inside a started subroutine re-checks its own
@@ -353,7 +353,7 @@ rule ("Subroutine sub") {
     let Val::Number(done) = trace.globals["done"] else {
         panic!("expected the subroutine to finish, got {:?}", trace.globals)
     };
-    assert!(done < 1.0, "resumed at {done}s");
+    assert!(done.get() < 1.0, "resumed at {done:?}s");
 }
 
 /// The simulator never starts a chase, so `Stop Chasing` has nothing to
@@ -380,7 +380,7 @@ rule ("t") {
 "#;
     let trace = run(text, ANA);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["a"], Val::Number(1.0));
+    assert_eq!(trace.globals["a"], Val::number(1.0));
 }
 
 /// `Create Effect` records an entity like a HUD element — recipients and
@@ -408,7 +408,7 @@ rule ("init") {
 "#;
     let trace = run(text, ANA);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["e"], Val::Number(0.0));
+    assert_eq!(trace.globals["e"], Val::number(0.0));
     let [created, played] = trace.effects.as_slice() else {
         panic!("expected two effect entities, got {:?}", trace.effects);
     };
@@ -417,7 +417,7 @@ rule ("init") {
     assert_eq!(created.args.effect.as_deref(), Some("GOOD_AURA"));
     assert_eq!(created.args.color, Some(Val::Text("WHITE".into())));
     assert_eq!(created.args.position, Some(Val::Player("p1".into())));
-    assert_eq!(created.args.radius, Some(Val::Number(2.0)));
+    assert_eq!(created.args.radius, Some(Val::number(2.0)));
     assert_eq!(
         created.args.reevaluation.as_deref(),
         Some("POSITION_AND_RADIUS")

@@ -65,7 +65,7 @@ fn the_boundary_elements_are_the_catalog_ends() {
     ));
     assert_eq!(global(&trace), members.last().unwrap());
     let trace = run(&set_global("Count Of(All Heroes())"));
-    assert_eq!(global(&trace), &Val::Number(members.len() as f64));
+    assert_eq!(global(&trace), &Val::number(members.len() as f64));
 }
 
 /// A member id compares equal to the `Hero` literal and to `Hero Of`'s
@@ -80,7 +80,7 @@ fn the_elements_compare_equal_to_hero_literals_and_hero_of() {
         .position(|member| *member == Val::Text("ANA".to_string()))
         .unwrap() as f64;
     let trace = run(&set_global("Index Of Array Value(All Heroes(), Hero(Ana))"));
-    assert_eq!(global(&trace), &Val::Number(index));
+    assert_eq!(global(&trace), &Val::number(index));
 
     // `Hero Of` on a scenario player yields the member id `All Heroes`
     // lists, so the read holds.

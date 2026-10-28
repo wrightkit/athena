@@ -99,7 +99,8 @@ fn has_variable_block(text: &str) -> bool {
 }
 
 fn is_zero_like(value: &Val) -> bool {
-    matches!(value, Val::Null | Val::Bool(false)) || matches!(value, Val::Number(n) if *n == 0.0)
+    matches!(value, Val::Null | Val::Bool(false))
+        || matches!(value, Val::Number(n) if n.get() == 0.0)
 }
 
 /// Variables in the export must agree; any variable the export omits must be
@@ -116,7 +117,7 @@ fn compare_variables(trace: &Trace, captured: &Capture) -> Result<(), String> {
             ("假", other) => is_zero_like(other),
             (number, Val::Number(value)) => number
                 .parse::<f64>()
-                .is_ok_and(|n| (n - value).abs() <= VARIABLE_TOLERANCE),
+                .is_ok_and(|n| (n - value.get()).abs() <= VARIABLE_TOLERANCE),
             _ => false,
         };
         if !ok {

@@ -81,7 +81,7 @@ fn no_matching_player_is_the_empty_array() {
             ROSTER,
         );
         assert_eq!(trace.outcome, Outcome::Complete, "{hero} on {team}");
-        assert_eq!(trace.globals["g"], Val::Number(0.0), "{hero} on {team}");
+        assert_eq!(trace.globals["g"], Val::number(0.0), "{hero} on {team}");
     }
 }
 
@@ -158,7 +158,7 @@ fn the_result_feeds_the_array_values() {
         &set_global("Count Of(Players On Hero(Hero(Ana), Team 1))"),
         ROSTER,
     );
-    assert_eq!(trace.globals["g"], Val::Number(2.0));
+    assert_eq!(trace.globals["g"], Val::number(2.0));
 
     let trace = run(
         &set_global(

@@ -18,7 +18,7 @@ use crate::eval::{eval, number};
 use crate::load::Instance;
 use crate::step::World;
 use crate::unsupported;
-use crate::{Change, Stop, Val};
+use crate::{Change, Finite, Stop, Val};
 
 /// The match clock: how far the run's game time has come, whether
 /// `Pause Match Time` holds it, the countdown `Match Time` reports
@@ -31,13 +31,13 @@ pub(crate) struct Clock {
     /// The seconds `Match Time` reports; `None` until a `Set Match
     /// Time` writes it — the lobby's phase limit is not an input the
     /// scenario format carries, so the read has no start value.
-    pub match_time: Option<f64>,
+    pub match_time: Option<Finite>,
     /// The `Set Slow Motion` percent; `100` is the client's normal
     /// rate.
-    pub slow_motion: f64,
+    pub slow_motion: Finite,
     /// The game-time seconds elapsed; `Total Time Elapsed` reads the
     /// start offset plus this.
-    pub elapsed: f64,
+    pub elapsed: Finite,
 }
 
 impl Clock {
@@ -47,8 +47,8 @@ impl Clock {
         Self {
             paused: false,
             match_time: None,
-            slow_motion: 100.0,
-            elapsed: 0.0,
+            slow_motion: Finite::from(100),
+            elapsed: Finite::from(0),
         }
     }
 
@@ -61,14 +61,14 @@ impl Clock {
         if self.paused {
             return Ok(());
         }
-        let step = tick_s * self.slow_motion / 100.0;
-        self.elapsed += step;
+        let step = tick_s * self.slow_motion.get() / 100.0;
+        self.elapsed = Finite::produced(self.elapsed.get() + step, "match clock")?;
         if let Some(remaining) = self.match_time {
-            let remaining = remaining - step;
+            let remaining = remaining.get() - step;
             if remaining <= 0.0 {
                 return unsupported("matchTime reaching zero");
             }
-            self.match_time = Some(remaining);
+            self.match_time = Some(Finite::produced(remaining, "match clock")?);
         }
         Ok(())
     }
@@ -82,7 +82,7 @@ pub(crate) fn action(
     world: &mut World,
     inst: &Instance<'_>,
     rule_idx: usize,
-    now: f64,
+    now: Finite,
 ) -> Option<Result<(), Stop>> {
     if !matches!(
         name,
@@ -99,7 +99,7 @@ fn run(
     world: &mut World,
     inst: &Instance<'_>,
     rule_idx: usize,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     // The caller's `Env` cannot cross this call — it shares a borrow of
     // `world.players` — so the `Env` is built here, as in `actions.rs`.
@@ -132,10 +132,7 @@ fn run(
             let [time] = args else {
                 return unsupported(format!("{name} arguments"));
             };
-            let time = number(&eval(time, &env)?)?;
-            if !time.is_finite() {
-                return unsupported(format!("{name} of a non-finite number"));
-            }
+            let time = Finite::produced(number(&eval(time, &env)?)?, "action setMatchTime")?;
             let old = world.clock.match_time;
             world.clock.match_time = Some(time);
             world.changes.borrow_mut().push(Change::MatchClock {
@@ -149,10 +146,7 @@ fn run(
             let [percent] = args else {
                 return unsupported(format!("{name} arguments"));
             };
-            let percent = number(&eval(percent, &env)?)?;
-            if !percent.is_finite() {
-                return unsupported(format!("{name} of a non-finite number"));
-            }
+            let percent = Finite::produced(number(&eval(percent, &env)?)?, "action setSlowMotion")?;
             let old = world.clock.slow_motion;
             world.clock.slow_motion = percent;
             world.changes.borrow_mut().push(Change::MatchClock {

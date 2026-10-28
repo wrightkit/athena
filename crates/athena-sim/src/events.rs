@@ -16,7 +16,7 @@ use crate::load::{Frame, Instance, player_matches};
 use crate::scenario::EventCtx;
 use crate::sched::{event_player, record_stop, run_and_record};
 use crate::step::{World, conditions_hold};
-use crate::{MissingInput, MissingInputKind, RuleRun, RunEnd, Stop};
+use crate::{Finite, MissingInput, MissingInputKind, RuleRun, RunEnd, Stop};
 
 /// Fire the events `world.pending_events` holds — raised by a modeled
 /// state change like `Damage`/`Heal` — in the order they occurred: each
@@ -32,7 +32,7 @@ pub(crate) fn dispatch(
     subroutines: &BTreeMap<String, usize>,
     world: &mut World,
     tick: u64,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     for ctx in std::mem::take(&mut world.pending_events) {
         for instance in instances.iter_mut() {
@@ -80,7 +80,7 @@ pub(crate) fn fire(
     subroutines: &BTreeMap<String, usize>,
     world: &mut World,
     tick: u64,
-    now: f64,
+    now: Finite,
 ) -> Result<(), Stop> {
     // Each event's condition check is its own `Evaluate Once` pass.
     let pass = RefCell::new(BTreeMap::new());

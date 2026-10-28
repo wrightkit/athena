@@ -74,10 +74,10 @@ fn each_producer_yields_an_opaque_display_value() {
             display(
                 "customColor",
                 vec![
-                    Val::Number(118.0),
-                    Val::Number(93.0),
-                    Val::Number(189.0),
-                    Val::Number(255.0),
+                    Val::number(118.0),
+                    Val::number(93.0),
+                    Val::number(189.0),
+                    Val::number(255.0),
                 ],
             ),
         ),
@@ -153,10 +153,10 @@ fn a_display_value_flows_through_an_array() {
         display(
             "customColor",
             vec![
-                Val::Number(1.0),
-                Val::Number(2.0),
-                Val::Number(3.0),
-                Val::Number(4.0)
+                Val::number(1.0),
+                Val::number(2.0),
+                Val::number(3.0),
+                Val::number(4.0)
             ]
         )
     );
@@ -221,10 +221,10 @@ rule ("probe") {
         Some(display(
             "customColor",
             vec![
-                Val::Number(118.0),
-                Val::Number(93.0),
-                Val::Number(189.0),
-                Val::Number(255.0),
+                Val::number(118.0),
+                Val::number(93.0),
+                Val::number(189.0),
+                Val::number(255.0),
             ],
         ))
     );

@@ -108,8 +108,9 @@ fn random_integer_is_inclusive_inside_the_bounds() {
             let Val::Number(n) = global(&trace) else {
                 panic!("{bounds} seed {seed}: {:?}", trace.globals["g"]);
             };
+            let n = n.get();
             assert!(
-                *n >= lo && *n <= hi && n.fract() == 0.0,
+                n >= lo && n <= hi && n.fract() == 0.0,
                 "{bounds} seed {seed}: {n}"
             );
         }
@@ -123,14 +124,14 @@ fn random_real_stays_inside_min_max() {
         let Val::Number(n) = global(&trace) else {
             panic!("seed {seed}: {:?}", trace.globals["g"]);
         };
-        assert!(*n >= 2.0 && *n < 5.0, "seed {seed}: {n}");
+        assert!(n.get() >= 2.0 && n.get() < 5.0, "seed {seed}: {n:?}");
     }
     // Swapped bounds cover the same interval.
     let trace = seeded(&set_global("Random Real(5, 2)"), 1);
     let Val::Number(n) = global(&trace) else {
         panic!("{:?}", trace.globals["g"]);
     };
-    assert!(*n >= 2.0 && *n < 5.0, "{n}");
+    assert!(n.get() >= 2.0 && n.get() < 5.0, "{n:?}");
 }
 
 #[test]
@@ -167,7 +168,7 @@ fn randomized_array_keeps_the_elements() {
         let mut sorted: Vec<f64> = items
             .iter()
             .map(|item| match item {
-                Val::Number(n) => *n,
+                Val::Number(n) => n.get(),
                 other => panic!("seed {seed}: {other:?}"),
             })
             .collect();
@@ -180,7 +181,7 @@ fn randomized_array_keeps_the_elements() {
         ("Randomized Array(Null)", Val::Array(vec![])),
         (
             "Randomized Array(Array(7))",
-            Val::Array(vec![Val::Number(7.0)]),
+            Val::Array(vec![Val::number(7.0)]),
         ),
     ] {
         let trace = seeded(&set_global(value), 1);

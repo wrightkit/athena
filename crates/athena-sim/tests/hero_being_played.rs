@@ -182,8 +182,8 @@ rule ("event") {
     // The event fired mid-wait on tick 1; the wait re-checked the value
     // there and held it true, so it suspended to its timeout — tick 7,
     // `0.1` s rounded up — and the actions after it ran.
-    assert_eq!(trace.globals["ev"], Val::Number(1.0));
-    assert_eq!(trace.globals["g"], Val::Number(1.0));
+    assert_eq!(trace.globals["ev"], Val::number(1.0));
+    assert_eq!(trace.globals["g"], Val::number(1.0));
     let [started] = trace.timeline.entries[0].rules.as_slice() else {
         panic!("{:?}", trace.timeline.entries[0].rules);
     };

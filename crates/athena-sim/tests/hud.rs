@@ -47,7 +47,7 @@ fn a_hud_text_visible_to_one_team_lists_only_its_members() {
     assert_eq!(hud.args.header, Some(Val::Text("Score: 0".into())));
     assert_eq!(hud.args.subheader, Some(Val::Null));
     assert_eq!(hud.args.location.as_deref(), Some("LEFT"));
-    assert_eq!(hud.args.sort_order, Some(Val::Number(0.0)));
+    assert_eq!(hud.args.sort_order, Some(Val::number(0.0)));
     assert_eq!(hud.args.header_color, Some(Val::Text("WHITE".into())));
     assert_eq!(
         hud.args.reevaluation.as_deref(),
@@ -88,7 +88,7 @@ fn a_destroyed_element_keeps_its_entry_with_destroyed_tick() {
         panic!("expected two HUD elements, got {:?}", trace.hud);
     };
     // `Last Text ID` named the newest element.
-    assert_eq!(trace.globals["t"], Val::Number(1.0));
+    assert_eq!(trace.globals["t"], Val::number(1.0));
     assert_eq!(second.id, 1);
     assert_eq!(second.destroyed_tick, Some(0));
     // Wait(0.5) wakes on tick 32 (0.5 / 0.016 = 31.25, rounded up).
@@ -122,10 +122,10 @@ fn a_progress_bar_records_its_arguments() {
     };
     assert_eq!(bar.kind, HudKind::ProgressBarHud);
     assert_eq!(bar.recipients, ["p1"]);
-    assert_eq!(bar.args.value, Some(Val::Number(0.5)));
+    assert_eq!(bar.args.value, Some(Val::number(0.5)));
     assert_eq!(bar.args.text, Some(Val::Text("boss".into())));
     assert_eq!(bar.args.location.as_deref(), Some("TOP"));
-    assert_eq!(bar.args.sort_order, Some(Val::Number(1.0)));
+    assert_eq!(bar.args.sort_order, Some(Val::number(1.0)));
     assert_eq!(
         bar.args.progress_bar_color,
         Some(Val::Text("YELLOW".into()))

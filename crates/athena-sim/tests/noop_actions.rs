@@ -84,8 +84,8 @@ rule ("t") {
 "#;
     let trace = run(text, ANA);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["before"], Val::Number(1.0));
-    assert_eq!(trace.globals["after"], Val::Number(2.0));
+    assert_eq!(trace.globals["before"], Val::number(1.0));
+    assert_eq!(trace.globals["after"], Val::number(2.0));
     // The run is in the trace, finished; its only changes are the two
     // variable writes — the no-read actions recorded nothing.
     let entry = &trace.timeline.entries[0];

@@ -64,13 +64,13 @@ fn pause_freezes_total_time_elapsed_and_records_the_write() {
     assert_eq!(trace.outcome, Outcome::Complete);
     // The clock stands while paused: both reads see the run's start,
     // and the wake tick's `time` repeats the first tick's.
-    assert_eq!(trace.globals["t0"], Val::Number(0.015));
-    assert_eq!(trace.globals["t1"], Val::Number(0.015));
+    assert_eq!(trace.globals["t0"], Val::number(0.015));
+    assert_eq!(trace.globals["t1"], Val::number(0.015));
     let [start, wake] = trace.timeline.entries.as_slice() else {
         panic!("expected two entries, got {:?}", trace.timeline.entries);
     };
-    assert_eq!((start.tick, start.time), (0, 15.0));
-    assert_eq!((wake.tick, wake.time), (3, 15.0));
+    assert_eq!((start.tick, start.time.get()), (0, 15.0));
+    assert_eq!((wake.tick, wake.time.get()), (3, 15.0));
     assert_eq!(
         clock_changes(&trace, 0),
         [Change::MatchClock {
@@ -94,8 +94,8 @@ fn unpause_resumes_the_clock() {
         1.0,
     );
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["t0"], Val::Number(0.015));
-    assert_eq!(trace.globals["t1"], Val::Number(0.031));
+    assert_eq!(trace.globals["t0"], Val::number(0.015));
+    assert_eq!(trace.globals["t1"], Val::number(0.031));
     assert_eq!(
         clock_changes(&trace, 1),
         [Change::MatchClock {
@@ -117,16 +117,16 @@ fn set_match_time_writes_the_countdown_match_time_reads() {
         1.0,
     );
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["m"], Val::Number(60.0));
+    assert_eq!(trace.globals["m"], Val::number(60.0));
     // One unpaused tick counted the countdown down by 16 ms.
-    assert_eq!(trace.globals["t1"], Val::Number(59.984));
+    assert_eq!(trace.globals["t1"], Val::number(59.984));
     assert_eq!(
         clock_changes(&trace, 0),
         [Change::MatchClock {
             action: "setMatchTime".into(),
             field: "matchTime".into(),
             old: Val::Null,
-            new: Val::Number(60.0),
+            new: Val::number(60.0),
         }]
     );
 }
@@ -143,7 +143,7 @@ fn a_paused_countdown_holds_its_value() {
         1.0,
     );
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["m"], Val::Number(0.0));
+    assert_eq!(trace.globals["m"], Val::number(0.0));
 }
 
 #[test]
@@ -206,20 +206,20 @@ rule ("slow") {
 "#;
     let trace = run_text(text, athena_sim::Options { seconds: 1.0 }).unwrap();
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["hit"], Val::Number(0.023));
+    assert_eq!(trace.globals["hit"], Val::number(0.023));
     let [start, wake] = trace.timeline.entries.as_slice() else {
         panic!("expected two entries, got {:?}", trace.timeline.entries);
     };
-    assert_eq!((start.tick, start.time), (0, 15.0));
-    assert_eq!((wake.tick, wake.time), (1, 23.0));
+    assert_eq!((start.tick, start.time.get()), (0, 15.0));
+    assert_eq!((wake.tick, wake.time.get()), (1, 23.0));
     assert_eq!(wake.rules[0].ended, RunEnd::Finished);
     assert_eq!(
         clock_changes(&trace, 0),
         [Change::MatchClock {
             action: "setSlowMotion".into(),
             field: "slowMotion".into(),
-            old: Val::Number(100.0),
-            new: Val::Number(50.0),
+            old: Val::number(100.0),
+            new: Val::number(50.0),
         }]
     );
 }
@@ -272,7 +272,7 @@ fn a_true_wait_until_under_a_non_100_factor_still_passes() {
         1.0,
     );
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["g"], Val::Number(1.0));
+    assert_eq!(trace.globals["g"], Val::number(1.0));
 }
 
 #[test]
@@ -417,7 +417,7 @@ rule ("setter") {
     }"#;
     let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["h"], Val::Number(7.0));
+    assert_eq!(trace.globals["h"], Val::number(7.0));
 }
 
 #[test]
@@ -485,7 +485,7 @@ rule ("setter") {
     }"#;
     let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["h"], Val::Number(9.0));
+    assert_eq!(trace.globals["h"], Val::number(9.0));
 }
 
 #[test]
@@ -611,4 +611,70 @@ fn a_non_finite_clock_argument_is_not_modeled() {
             not_modeled.construct
         );
     }
+}
+
+/// A finite `Set Slow Motion` factor so large that a few thousand ticks
+/// of `tick_s * factor` overflow `elapsed`: the next `advance` stops
+/// `not_modeled` instead of writing `inf` into `Total Time Elapsed`
+/// (athena#133). The ticks in between are quiet — the run stops on the
+/// clock itself, not on a rule.
+#[test]
+fn a_slow_motion_factor_that_overflows_the_elapsed_clock_is_not_modeled() {
+    let trace = run(
+        "        Set Slow Motion(Multiply(Raise To Power(10, 308), 1.5));
+        Set Global Variable(g, 1);",
+        121.0,
+    );
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "match clock produced a non-finite number"
+    );
+}
+
+/// The timeline's `time` field is `now * 1000`: an elapsed clock that
+/// still fits in seconds can overflow in milliseconds. A player event
+/// landing on a tick whose timeline `time` is `inf` stops `not_modeled`
+/// (athena#133).
+#[test]
+fn a_timeline_time_that_overflows_is_not_modeled() {
+    let text = r#"
+variables {
+    global:
+        0: g
+}
+
+rule ("clock") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Slow Motion(Multiply(Raise To Power(10, 308), 1.5));
+    }
+}
+
+rule ("join") {
+    event {
+        Player Joined Match;
+        All;
+        All;
+    }
+    actions {
+        Set Global Variable(g, 1);
+    }
+}
+"#;
+    let scenario = r#"{ "scenarioVersion": 1, "seconds": 1,
+        "players": [{ "id": "p1", "host": true, "hero": "ana" }],
+        "events": [{ "kind": "playerJoined", "time": 0.2, "eventPlayer": "p1" }] }"#;
+    let trace = run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"));
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(
+        not_modeled.construct,
+        "match clock produced a non-finite number"
+    );
 }

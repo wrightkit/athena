@@ -23,7 +23,7 @@ use workshop_rs::settings::Settings;
 
 use crate::hero_settings;
 use crate::scenario::Team;
-use crate::{NotModeled, PlayerWorld, PoolState, UltimateState, Val};
+use crate::{Finite, NotModeled, PlayerWorld, PoolState, Stop, UltimateState, Val};
 
 /// The resolved world state of a scenario player.
 #[derive(Debug, Clone, PartialEq)]
@@ -98,31 +98,23 @@ pub(crate) fn resolve(
     // Every hero has a `health` pool and an ultimate cost; `shield` and
     // `armor` exist only where the catalog records them (a hero without the
     // pool has no entry, never a zero). `health%` scales every pool.
-    let pool = |kind: HealthPool, field: &str| {
-        values
-            .health(&hero_id, kind)
-            .map(|max| PoolState {
-                current: max * mods.health,
-                max: max * mods.health,
-            })
-            .ok_or_else(|| unmodeled(format!("hero `{hero}` has no `{field}` hero value")))
+    let pool = |kind: HealthPool| -> Result<Option<PoolState>, NotModeled> {
+        let Some(max) = values.health(&hero_id, kind) else {
+            return Ok(None);
+        };
+        let max = Finite::produced(max * mods.health, "hero settings")
+            .map_err(|error| unmodeled(error.construct))?;
+        Ok(Some(PoolState { current: max, max }))
     };
-    let health = pool(HealthPool::Health, "health")?;
-    let shield = values
-        .health(&hero_id, HealthPool::Shield)
-        .map(|max| PoolState {
-            current: max * mods.health,
-            max: max * mods.health,
-        });
-    let armor = values
-        .health(&hero_id, HealthPool::Armor)
-        .map(|max| PoolState {
-            current: max * mods.health,
-            max: max * mods.health,
-        });
+    let health = pool(HealthPool::Health)?
+        .ok_or_else(|| unmodeled(format!("hero `{hero}` has no `health` hero value")))?;
+    let shield = pool(HealthPool::Shield)?;
+    let armor = pool(HealthPool::Armor)?;
     let cost = values
         .ultimate_cost(&hero_id)
         .ok_or_else(|| unmodeled(format!("hero `{hero}` has no `ultimateCost` hero value")))?;
+    let cost =
+        Finite::produced(cost, "hero settings").map_err(|error| unmodeled(error.construct))?;
 
     // Cooldowns are reported for the ability slots the catalog records;
     // an ability without an entry has no cooldown and is simply absent.
@@ -138,7 +130,9 @@ pub(crate) fn resolve(
         if let Some(seconds) = values.cooldown(&hero_id, slot, variant) {
             let scale = mods.cooldown_all * mods.cooldown_slots.get(slot).copied().unwrap_or(1.0);
             let key = variant.map_or_else(|| slot.to_string(), |v| format!("{slot}/{v}"));
-            cooldowns.insert(key, seconds * scale);
+            let seconds = Finite::produced(seconds * scale, "hero settings")
+                .map_err(|error| unmodeled(error.construct))?;
+            cooldowns.insert(key, seconds);
         }
     }
 
@@ -148,7 +142,10 @@ pub(crate) fn resolve(
             shield,
             armor,
             cooldowns,
-            ultimate: UltimateState { charge: 0.0, cost },
+            ultimate: UltimateState {
+                charge: Finite::from(0),
+                cost,
+            },
             statuses: std::collections::BTreeMap::new(),
             buttons: std::collections::BTreeMap::new(),
         },
@@ -163,19 +160,23 @@ pub(crate) fn resolve(
 /// armor, health order; each pool absorbs up to its `current` and the rest
 /// spills into the next. Health floors at zero; a negative amount does
 /// nothing.
-pub(crate) fn damage(world: &mut PlayerWorld, amount: f64) {
+pub(crate) fn damage(world: &mut PlayerWorld, amount: f64, construct: &str) -> Result<(), Stop> {
     let mut rest = amount.max(0.0);
     for pool in [world.shield.as_mut(), world.armor.as_mut()] {
         let Some(pool) = pool else { continue };
-        let taken = pool.current.min(rest);
-        pool.current -= taken;
+        let taken = pool.current.get().min(rest);
+        pool.current = Finite::produced(pool.current.get() - taken, construct)?;
         rest -= taken;
     }
-    world.health.current = (world.health.current - rest).max(0.0);
+    world.health.current =
+        Finite::produced((world.health.current.get() - rest).max(0.0), construct)?;
+    Ok(())
 }
 
 /// `Heal(player, healer, amount)`: the `health` pool rises by the amount,
 /// capped at `max`; a negative amount does nothing.
-pub(crate) fn heal(world: &mut PlayerWorld, amount: f64) {
-    world.health.current = (world.health.current + amount.max(0.0)).min(world.health.max);
+pub(crate) fn heal(world: &mut PlayerWorld, amount: f64, construct: &str) -> Result<(), Stop> {
+    let healed = (world.health.current.get() + amount.max(0.0)).min(world.health.max.get());
+    world.health.current = Finite::produced(healed, construct)?;
+    Ok(())
 }

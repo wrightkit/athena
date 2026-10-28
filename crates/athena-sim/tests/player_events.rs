@@ -62,7 +62,7 @@ fn an_injected_player_event_runs_a_matching_rule_once() {
     }"#;
     let trace = run(LEFT_RULE, scenario);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["left"], Val::Number(1.0));
+    assert_eq!(trace.globals["left"], Val::number(1.0));
     assert_eq!(trace.globals["who"], Val::Text("REAPER".into()));
     let [run] = trace.timeline.entries[0].rules.as_slice() else {
         panic!(
@@ -163,13 +163,13 @@ const DUEL: &str = r#"{
 fn a_modeled_damage_hit_raises_the_damage_events_in_occurrence_order() {
     let trace = run(DAMAGE_EVENTS, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["took"], Val::Number(2.0));
-    assert_eq!(trace.globals["dealt"], Val::Number(2.0));
-    assert_eq!(trace.globals["died"], Val::Number(1.0));
-    assert_eq!(trace.globals["blow"], Val::Number(1.0));
+    assert_eq!(trace.globals["took"], Val::number(2.0));
+    assert_eq!(trace.globals["dealt"], Val::number(2.0));
+    assert_eq!(trace.globals["died"], Val::number(1.0));
+    assert_eq!(trace.globals["blow"], Val::number(1.0));
     // `Event Damage` is the applied hit; `Attacker`/`Victim` the dealer
     // and the target.
-    assert_eq!(trace.globals["dmg"], Val::Number(9999.0));
+    assert_eq!(trace.globals["dmg"], Val::number(9999.0));
     assert_eq!(trace.globals["atk"], Val::Text("ANA".into()));
     assert_eq!(trace.globals["vic"], Val::Text("REAPER".into()));
     assert_eq!(
@@ -241,7 +241,7 @@ rule ("dealt") {
 "#;
     let trace = run(text, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["took"], Val::Number(1.0));
+    assert_eq!(trace.globals["took"], Val::number(1.0));
     // The dealt rule never ran: the variable stays `null`.
     assert_eq!(trace.globals["dealt"], Val::Null);
     assert_eq!(trace.globals["atk"], Val::Null);
@@ -294,9 +294,9 @@ rule ("dealt") {
 "#;
     let trace = run(text, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["received"], Val::Number(1.0));
-    assert_eq!(trace.globals["dealt"], Val::Number(1.0));
-    assert_eq!(trace.globals["healed"], Val::Number(20.0));
+    assert_eq!(trace.globals["received"], Val::number(1.0));
+    assert_eq!(trace.globals["dealt"], Val::number(1.0));
+    assert_eq!(trace.globals["healed"], Val::number(20.0));
     assert_eq!(run_names(&trace, 0), ["driver", "received", "dealt"]);
     let dealt_run = &trace.timeline.entries[0].rules[2];
     assert_eq!(dealt_run.event_player.as_deref(), Some("p1"));
@@ -370,8 +370,8 @@ rule ("bastion") {
 "#;
     let trace = run(text, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["team2"], Val::Number(1.0));
-    assert_eq!(trace.globals["reaper"], Val::Number(1.0));
+    assert_eq!(trace.globals["team2"], Val::number(1.0));
+    assert_eq!(trace.globals["reaper"], Val::number(1.0));
     // The non-matching rules never ran: the variables stay `null`.
     assert_eq!(trace.globals["team1"], Val::Null);
     assert_eq!(trace.globals["bastion"], Val::Null);
@@ -502,7 +502,7 @@ rule ("died") {
     assert_eq!(trace.outcome, Outcome::Complete);
     // Without the revive's health-pool refill the second hit could not
     // reach zero, so `Player Died` would fire once.
-    assert_eq!(trace.globals["died"], Val::Number(2.0));
+    assert_eq!(trace.globals["died"], Val::number(2.0));
     assert_eq!(trace.players["p2"].state["isDead"], Val::Bool(true));
 }
 
@@ -539,7 +539,7 @@ rule ("died") {
 "#;
     let trace = run(text, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
-    assert_eq!(trace.globals["died"], Val::Number(2.0));
+    assert_eq!(trace.globals["died"], Val::number(2.0));
 }
 
 /// The catalog splits the revives: `Resurrect` acts on dead players, so
@@ -561,7 +561,7 @@ rule ("driver") {
     let trace = run(text, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
     let world = trace.players["p2"].world.as_ref().expect("world state");
-    assert_eq!(world.health.current, world.health.max - 50.0);
+    assert_eq!(world.health.current.get(), world.health.max.get() - 50.0);
 
     let text = r#"
 rule ("driver") {
@@ -619,7 +619,7 @@ rule ("events") {
     assert_eq!(trace.outcome, Outcome::Complete);
     assert_eq!(trace.globals["dead"], Val::Bool(true));
     // Only the killing hit's `Player Took Damage` ran.
-    assert_eq!(trace.globals["events"], Val::Number(1.0));
+    assert_eq!(trace.globals["events"], Val::number(1.0));
 }
 
 /// An instance mid-`Wait` queues a raised event like an injected one
@@ -658,7 +658,7 @@ rule ("took") {
     assert_eq!(trace.outcome, Outcome::Complete);
     // The second event queued behind the suspended run and fired when
     // the `Wait` resumed and ended it.
-    assert_eq!(trace.globals["took"], Val::Number(2.0));
+    assert_eq!(trace.globals["took"], Val::number(2.0));
 }
 
 /// The per-tick bound on raised events keeps a `Damage` fan-out — a
