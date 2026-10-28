@@ -52,6 +52,7 @@ fn evaluate_once_inside_an_element_context_is_not_modeled() {
         "Sorted Array(Array(1, 2), Evaluate Once(Current Array Index))",
         "Is True For All(Array(1, 2), Evaluate Once(True))",
         "Is True For Any(Array(1, 2, 3), Compare(Evaluate Once(Current Array Index), ==, 2))",
+        "Mapped Array(Array(1, 2), Evaluate Once(Current Array Element))",
         // The element context reaches through an operand's own values.
         "Is True For Any(Array(1), Is True For Any(Array(2), Evaluate Once(True)))",
     ] {
@@ -304,6 +305,89 @@ fn is_true_for_all_and_any_cover_the_whole_array() {
         let trace = run(&set_global(value));
         assert_eq!(global(&trace), &Val::Bool(expected), "{value}");
     }
+}
+
+/// `Mapped Array` evaluates the operand once per element with `Current
+/// Array Element`/`Current Array Index` bound and collects the results
+/// — the element-context rule the other array values follow (athena#134,
+/// modeled not measured).
+#[test]
+fn mapped_array_collects_the_per_element_result() {
+    let trace = run(&set_global(
+        "Mapped Array(Array(10, 20, 30), Add(Current Array Element, Current Array Index))",
+    ));
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![
+            Val::Number(10.0),
+            Val::Number(21.0),
+            Val::Number(32.0)
+        ])
+    );
+
+    // The empty array maps to nothing, and `Null` reads as it.
+    for array in ["Empty Array", "Null"] {
+        let trace = run(&set_global(&format!(
+            "Mapped Array({array}, Current Array Element)"
+        )));
+        assert_eq!(global(&trace), &Val::Array(vec![]), "{array}");
+    }
+
+    // A non-array operand stops the same way the other array values do.
+    let trace = run(&set_global("Mapped Array(5, Current Array Element)"));
+    let Outcome::NotModeled(stop) = &trace.outcome else {
+        panic!("{:?}", trace.outcome);
+    };
+    assert_eq!(stop.construct, "mappedArray on Number(5.0)");
+
+    // A constant mapping — the Bastion form — needs no element read.
+    let trace = run(&set_global("Mapped Array(Array(1, 2), -30)"));
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![Val::Number(-30.0), Val::Number(-30.0)])
+    );
+
+    // A nested element-context value rebinds the pair for its own
+    // operand; the outer binding applies again outside it.
+    let trace = run(&set_global(
+        "Mapped Array(Array(1, 2), Array(Current Array Element, Count Of(Mapped Array(Array(9), Current Array Index))))",
+    ));
+    assert_eq!(
+        global(&trace),
+        &Val::Array(vec![
+            Val::Array(vec![Val::Number(1.0), Val::Number(1.0)]),
+            Val::Array(vec![Val::Number(2.0), Val::Number(1.0)]),
+        ])
+    );
+}
+
+/// A mapped number is a produced number: one that is not finite — here
+/// the variable a `For` `End` step left `inf` — stops `not_modeled`
+/// instead of serializing `null` (athena#134).
+#[test]
+fn mapped_array_stops_on_a_non_finite_result() {
+    let trace = run(r#"
+variables {
+    global:
+        0: g
+        1: r
+}
+
+rule ("probe") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        For Global Variable(g, Raise To Power(10, 308), Multiply(Raise To Power(10, 308), 1.5), Raise To Power(10, 308));
+        End;
+        Set Global Variable(r, Mapped Array(Array(1), Global.g));
+    }
+}
+"#);
+    let Outcome::NotModeled(stop) = &trace.outcome else {
+        panic!("{:?}", trace.outcome);
+    };
+    assert_eq!(stop.construct, "mappedArray produced a non-finite number");
 }
 
 #[test]

@@ -585,7 +585,7 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // The element-context array values read the array once, then the
         // operand once per element with `Current Array Element`/`Current
         // Array Index` bound. `Null` reads as the empty array.
-        "filteredArray" | "sortedArray" | "isTrueForAll" | "isTrueForAny" => {
+        "filteredArray" | "sortedArray" | "isTrueForAll" | "isTrueForAny" | "mappedArray" => {
             let [array, operand] = arguments::<2>(name, args)?;
             let items = items(eval(array, env)?, name)?;
             match name {
@@ -610,6 +610,19 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                     Ok(Val::Array(
                         keyed.into_iter().map(|(_, item)| item.clone()).collect(),
                     ))
+                }
+                // `Mapped Array` collects the operand's per-element
+                // result; a produced number stays a value only while
+                // finite, as everywhere one is produced.
+                "mappedArray" => {
+                    let mut mapped = Vec::with_capacity(items.len());
+                    for (index, item) in items.iter().enumerate() {
+                        match eval(operand, &element_env(env, item, index))? {
+                            Val::Number(n) => mapped.push(crate::vector::produced_number(n, name)?),
+                            element => mapped.push(element),
+                        }
+                    }
+                    Ok(Val::Array(mapped))
                 }
                 // `Is True For All`/`Any` stop at the element that decides
                 // them: the first false, the first true.
