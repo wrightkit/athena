@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/wrightkit/athena/compare/v0.11.0...v0.11.1) (2026-10-28)
+
+
+### Code Refactoring
+
+* **sim:** share unsupported helper and World::env ([#124](https://github.com/wrightkit/athena/issues/124)) ([c1a53de](https://github.com/wrightkit/athena/commit/c1a53de9bbc4e8096e9337814d64d5eeb36bb2cf))
+
 ## [0.11.0](https://github.com/wrightkit/athena/compare/v0.10.0...v0.11.0) (2026-10-27)
 
 
