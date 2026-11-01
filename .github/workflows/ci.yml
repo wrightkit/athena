@@ -3,33 +3,69 @@ name: CI
 on:
   push:
     branches: ["main"]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
 
 env:
   CARGO_TERM_COLOR: always
 
+# A newer push to the same pull request supersedes the older run. Pushes to
+# main never share a group, so each main commit keeps a complete run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Skipped jobs still report their check names as passing, so a change that
+  # touches only documentation does not leave a required check pending.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - name: Check out repository
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!docs/**'
+            workflows:
+              - '.github/workflows/**'
+
   workflow-lint:
     name: Workflow lint
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
     uses: wrightkit/.github/.github/workflows/actionlint.yml@main
     permissions:
       contents: read
 
   rust-quality:
     name: Rust (1.88.0)
+    needs: changes
     uses: wrightkit/.github/.github/workflows/rust-quality.yml@main
     with:
       toolchain: 1.88.0
       cache-shared-key: linux-ci
+      skip: ${{ needs.changes.outputs.code != 'true' }}
 
   wasm-check:
     name: Core builds for WebAssembly
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
