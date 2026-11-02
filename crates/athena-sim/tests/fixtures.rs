@@ -160,9 +160,12 @@ fn compare_logs(trace: &Trace, captured: &Capture) -> Result<(), String> {
 const RUN_SECONDS: f64 = 10.0;
 
 fn check_probe(id: &str) {
-    let options = Options {
-        seconds: RUN_SECONDS,
-    };
+    check_probe_for(id, RUN_SECONDS);
+}
+
+/// `check_probe` for a probe whose run outlasts `RUN_SECONDS`.
+fn check_probe_for(id: &str, seconds: f64) {
+    let options = Options { seconds };
     // A probe that needs a real player carries a `scenario.json`; without
     // one `run_text` runs the bare program.
     let scenario = probe_file(id, "scenario.json")
@@ -241,6 +244,12 @@ fn p4_wait_until_zero_tick() {
 #[test]
 fn p6_wait_behavior() {
     check_probe("p6-wait-behavior");
+}
+
+#[test]
+fn p8_slow_motion_wait() {
+    // Three factors of about 2.7 s each, after a 3 s start.
+    check_probe_for("p8-slow-motion-wait", 12.0);
 }
 
 #[test]

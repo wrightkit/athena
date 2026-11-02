@@ -213,6 +213,45 @@ fn waits_under_a_non_100_factor_round_up_to_whole_ticks() {
 }
 
 #[test]
+fn a_wait_until_condition_wake_under_a_non_100_factor_resumes_on_the_next_tick() {
+    // The ongoing-rule re-check wakes on the condition, not a schedule:
+    // at 50% the clock still reads 31 ms on tick 1 (P8).
+    let text = r#"
+variables {
+    global:
+        0: hit
+}
+
+rule ("reader") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Wait Until(Total Time Elapsed >= 0.023, 999);
+        Set Global Variable(hit, Total Time Elapsed);
+    }
+}
+
+rule ("slow") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Slow Motion(50);
+    }
+}
+"#;
+    let trace = run_text(text, athena_sim::Options { seconds: 1.0 }).unwrap();
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["hit"], Val::number(0.031));
+    let [start, wake] = trace.timeline.entries.as_slice() else {
+        panic!("expected two entries, got {:?}", trace.timeline.entries);
+    };
+    assert_eq!((start.tick, start.time.get()), (0, 15.0));
+    assert_eq!((wake.tick, wake.time.get()), (1, 31.0));
+}
+
+#[test]
 fn a_non_finite_clock_argument_is_not_modeled() {
     for action in ["Set Match Time", "Set Slow Motion"] {
         let trace = run(&format!("        {action}(1 / 0);"), 1.0);
