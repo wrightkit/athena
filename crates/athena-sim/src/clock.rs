@@ -1,16 +1,16 @@
 //! The match clock: `Pause`/`Unpause Match Time`, `Set Match Time` and
 //! `Set Slow Motion` write it, `Match Time` and `Total Time Elapsed`
 //! read it (athena#120). An unpaused clock advances each tick by the
-//! tick length scaled by the slow-motion percent: a `Pause Match Time`
-//! stops `Total Time Elapsed` and the match countdown alike, and
-//! `Set Slow Motion` scales how fast both run. A `Wait` maps seconds
-//! to ticks the clock does not describe, so a `Wait` under a non-100
-//! factor — and a `Wait Until` whose timeout would suspend — stops
-//! `not_modeled` rather than guess the mapping. `Match Time` before
-//! any `Set Match Time` is unanswerable — the lobby's phase limit is
-//! no input the scenario format carries — and a countdown reaching
-//! zero is the phase boundary the simulator does not run. Modeled,
-//! not measured (`docs/findings.md`).
+//! tick length: a `Pause Match Time` stops `Total Time Elapsed` and
+//! the match countdown alike. `Set Slow Motion` scales the whole
+//! simulation, the Inspector clock included, so game time per tick
+//! and the seconds-to-ticks mapping of a `Wait` stay as they are;
+//! the write is recorded and changes nothing a rule can read (P8,
+//! measured). `Match Time` before any `Set Match Time` is
+//! unanswerable — the lobby's phase limit is no input the scenario
+//! format carries — and a countdown reaching zero is the phase
+//! boundary the simulator does not run. The countdown and pause
+//! are modeled, not measured (`docs/findings.md`).
 
 use workshop_rs::Value;
 
@@ -22,7 +22,7 @@ use crate::{Change, Finite, Stop, Val};
 
 /// The match clock: how far the run's game time has come, whether
 /// `Pause Match Time` holds it, the countdown `Match Time` reports
-/// and the `Set Slow Motion` percent that scales its rate.
+/// and the last `Set Slow Motion` percent.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Clock {
     /// `Pause Match Time` holds the clock; it advances only while
@@ -32,8 +32,9 @@ pub(crate) struct Clock {
     /// Time` writes it — the lobby's phase limit is not an input the
     /// scenario format carries, so the read has no start value.
     pub match_time: Option<Finite>,
-    /// The `Set Slow Motion` percent; `100` is the client's normal
-    /// rate.
+    /// The last `Set Slow Motion` percent; `100` is the client's
+    /// normal rate. Recorded only: the rate scales wall time, not the
+    /// game time rules read (P8).
     pub slow_motion: Finite,
     /// The game-time seconds elapsed; `Total Time Elapsed` reads the
     /// start offset plus this.
@@ -53,18 +54,16 @@ impl Clock {
     }
 
     /// Advance the clock into a tick: an unpaused clock gains
-    /// `tick_s` scaled by `slow_motion` on `elapsed` and loses the
-    /// same on `match_time`. A paused clock stands. A countdown that
+    /// `tick_s` on `elapsed` and loses the same on `match_time`. A paused clock stands. A countdown that
     /// reaches zero crosses the phase boundary the simulator does not
     /// run — game-mode advancement is not modeled — so the run stops.
     pub(crate) fn advance(&mut self, tick_s: f64) -> Result<(), Stop> {
         if self.paused {
             return Ok(());
         }
-        let step = tick_s * self.slow_motion.get() / 100.0;
-        self.elapsed = Finite::produced(self.elapsed.get() + step, "match clock")?;
+        self.elapsed = Finite::produced(self.elapsed.get() + tick_s, "match clock")?;
         if let Some(remaining) = self.match_time {
-            let remaining = remaining.get() - step;
+            let remaining = remaining.get() - tick_s;
             if remaining <= 0.0 {
                 return unsupported("matchTime reaching zero");
             }
