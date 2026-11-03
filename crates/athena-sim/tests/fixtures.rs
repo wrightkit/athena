@@ -253,6 +253,12 @@ fn p8_slow_motion_wait() {
 }
 
 #[test]
+fn p9_slow_motion_extremes() {
+    // Four factors of about 1.2 s each, after a 3 s start.
+    check_probe_for("p9-slow-motion-extremes", 12.0);
+}
+
+#[test]
 fn p7_hero_settings() {
     check_probe("p7-hero-settings");
 }

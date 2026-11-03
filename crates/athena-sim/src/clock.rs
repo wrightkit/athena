@@ -3,14 +3,16 @@
 //! read it (athena#120). An unpaused clock advances each tick by the
 //! tick length: a `Pause Match Time` stops `Total Time Elapsed` and
 //! the match countdown alike. `Set Slow Motion` is recorded only at
-//! the factors P8 measured (`MEASURED_SLOW_MOTION`): there `Total Time
-//! Elapsed` and a `Wait(.., Ignore Condition)` read as at 100%. Any
-//! other factor stops `not_modeled` at the next tick or `Wait`.
+//! the range P8 and P9 measured (`MEASURED_SLOW_MOTION`): there `Total
+//! Time Elapsed` and a `Wait(.., Ignore Condition)` read as at 100%.
+//! Any other factor stops `not_modeled` at the next tick or `Wait`.
 //! `Match Time` before any `Set Match Time` is
 //! unanswerable — the lobby's phase limit is no input the scenario
 //! format carries — and a countdown reaching zero is the phase
 //! boundary the simulator does not run. The countdown and pause
 //! are modeled, not measured (`docs/findings.md`).
+
+use std::ops::RangeInclusive;
 
 use workshop_rs::Value;
 
@@ -20,9 +22,12 @@ use crate::step::World;
 use crate::unsupported;
 use crate::{Change, Finite, Stop, Val};
 
-/// The `Set Slow Motion` percents P8 measured: the 100 control and the
-/// 50 and 90 factors (`probes/p8-slow-motion-wait/capture.json`).
-const MEASURED_SLOW_MOTION: [f64; 3] = [100.0, 50.0, 90.0];
+/// The `Set Slow Motion` percents P8 and P9 measured: 100, 50 and 90
+/// (`probes/p8-slow-motion-wait`), then 10, 200, 0 and -50
+/// (`probes/p9-slow-motion-extremes`). The script timeline read as at
+/// 100% at every one, so the range between the extremes is taken as
+/// measured, clamped inputs included (#143).
+const MEASURED_SLOW_MOTION: RangeInclusive<f64> = -50.0..=200.0;
 
 /// The match clock: how far the run's game time has come, whether
 /// `Pause Match Time` holds it, the countdown `Match Time` reports
@@ -37,7 +42,7 @@ pub(crate) struct Clock {
     /// scenario format carries, so the read has no start value.
     pub match_time: Option<Finite>,
     /// The last `Set Slow Motion` percent; `100` is the client's
-    /// normal rate. Recorded only; it scales nothing (P8).
+    /// normal rate. Recorded only; it scales nothing (P8, P9).
     pub slow_motion: Finite,
     /// The game-time seconds elapsed; `Total Time Elapsed` reads the
     /// start offset plus this.
@@ -56,8 +61,8 @@ impl Clock {
         }
     }
 
-    /// Stop unless the last `Set Slow Motion` factor is one P8 measured;
-    /// the simulator's 16 ms tick mapping holds only for those.
+    /// Stop unless the last `Set Slow Motion` factor is inside the range P8 and P9
+    /// measured; the simulator's 16 ms tick mapping holds only there.
     pub(crate) fn require_measured_slow_motion(&self) -> Result<(), Stop> {
         let percent = self.slow_motion.get();
         if MEASURED_SLOW_MOTION.contains(&percent) {
