@@ -1,16 +1,16 @@
 //! The match clock: `Pause`/`Unpause Match Time`, `Set Match Time` and
 //! `Set Slow Motion` write it, `Match Time` and `Total Time Elapsed`
 //! read it (athena#120). An unpaused clock advances each tick by the
-//! tick length scaled by the slow-motion percent: a `Pause Match Time`
-//! stops `Total Time Elapsed` and the match countdown alike, and
-//! `Set Slow Motion` scales how fast both run. A `Wait` maps seconds
-//! to ticks the clock does not describe, so a `Wait` under a non-100
-//! factor — and a `Wait Until` whose timeout would suspend — stops
-//! `not_modeled` rather than guess the mapping. `Match Time` before
-//! any `Set Match Time` is unanswerable — the lobby's phase limit is
-//! no input the scenario format carries — and a countdown reaching
-//! zero is the phase boundary the simulator does not run. Modeled,
-//! not measured (`docs/findings.md`).
+//! tick length: a `Pause Match Time` stops `Total Time Elapsed` and
+//! the match countdown alike. `Set Slow Motion` is recorded only at
+//! the factors P8 measured (`MEASURED_SLOW_MOTION`): there `Total Time
+//! Elapsed` and a `Wait(.., Ignore Condition)` read as at 100%. Any
+//! other factor stops `not_modeled` at the next tick or `Wait`.
+//! `Match Time` before any `Set Match Time` is
+//! unanswerable — the lobby's phase limit is no input the scenario
+//! format carries — and a countdown reaching zero is the phase
+//! boundary the simulator does not run. The countdown and pause
+//! are modeled, not measured (`docs/findings.md`).
 
 use workshop_rs::Value;
 
@@ -20,9 +20,13 @@ use crate::step::World;
 use crate::unsupported;
 use crate::{Change, Finite, Stop, Val};
 
+/// The `Set Slow Motion` percents P8 measured: the 100 control and the
+/// 50 and 90 factors (`probes/p8-slow-motion-wait/capture.json`).
+const MEASURED_SLOW_MOTION: [f64; 3] = [100.0, 50.0, 90.0];
+
 /// The match clock: how far the run's game time has come, whether
 /// `Pause Match Time` holds it, the countdown `Match Time` reports
-/// and the `Set Slow Motion` percent that scales its rate.
+/// and the last `Set Slow Motion` percent.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Clock {
     /// `Pause Match Time` holds the clock; it advances only while
@@ -32,8 +36,8 @@ pub(crate) struct Clock {
     /// Time` writes it — the lobby's phase limit is not an input the
     /// scenario format carries, so the read has no start value.
     pub match_time: Option<Finite>,
-    /// The `Set Slow Motion` percent; `100` is the client's normal
-    /// rate.
+    /// The last `Set Slow Motion` percent; `100` is the client's
+    /// normal rate. Recorded only; it scales nothing (P8).
     pub slow_motion: Finite,
     /// The game-time seconds elapsed; `Total Time Elapsed` reads the
     /// start offset plus this.
@@ -52,19 +56,30 @@ impl Clock {
         }
     }
 
+    /// Stop unless the last `Set Slow Motion` factor is one P8 measured;
+    /// the simulator's 16 ms tick mapping holds only for those.
+    pub(crate) fn require_measured_slow_motion(&self) -> Result<(), Stop> {
+        let percent = self.slow_motion.get();
+        if MEASURED_SLOW_MOTION.contains(&percent) {
+            return Ok(());
+        }
+        unsupported(format!("Set Slow Motion at {percent}%"))
+    }
+
     /// Advance the clock into a tick: an unpaused clock gains
-    /// `tick_s` scaled by `slow_motion` on `elapsed` and loses the
-    /// same on `match_time`. A paused clock stands. A countdown that
-    /// reaches zero crosses the phase boundary the simulator does not
-    /// run — game-mode advancement is not modeled — so the run stops.
+    /// `tick_s` on `elapsed` and loses the same on `match_time`. A
+    /// paused clock stands. A countdown that reaches zero crosses the
+    /// phase boundary the simulator does not run — game-mode
+    /// advancement is not modeled — so the run stops. An unmeasured
+    /// slow-motion factor stops the run first.
     pub(crate) fn advance(&mut self, tick_s: f64) -> Result<(), Stop> {
+        self.require_measured_slow_motion()?;
         if self.paused {
             return Ok(());
         }
-        let step = tick_s * self.slow_motion.get() / 100.0;
-        self.elapsed = Finite::produced(self.elapsed.get() + step, "match clock")?;
+        self.elapsed = Finite::produced(self.elapsed.get() + tick_s, "match clock")?;
         if let Some(remaining) = self.match_time {
-            let remaining = remaining.get() - step;
+            let remaining = remaining.get() - tick_s;
             if remaining <= 0.0 {
                 return unsupported("matchTime reaching zero");
             }

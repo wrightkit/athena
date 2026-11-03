@@ -142,7 +142,7 @@ pub struct TimelineEntry {
     pub tick: u64,
     /// The tick's `Total Time Elapsed` in milliseconds: 15 + the
     /// elapsed game-time seconds. The match clock drives it, so a
-    /// paused or slowed clock repeats values across ticks.
+    /// paused clock repeats values across ticks.
     pub time: Finite,
     pub rules: Vec<RuleRun>,
     pub changes: Vec<Change>,

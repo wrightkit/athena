@@ -1,15 +1,95 @@
 {
   "probe": "p8-slow-motion-wait",
   "client": {
-    "version": "",
-    "date": "",
+    "version": "2.25.0.1 - 154504.1",
+    "date": "2026-11-03",
     "locale": "zh-CN"
   },
-  "runs": 0,
+  "runs": 3,
   "probe_sha256": "e369040ef4ebb0001975808ef05ae8287a8c21da720585b233bfe792f7898ce5",
   "hypothesis": "under Set Slow Motion(f) the tick still paces rule evaluation and Total Time Elapsed advances 16*f/100 ms per tick (P8m lines: 8, 14.4 and 16 ms at f=50, 90, 100), and Wait seconds map to ticks in that scaled time, so rounding still rounds up to a whole tick (P8w lines: elapsed_ms is the requested ms rounded up to a multiple of the scaled tick). The f=100 control repeats the P1 readings.",
-  "observed": [],
-  "result": "inconclusive",
-  "notes": "No captures yet; running the probe in the client is an owner step. The expected lines are hypotheses in expect.json. P8 is the one probe that calls Set Slow Motion itself; it must be the only rule loaded and it restores the factor to 100 at the end. If the log lines alone show the f=100 values at every factor, the [hh:mm:ss] timestamps decide whether the tick itself stretched (Wait(1) then takes about 2 s of wall time at f=50) or slow motion never reached the scheduler; the two readings print the same numbers.",
-  "sources": []
+  "observed": [
+    {
+      "factor": 100,
+      "metronome_t_ms": [
+        16,
+        32,
+        48,
+        64,
+        80,
+        96,
+        112,
+        128
+      ],
+      "wait_requested_ms": [
+        16,
+        100,
+        500,
+        1000
+      ],
+      "wait_elapsed_ms": [
+        16,
+        112,
+        512,
+        1008
+      ]
+    },
+    {
+      "factor": 50,
+      "metronome_t_ms": [
+        16,
+        32,
+        48,
+        64,
+        80,
+        96,
+        112,
+        128
+      ],
+      "wait_requested_ms": [
+        16,
+        100,
+        500,
+        1000
+      ],
+      "wait_elapsed_ms": [
+        16,
+        112,
+        512,
+        1008
+      ]
+    },
+    {
+      "factor": 90,
+      "metronome_t_ms": [
+        16,
+        32,
+        48,
+        64,
+        80,
+        96,
+        112,
+        128
+      ],
+      "wait_requested_ms": [
+        16,
+        100,
+        500,
+        1000
+      ],
+      "wait_elapsed_ms": [
+        16,
+        112,
+        512,
+        1008
+      ]
+    }
+  ],
+  "result": "mismatch",
+  "notes": "Three complete captures agree and disagree with the scaled-tick hypothesis. The client version was read on 2026-11-03. One separate attempt was discarded after an accidental character input. Inspector timestamps have one-second precision and do not independently measure wall time. Raw ASCII logs were received through UU Remote file transfer; the active log appeared empty until the game restarted. The game visibly slowed under factors 50 and 90 by eye, while the Inspector readings stayed identical to f=100; a rule cannot observe the factor. The cause is not measured: it may be a scaled simulation including the Inspector clock, or a game-world-only slowdown. P8 reads game time only, and the wall-clock ratio needs an external timer.",
+  "sources": [
+    "Log-2026-11-03-02-06-04.txt",
+    "Log-2026-11-03-02-09-16.txt",
+    "Log-2026-11-03-02-24-39.txt"
+  ]
 }

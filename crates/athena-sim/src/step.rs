@@ -593,16 +593,8 @@ pub(crate) fn run_instance(
                     if mode != WaitMode::Ignore && inst.event.is_some() {
                         return unsupported("wait behavior in an event-triggered rule");
                     }
+                    world.clock.require_measured_slow_motion()?;
                     let ticks = wait_ticks(number(&eval(seconds, &env)?)?);
-                    // The catalog's seconds-to-ticks mapping under a
-                    // non-100 `Set Slow Motion` factor is unmeasured —
-                    // stop rather than guess it (athena#120).
-                    if world.clock.slow_motion.get() != 100.0 {
-                        return unsupported(format!(
-                            "action wait under a {}% simulation rate",
-                            world.clock.slow_motion.get()
-                        ));
-                    }
                     inst.wake = Some(tick + ticks);
                     inst.wait_mode = mode;
                     advance(inst);
@@ -633,14 +625,7 @@ pub(crate) fn run_instance(
                     if timeout <= 0.0 {
                         return unsupported("Wait Until(false, 0)");
                     }
-                    // The same unmeasured seconds-to-ticks mapping as
-                    // `wait` gates a suspending `Wait Until`.
-                    if world.clock.slow_motion.get() != 100.0 {
-                        return unsupported(format!(
-                            "action waitUntil under a {}% simulation rate",
-                            world.clock.slow_motion.get()
-                        ));
-                    }
+                    world.clock.require_measured_slow_motion()?;
                     inst.wake = Some(tick + wait_ticks(timeout));
                     inst.wait_mode = WaitMode::Until(Frame { rule_idx, pc });
                     advance(inst);
