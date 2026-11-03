@@ -215,6 +215,15 @@ fn assert_unmeasured_stop(trace: &athena_sim::Trace, factor: u32) {
     );
 }
 
+/// Assert the stop happened at `tick`: tick 0 proves a `step.rs` gate,
+/// since the clock gate cannot stop before tick 1.
+fn assert_stopped_at_tick(trace: &athena_sim::Trace, tick: u64) {
+    let Outcome::NotModeled(not_modeled) = &trace.outcome else {
+        panic!("expected NotModeled, got {:?}", trace.outcome);
+    };
+    assert_eq!(not_modeled.tick, Some(tick));
+}
+
 #[test]
 fn waits_under_a_measured_factor_round_up_to_whole_ticks() {
     // P8 (measured): at 50% and 90% a `Wait(0.1)` still takes 112 ms.
@@ -243,11 +252,7 @@ fn a_wait_under_an_unmeasured_factor_is_not_modeled() {
             1.0,
         );
         assert_unmeasured_stop(&trace, factor);
-        assert_eq!(
-            trace.timeline.entries.len(),
-            1,
-            "the wait arm stops in the setting tick"
-        );
+        assert_stopped_at_tick(&trace, 0);
     }
 }
 
@@ -262,7 +267,7 @@ fn a_suspending_wait_until_under_an_unmeasured_factor_is_not_modeled() {
             1.0,
         );
         assert_unmeasured_stop(&trace, factor);
-        assert_eq!(trace.timeline.entries.len(), 1);
+        assert_stopped_at_tick(&trace, 0);
     }
 }
 

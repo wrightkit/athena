@@ -1,0 +1,5 @@
+[00:00:19] P7 max_health=375
+[00:00:19] P7 health_after_damage=275
+[00:00:19] P7 health_after_heal=355
+[00:00:19] P7 ability1_cooldown=20
+[00:00:19] P7 done
