@@ -1,9 +1,9 @@
 //! The match clock (athena#120): `Pause`/`Unpause Match Time`,
 //! `Set Match Time` and `Set Slow Motion` write it, `Match Time` and
 //! `Total Time Elapsed` read it, and every write records a
-//! `matchClock` change. `Set Slow Motion` is recorded only at the
-//! factors P8 measured (100, 50, 90), where `Total Time Elapsed` and
-//! `Wait` rounding read as at 100%; any other factor is `not_modeled`.
+//! `matchClock` change. `Set Slow Motion` is recorded only inside
+//! the range P8 and P9 measured (-50 to 200), where `Total Time Elapsed`
+//! and `Wait` rounding read as at 100%; any other factor is `not_modeled`.
 
 use athena_sim::{Change, Outcome, Val, run_scenario, run_text};
 
@@ -200,12 +200,16 @@ fn set_slow_motion_records_the_factor_and_leaves_game_time_unscaled() {
     );
 }
 
-/// Factors P8 did not measure.
-const UNMEASURED: [u32; 2] = [10, 200];
+/// Factors just outside the measured range, and far outside it.
+const UNMEASURED: [i32; 3] = [201, -51, 1000];
+
+/// Factors P8 and P9 measured: the 100 control, P8's 50 and 90, and
+/// P9's 10 and the clamped 200, 0 and -50.
+const MEASURED: [i32; 7] = [100, 50, 90, 10, 200, 0, -50];
 
 /// Assert the run stopped `not_modeled` on an unmeasured slow-motion
 /// factor, naming it.
-fn assert_unmeasured_stop(trace: &athena_sim::Trace, factor: u32) {
+fn assert_unmeasured_stop(trace: &athena_sim::Trace, factor: i32) {
     let Outcome::NotModeled(not_modeled) = &trace.outcome else {
         panic!("{factor}%: expected NotModeled, got {:?}", trace.outcome);
     };
@@ -226,8 +230,9 @@ fn assert_stopped_at_tick(trace: &athena_sim::Trace, tick: u64) {
 
 #[test]
 fn waits_under_a_measured_factor_round_up_to_whole_ticks() {
-    // P8 (measured): at 50% and 90% a `Wait(0.1)` still takes 112 ms.
-    for factor in [50, 90] {
+    // P8 and P9 (measured): at every measured factor a `Wait(0.1)`
+    // still takes 112 ms.
+    for factor in MEASURED {
         let trace = run(
             &format!(
                 "        Set Slow Motion({factor});
@@ -273,7 +278,7 @@ fn a_suspending_wait_until_under_an_unmeasured_factor_is_not_modeled() {
 
 #[test]
 fn a_wait_until_timeout_under_a_measured_factor_keeps_the_16_ms_ticks() {
-    for factor in [50, 90] {
+    for factor in MEASURED {
         let trace = run(
             &format!(
                 "        Set Slow Motion({factor});
@@ -303,16 +308,16 @@ fn an_unmeasured_factor_stops_the_clock_even_with_no_wait() {
 fn a_paused_clock_under_an_unmeasured_factor_is_not_modeled() {
     let trace = run(
         "        Pause Match Time;
-        Set Slow Motion(10);",
+        Set Slow Motion(201);",
         1.0,
     );
-    assert_unmeasured_stop(&trace, 10);
+    assert_unmeasured_stop(&trace, 201);
 }
 
 /// A rule that sets `factor` in the tick after `waiter` suspends at
 /// 100%: the resume path must stop at the wake, not run the stale
 /// schedule.
-fn slow_rule(factor: u32) -> String {
+fn slow_rule(factor: i32) -> String {
     format!(
         r#"
 rule ("slow") {{
