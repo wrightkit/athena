@@ -1,6 +1,6 @@
 # 探针操作与判定
 
-本文是各探针判定条件和操作步骤的出处。有 `probes/<id>/expect.json` 的探针（P0 到 P4、P6、P7、P8），其预期日志行以该文件为唯一出处；P5 的统计判定在其 `expect.json` 的 `verdict` 字段。下文表中的预期列只作说明；`athena ingest` 按 `expect.json` 判定（见 [capture-convention.md](capture-convention.md#ingesting-a-log)）。结果状态（`runs`、`result`）以各探针目录下的 `capture.json` 为准，这里不记录。运行流程见 workspace skill `wrightkit-run-workshop-probe`；`capture.json` 的格式见 [capture-convention.md](capture-convention.md)。
+本文是各探针判定条件和操作步骤的出处。有 `probes/<id>/expect.json` 的探针（P0 到 P4、P6 到 P9），其预期日志行以该文件为唯一出处；P5 的统计判定在其 `expect.json` 的 `verdict` 字段。下文表中的预期列只作说明；`athena ingest` 按 `expect.json` 判定（见 [capture-convention.md](capture-convention.md#ingesting-a-log)）。结果状态（`runs`、`result`）以各探针目录下的 `capture.json` 为准，这里不记录。运行流程见 workspace skill `wrightkit-run-workshop-probe`；`capture.json` 的格式见 [capture-convention.md](capture-convention.md)。
 
 ## 探针清单
 
@@ -16,6 +16,7 @@
 | P6 | 三种 Wait Behavior 在条件变假、再变真时的处理 | 用各规则启动次数、完成次数及完成时间区分忽略、中止、重新开始 |
 | P7 | heroes 设置作用于上报的玩家状态：health% 放大 Max Health，damageReceived%/healingReceived% 缩放脚本 Damage/Heal，abilityCooldown% 作用于技能冷却 | 四行读数与预期是否一致；`ability1_cooldown` 为 20 说明 `Set Ability Cooldown` 是绝对写入，为 10 说明它也被 50% 缩放 |
 | P8 | `Set Slow Motion(f)` 下 `Total Time Elapsed` 每 tick 前进 16*f/100 ms，Wait 仍按缩放后的 tick 向上取整 | P8m 的逐 tick 步长（f=50 为 8、f=90 为 14.4、f=100 为 16）区分按倍率缩放还是恒定 16；P8w 的 elapsed_ms 区分按缩放 tick 取整（f=50 时 0.1→104）还是仍按 16 ms tick 计（f=50 时 0.1→56）；各倍率读数若与 f=100 相同，看日志时间戳区分 tick 拉长（Wait(1) 在 f=50 占约 2 秒墙钟）与慢动作未作用到调度 |
+| P9 | `Set Slow Motion(f)` 在极端倍率（10、200、0、-50）下对脚本时间线无作用：`Total Time Elapsed` 每 tick 仍前进 16 ms，Wait 仍向上取整到整 16 ms tick，与 f=100 相同 | P9m 的逐 tick 步长（预期恒为 16）与 P9w 的 elapsed_ms（预期 16→16、100→112、1000→1008）逐倍率比对；某倍率与预期不符，说明客户端对该倍率钳制或作用于调度，按倍率分别记录 |
 
 P5 用 `Start Forcing Throttle` 强制主机玩家向前移动，无需手动操作。脚本会一直等到主机玩家选好英雄并出生（最长 10 分钟），所以开局后正常选英雄即可；不要在观战状态下跑。前方要有约 3 秒的跑道。
 
@@ -27,7 +28,7 @@ P7 把英雄池限制为 Ana（`enabledHeroes`）。设置里还有一个空的 
 
 ### 通用步骤
 
-1. 新建自定义游戏，选 Workshop 模式，打开 Workshop Inspector 和 Inspector 记录。慢动作（`Set Slow Motion`）是 Workshop 动作，不是界面开关；P8 是唯一自己调用它的探针，必须单独加载，其余探针文件都不含它，所以粘贴前清空全部已有规则，就保证没有别的规则调用它。
+1. 新建自定义游戏，选 Workshop 模式，打开 Workshop Inspector 和 Inspector 记录。慢动作（`Set Slow Motion`）是 Workshop 动作，不是界面开关；P8 和 P9 是仅有的自己调用它的探针，必须单独加载，其余探针文件都不含它，所以粘贴前清空全部已有规则，就保证没有别的规则调用它。
 2. 粘贴一个 `.zh-CN.ow`（中文客户端；`probe.workshop` 是可读源码，不用于粘贴），一次只跑一个探针，开始游戏，不要操作角色。每个探针开头都有 `Wait(3)`，无需手动操作（P5 需要主机玩家出生，见上方探针清单）。
 3. 约 3 秒后日志开始出现；见到该探针最后一行（见下表，即 `expect.json` 的 `end`）后，取出 Inspector 内容，存成一份独立的日志文件。变量块是复制时的末态，用来核对循环是否跑完、`runs` 等计数，不用来判断时序；`athena ingest` 只读 log 行。
 4. 重复两次，每次一份独立日志、不同的文件名。
@@ -58,6 +59,7 @@ P7 把英雄池限制为 Ana（`enabledHeroes`）。设置里还有一个空的 
 | P5 | 开局后选英雄并出生，前方要有约 3 秒的跑道；脚本最长等 10 分钟。不要在观战状态下跑。`P5 start` 行的 `spawned` 为假或 `pos` 为 0，本次作废。 |
 | P7 | 开局后选 Ana 并出生。`P7 max_health` 等行显示 0 或缺行，说明读取时玩家未出生，本次作废，重跑。 |
 | P8 | 无。开局后不要操作角色。它是唯一调用 `Set Slow Motion` 的探针，必须只粘贴这一个探针；结尾动作把倍率重置为 100，见 `P8 done` 后可正常取日志。 |
+| P9 | 无。开局后不要操作角色。它自己调用 `Set Slow Motion`，必须只粘贴这一个探针，结尾动作把倍率重置为 100。倍率 0 和 -50 排在最后：若客户端在某倍率下停住模拟，脚本无法恢复 100，此时退出对局，保留已有的 Inspector 日志作为证据（缺 `P9 done`，`athena ingest` 会拒收，需另行记录）。 |
 
 **取回日志**
 
@@ -92,6 +94,7 @@ P7 把英雄池限制为 Ana（`enabledHeroes`）。设置里还有一个空的 
 | P5 | `P5 i=187 ...` | 开头一行 `P5 start spawned=真 pos=(x, y, z)`（`spawned` 为假或 `pos` 为 0 说明主机玩家没有出生，本次作废）；然后 188 行。`pos` 约 38 个不同值，`everyframe` 约 188 个不同值 | pos 不同值个数接近 38 → match；pos 也接近 188 → mismatch，以实测为准；pos 恒定或为 0 → 主机玩家没出生，本次作废 |
 | P7 | `P7 done` | `max_health`=375，`health_after_damage`=275，`health_after_heal`=355，`ability1_cooldown`=20 | 四行与预期逐一比对，全部一致为 match；任一行不符记下实际值（cooldown 为 10 说明 `abilityCooldown%` 也缩放脚本写入） |
 | P8 | `P8 done` | 每个倍率先 8 行 P8m（f=100 步长 16、f=50 步长 8、f=90 步长 14.4），再 4 行 P8w（f=100：16→16、100→112、500→512、1000→1008；f=50：16→16、100→104、500→504、1000→1000；f=90：16→28.8、100→100.8、500→504、1000→1008），共 37 行 | 全部一致 → match；任一行不符记 mismatch 并保留实际值（P8w 区分按缩放 tick 取整还是仍按 16 ms tick 计，P8m 区分 TTE 按倍率缩放还是恒定 16）；各倍率读数若与 f=100 相同，看 `[hh:mm:ss]` 时间戳区分 tick 拉长与慢动作未作用到调度 |
+| P9 | `P9 done` | 每个倍率（10、200、0、-50 依次）先 4 行 P9m（t_ms 依次 16、32、48、64），再 3 行 P9w（16→16、100→112、1000→1008），共 29 行 | 全部一致 → match；任一行不符记 mismatch 并保留实际值，注明是哪个倍率（钳制到下限、负值被当作其他值、或 200 超过 100 的处理） |
 
 ### P3 的 driver 末尾变体
 
