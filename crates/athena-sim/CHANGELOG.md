@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.1](https://github.com/wrightkit/athena/compare/v0.13.0...v0.13.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* **sim:** leave game time unscaled under measured Set Slow Motion factors ([#139](https://github.com/wrightkit/athena/issues/139)) ([ab25e57](https://github.com/wrightkit/athena/commit/ab25e57b3a12f0321e9cb68e3b1727a037d7128b))
+* **sim:** treat Set Slow Motion as no-effect across the measured -50..200 range ([#148](https://github.com/wrightkit/athena/issues/148)) ([272df93](https://github.com/wrightkit/athena/commit/272df931186a9d864a1dc2de4b8ec85b49373c35)), closes [#143](https://github.com/wrightkit/athena/issues/143)
+
 ## [0.13.0](https://github.com/wrightkit/athena/compare/v0.12.0...v0.13.0) (2026-10-28)
 
 
