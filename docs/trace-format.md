@@ -13,7 +13,7 @@ Each entry:
 | Field | Meaning |
 | --- | --- |
 | `tick` | The tick. |
-| `time` | The tick's `Total Time Elapsed` in milliseconds: 15 + the run's elapsed game time (tick·16 at the normal rate). The match clock drives it — `Pause Match Time` holds it, so a paused clock repeats values across ticks; `Set Slow Motion` does not change it. |
+| `time` | The tick's `Total Time Elapsed` in milliseconds: 15 + the run's elapsed game time (tick·16 at the normal rate). The match clock drives it — `Pause Match Time` holds it, so a paused clock repeats values across ticks; `Set Slow Motion` does not change it at the measured factors 50 and 90; any other factor ends the run `not_modeled`. |
 | `rules` | The rule executions that started, resumed or ended on the tick, in execution order. See below. |
 | `changes` | The state changes the executions made, in execution order across rules. See below. |
 

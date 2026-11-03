@@ -2,10 +2,11 @@
 //! `Set Slow Motion` write it, `Match Time` and `Total Time Elapsed`
 //! read it (athena#120). An unpaused clock advances each tick by the
 //! tick length: a `Pause Match Time` stops `Total Time Elapsed` and
-//! the match countdown alike. `Set Slow Motion` is recorded only: at
-//! 50% and 90% `Total Time Elapsed` and a `Wait(.., Ignore
-//! Condition)` read as at 100% (P8, measured); every other timer is
-//! modeled to follow them. `Match Time` before any `Set Match Time` is
+//! the match countdown alike. `Set Slow Motion` is recorded only at
+//! the factors P8 measured (`MEASURED_SLOW_MOTION`): there `Total Time
+//! Elapsed` and a `Wait(.., Ignore Condition)` read as at 100%. Any
+//! other factor stops `not_modeled` at the next tick or `Wait`.
+//! `Match Time` before any `Set Match Time` is
 //! unanswerable — the lobby's phase limit is no input the scenario
 //! format carries — and a countdown reaching zero is the phase
 //! boundary the simulator does not run. The countdown and pause
@@ -18,6 +19,10 @@ use crate::load::Instance;
 use crate::step::World;
 use crate::unsupported;
 use crate::{Change, Finite, Stop, Val};
+
+/// The `Set Slow Motion` percents P8 measured: the 100 control and the
+/// 50 and 90 factors (`probes/p8-slow-motion-wait/capture.json`).
+const MEASURED_SLOW_MOTION: [f64; 3] = [100.0, 50.0, 90.0];
 
 /// The match clock: how far the run's game time has come, whether
 /// `Pause Match Time` holds it, the countdown `Match Time` reports
@@ -51,12 +56,24 @@ impl Clock {
         }
     }
 
+    /// Stop unless the last `Set Slow Motion` factor is one P8 measured;
+    /// the simulator's 16 ms tick mapping holds only for those.
+    pub(crate) fn require_measured_slow_motion(&self) -> Result<(), Stop> {
+        let percent = self.slow_motion.get();
+        if MEASURED_SLOW_MOTION.contains(&percent) {
+            return Ok(());
+        }
+        unsupported(format!("Set Slow Motion at {percent}%"))
+    }
+
     /// Advance the clock into a tick: an unpaused clock gains
     /// `tick_s` on `elapsed` and loses the same on `match_time`. A
     /// paused clock stands. A countdown that reaches zero crosses the
     /// phase boundary the simulator does not run — game-mode
-    /// advancement is not modeled — so the run stops.
+    /// advancement is not modeled — so the run stops. An unmeasured
+    /// slow-motion factor stops the run first.
     pub(crate) fn advance(&mut self, tick_s: f64) -> Result<(), Stop> {
+        self.require_measured_slow_motion()?;
         if self.paused {
             return Ok(());
         }

@@ -593,6 +593,7 @@ pub(crate) fn run_instance(
                     if mode != WaitMode::Ignore && inst.event.is_some() {
                         return unsupported("wait behavior in an event-triggered rule");
                     }
+                    world.clock.require_measured_slow_motion()?;
                     let ticks = wait_ticks(number(&eval(seconds, &env)?)?);
                     inst.wake = Some(tick + ticks);
                     inst.wait_mode = mode;
@@ -624,6 +625,7 @@ pub(crate) fn run_instance(
                     if timeout <= 0.0 {
                         return unsupported("Wait Until(false, 0)");
                     }
+                    world.clock.require_measured_slow_motion()?;
                     inst.wake = Some(tick + wait_ticks(timeout));
                     inst.wait_mode = WaitMode::Until(Frame { rule_idx, pc });
                     advance(inst);
