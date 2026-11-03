@@ -244,14 +244,13 @@ fn p6_wait_behavior() {
 }
 
 #[test]
-#[ignore = "no captures yet (`runs` is 0)"]
 fn p7_hero_settings() {
     check_probe("p7-hero-settings");
 }
 
-/// P7 is `inconclusive`: it has no captures. This test does not assert
-/// client behavior; it checks the simulator's modeled player state produces
-/// the hypothesis lines in `expect.json`, and that a bare `run_text` — no
+/// `p7_hero_settings` asserts the P7 client capture. This test does not
+/// assert client behavior; it checks the simulator's modeled player state
+/// produces the lines in `expect.json`, and that a bare `run_text` — no
 /// scenario, so no player — reports the probe `not_modeled`. The values are
 /// test-loaded so the check does not wait on a workshop-rs release.
 #[test]

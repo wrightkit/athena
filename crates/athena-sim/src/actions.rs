@@ -186,8 +186,8 @@ fn run(
                 return unsupported("setAbilityCooldown arguments");
             };
             // `Set Ability Cooldown` writes the reported cooldown for
-            // the slot literally; whether `abilityCooldown%` also
-            // scales it is what P7 is for.
+            // the slot literally; P7 measured that `abilityCooldown%`
+            // does not scale the write.
             let ids = player_ids(player, &env)?;
             let slot = button_slot(button)?;
             let seconds =

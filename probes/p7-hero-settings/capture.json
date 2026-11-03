@@ -22,7 +22,7 @@
     }
   ],
   "result": "match",
-  "notes": "All three runs gave the same four readings. Set Ability Cooldown wrote 20 literally, so abilityCooldown% 50 did not scale the scripted write. The probe measures script-applied damage, healing and cooldown writes, not natural ability cooldowns. The client version was read on 2026-11-03; the versions of runs 1 and 2 were not recorded. Raw logs were received through UU Remote file transfer.",
+  "notes": "All three runs gave the same four readings. Set Ability Cooldown wrote 20 literally, so abilityCooldown% 50 did not scale the scripted write. The probe measures script-applied damage, healing and cooldown writes, not natural ability cooldowns. The client version was read on 2026-11-03; the versions of runs 1 and 2 were not recorded. Balance version: workshop-rs names the client version of its hero-values file as `balanceVersion` (CURRENT_VERSION `2.25.0.0 - 154461.1`), not a named patch. This capture's client is 2.25.0.1 and workshop-rs has no file for it, so the balance version of the Ana 250 health reading is not determinable; the 375 reading only matches a 250 base. Raw logs were received through UU Remote file transfer.",
   "sources": [
     "Log-2026-10-27-18-29-27.txt",
     "Log-2026-11-02-16-11-32.txt",
