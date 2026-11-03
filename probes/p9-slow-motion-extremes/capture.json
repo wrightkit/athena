@@ -1,0 +1,15 @@
+{
+  "probe": "p9-slow-motion-extremes",
+  "client": {
+    "version": "",
+    "date": "",
+    "locale": "zh-CN"
+  },
+  "runs": 0,
+  "probe_sha256": "33f9bad09938e955b2eaccb3b6e91dc571e92481c0021f8b81b7d780f93c33b5",
+  "hypothesis": "Set Slow Motion has no effect on the script timeline at extreme factors: the documented maximum is 100, and the client's minimum is not documented, so the probe measures 10, 200, 0 and -50. At every factor Total Time Elapsed advances 16 ms per tick (P9m lines: 16, 32, 48, 64) and Wait rounds up to whole 16 ms ticks (P9w lines: 16->16, 100->112, 1000->1008), as at 100.",
+  "observed": [],
+  "result": "inconclusive",
+  "notes": "No captures yet; running the probe in the client is an owner step. The expected lines are hypotheses in expect.json. P9 calls Set Slow Motion itself; it must be the only rule loaded and it restores the factor to 100 at the end. Factors 0 and -50 run last: if the client stops the simulation at a factor, the script cannot restore 100, so leave the match and keep the Inspector log up to that point as evidence. A factor whose lines differ from the expected ones is a mismatch for that factor.",
+  "sources": []
+}
