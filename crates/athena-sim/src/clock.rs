@@ -2,10 +2,10 @@
 //! `Set Slow Motion` write it, `Match Time` and `Total Time Elapsed`
 //! read it (athena#120). An unpaused clock advances each tick by the
 //! tick length: a `Pause Match Time` stops `Total Time Elapsed` and
-//! the match countdown alike. `Set Slow Motion` changes no clock a
-//! rule can read: game time per tick and the seconds-to-ticks mapping
-//! of a `Wait` stay as they are (P8, measured at 50% and 90%); the
-//! write is recorded only. `Match Time` before any `Set Match Time` is
+//! the match countdown alike. `Set Slow Motion` is recorded only: at
+//! 50% and 90% `Total Time Elapsed` and a `Wait(.., Ignore
+//! Condition)` read as at 100% (P8, measured); every other timer is
+//! modeled to follow them. `Match Time` before any `Set Match Time` is
 //! unanswerable — the lobby's phase limit is no input the scenario
 //! format carries — and a countdown reaching zero is the phase
 //! boundary the simulator does not run. The countdown and pause
@@ -32,7 +32,7 @@ pub(crate) struct Clock {
     /// scenario format carries, so the read has no start value.
     pub match_time: Option<Finite>,
     /// The last `Set Slow Motion` percent; `100` is the client's
-    /// normal rate. Recorded only: no clock a rule can read moves (P8).
+    /// normal rate. Recorded only; it scales nothing (P8).
     pub slow_motion: Finite,
     /// The game-time seconds elapsed; `Total Time Elapsed` reads the
     /// start offset plus this.
@@ -53,8 +53,9 @@ impl Clock {
 
     /// Advance the clock into a tick: an unpaused clock gains
     /// `tick_s` on `elapsed` and loses the same on `match_time`. A
-    /// paused clock stands. A countdown that reaches zero crosses the phase boundary the simulator does not
-    /// run — game-mode advancement is not modeled — so the run stops.
+    /// paused clock stands. A countdown that reaches zero crosses the
+    /// phase boundary the simulator does not run — game-mode
+    /// advancement is not modeled — so the run stops.
     pub(crate) fn advance(&mut self, tick_s: f64) -> Result<(), Stop> {
         if self.paused {
             return Ok(());

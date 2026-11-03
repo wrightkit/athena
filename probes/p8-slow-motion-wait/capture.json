@@ -86,7 +86,7 @@
     }
   ],
   "result": "mismatch",
-  "notes": "Three complete captures agree and disagree with the scaled-tick hypothesis. The client version was read on 2026-11-03. One separate attempt was discarded after an accidental character input. Inspector timestamps have one-second precision and do not independently measure wall time. Raw ASCII logs were received through UU Remote file transfer; the active log appeared empty until the game restarted. The game visibly slowed under factors 50 and 90 while the Inspector readings stayed identical to f=100: the slow-motion rate scales the whole simulation, including the Inspector clock, so rules cannot observe it. P8 measures game time only; the wall-clock ratio needs an external timer and is not measured.",
+  "notes": "Three complete captures agree and disagree with the scaled-tick hypothesis. The client version was read on 2026-11-03. One separate attempt was discarded after an accidental character input. Inspector timestamps have one-second precision and do not independently measure wall time. Raw ASCII logs were received through UU Remote file transfer; the active log appeared empty until the game restarted. The game visibly slowed under factors 50 and 90 by eye, while the Inspector readings stayed identical to f=100; a rule cannot observe the factor. The cause is not measured: it may be a scaled simulation including the Inspector clock, or a game-world-only slowdown. P8 reads game time only, and the wall-clock ratio needs an external timer.",
   "sources": [
     "Log-2026-11-03-02-06-04.txt",
     "Log-2026-11-03-02-09-16.txt",

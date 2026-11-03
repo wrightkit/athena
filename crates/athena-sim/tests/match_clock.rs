@@ -1,8 +1,8 @@
 //! The match clock (athena#120): `Pause`/`Unpause Match Time`,
 //! `Set Match Time` and `Set Slow Motion` write it, `Match Time` and
 //! `Total Time Elapsed` read it, and every write records a
-//! `matchClock` change. `Set Slow Motion` changes nothing a rule can
-//! read: game time per tick and `Wait` rounding stay as at 100% (P8).
+//! `matchClock` change. `Set Slow Motion` is recorded only: `Total Time
+//! Elapsed` and `Wait` rounding read as at 100% (P8).
 
 use athena_sim::{Change, Outcome, Val, run_text};
 
@@ -249,6 +249,19 @@ rule ("slow") {
     };
     assert_eq!((start.tick, start.time.get()), (0, 15.0));
     assert_eq!((wake.tick, wake.time.get()), (1, 31.0));
+}
+
+#[test]
+fn a_wait_until_timeout_under_a_non_100_factor_keeps_the_16_ms_ticks() {
+    // Modeled, not measured: P8 reads only `Wait(.., Ignore Condition)`.
+    let trace = run(
+        "        Set Slow Motion(50);
+        Wait Until(False, 0.1);
+        Set Global Variable(t0, Total Time Elapsed);",
+        1.0,
+    );
+    assert_eq!(trace.outcome, Outcome::Complete);
+    assert_eq!(trace.globals["t0"], Val::number(0.127));
 }
 
 #[test]
