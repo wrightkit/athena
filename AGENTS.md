@@ -5,8 +5,8 @@ workspace-level `AGENTS.md` when available, then follow this file. `README.md` a
 `docs/` are English except `docs/procedure.zh-CN.md`, the Chinese probe procedure.
 
 `athena` holds **runtime-behavior probes** for Overwatch Workshop rules and the
-captures recorded from the real client, so that a later scheduler simulator can
-assert against measured behavior instead of community notes.
+captures recorded from the real client, so that the scheduler simulator
+(`crates/athena-sim`) asserts against measured behavior instead of community notes.
 
 ## Docs routing
 
