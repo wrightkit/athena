@@ -145,9 +145,6 @@ fn a_non_member_argument_is_not_modeled() {
     }
 }
 
-/// The result is a player array the array values read: `Count Of` its
-/// length, `Filtered Array` over its elements, `Array Contains` its
-/// membership.
 #[test]
 fn the_result_feeds_the_array_values() {
     let trace = run(

@@ -12,10 +12,8 @@ fn scenario(players: &str) -> String {
     format!(r#"{{ "scenarioVersion": 1, "seconds": 2, "players": {players} }}"#)
 }
 
-/// Two players on different teams.
 const TWO_TEAMS: &str = r#"[{ "id": "p1", "team": "team1" }, { "id": "p2", "team": "team2" }]"#;
 
-/// One HUD text, visible to `All Players(Team 1)`.
 const TEAM_HUD: &str = r#"
 variables {
     global:
@@ -97,7 +95,6 @@ fn a_destroyed_element_keeps_its_entry_with_destroyed_tick() {
     assert_eq!(trace.hud.len(), 2);
 }
 
-/// A progress bar and a HUD text, each destroyed by its own destroy action.
 const PROGRESS_BAR: &str = r#"
 rule ("init") {
     event {
@@ -138,7 +135,6 @@ fn a_progress_bar_records_its_arguments() {
     assert_eq!(hud_text.destroyed_tick, None);
 }
 
-/// Messages and an objective description in an event rule.
 const MESSAGES: &str = r#"
 variables {
     player:

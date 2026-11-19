@@ -6,7 +6,6 @@ fn run(text: &str) -> athena_sim::Trace {
     run_text(text, Options { seconds: 2.0 }).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// One setting of each kind, read into a global.
 const DEFAULTS: &str = r#"
 variables {
     global:
@@ -42,7 +41,6 @@ fn each_setting_kind_evaluates_to_its_default() {
     assert_eq!(trace.globals["hero"], Val::Text("ANA".into()));
 }
 
-/// A setting read in a rule condition and in an action argument.
 const CONDITION_AND_ARGUMENT: &str = r#"
 variables {
     global:

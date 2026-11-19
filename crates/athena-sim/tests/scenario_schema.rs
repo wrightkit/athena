@@ -43,7 +43,6 @@ fn schema_accepts_valid_and_rejects_invalid_examples() {
     assert!(invalid >= 3, "expected at least three invalid examples");
 }
 
-/// The schema fragments of one object, with `$ref` followed.
 fn resolve<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
     match schema["$ref"].as_str() {
         Some(reference) => resolve(root, root.pointer(&reference[1..]).unwrap()),
@@ -51,7 +50,6 @@ fn resolve<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
     }
 }
 
-/// The first value of `key` among the fragments.
 fn first<'a>(fragments: &[&'a Value], key: &str) -> Option<&'a Value> {
     fragments.iter().find_map(|fragment| fragment.get(key))
 }

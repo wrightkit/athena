@@ -14,7 +14,6 @@ fn run(text: &str, scenario: &str) -> athena_sim::Trace {
     run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// The names of the rules that ran on a tick, in execution order.
 fn run_names(trace: &athena_sim::Trace, tick: usize) -> Vec<&str> {
     trace.timeline.entries[tick]
         .rules
@@ -23,7 +22,6 @@ fn run_names(trace: &athena_sim::Trace, tick: usize) -> Vec<&str> {
         .collect()
 }
 
-/// A `Player Left Match` counter.
 const LEFT_RULE: &str = r#"
 variables {
     global:
@@ -146,7 +144,6 @@ rule ("died") {
 }
 "#;
 
-/// Two players: the host dealer on team 1, the victim on team 2.
 const DUEL: &str = r#"{
     "scenarioVersion": 1,
     "seconds": 1,

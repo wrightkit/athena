@@ -19,7 +19,6 @@ fn ended(trace: &athena_sim::Trace) -> &RunEnd {
         .ended
 }
 
-/// `Skip` steps over exactly its count.
 const SKIP: &str = r#"
 variables {
     global:
@@ -49,7 +48,6 @@ fn skip_steps_over_exactly_its_count() {
     assert_eq!(trace.globals["b"], Val::number(7.0));
 }
 
-/// `Skip(0)` skips nothing; `Skip` past the list ends the run.
 #[test]
 fn a_zero_skip_skips_nothing_and_skipping_past_the_end_finishes() {
     let text = r#"
@@ -78,7 +76,6 @@ rule ("t") {
     assert_eq!(*ended(&trace), RunEnd::Finished);
 }
 
-/// `Skip If` skips only when its condition holds; a `True` count is one.
 #[test]
 fn skip_if_skips_on_true_and_a_boolean_count_is_one() {
     let text = r#"
@@ -159,7 +156,6 @@ rule ("t") {
     assert_eq!(trace.globals["b"], Val::number(2.0));
 }
 
-/// `Abort` ends the action list and records `aborted`.
 #[test]
 fn abort_ends_the_run_aborted() {
     let text = r#"
@@ -187,7 +183,6 @@ rule ("t") {
     assert_eq!(*ended(&trace), RunEnd::Aborted);
 }
 
-/// `Abort If` ends the run only when its condition holds.
 #[test]
 fn abort_if_ends_the_run_only_on_true() {
     let text = r#"
@@ -215,7 +210,6 @@ rule ("t") {
     assert_eq!(*ended(&trace), RunEnd::Aborted);
 }
 
-/// An `Abort` inside a subroutine kills the caller's run too.
 #[test]
 fn an_abort_inside_a_subroutine_kills_the_caller() {
     let text = r#"
@@ -257,7 +251,6 @@ rule ("Subroutine die") {
     assert_eq!(*ended(&trace), RunEnd::Aborted);
 }
 
-/// A bare `Loop` never ends; the step limit stops the run `not_modeled`.
 #[test]
 fn a_loop_that_never_ends_stops_at_the_step_limit() {
     let text = r#"
@@ -280,7 +273,6 @@ rule ("t") {
     assert!(stop.construct.contains("steps"), "{stop:?}");
 }
 
-/// `Loop If` re-checks its condition on every pass.
 #[test]
 fn loop_if_rechecks_its_condition_each_pass() {
     let text = r#"
@@ -509,7 +501,6 @@ rule ("t") {
     assert_eq!(trace.globals["x"], Val::number(2.0));
 }
 
-/// `Break` outside any loop is not modeled.
 #[test]
 fn a_break_outside_a_loop_is_not_modeled() {
     let text = r#"

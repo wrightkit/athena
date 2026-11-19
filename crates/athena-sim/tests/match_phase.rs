@@ -15,8 +15,6 @@ const READS: &[(&str, &str)] = &[
     ("Is Match Complete", "matchComplete"),
 ];
 
-/// One `Ongoing - Global` rule that writes the read's answer to `g` at
-/// tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"

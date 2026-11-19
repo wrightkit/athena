@@ -36,8 +36,6 @@ fn test_values() -> workshop_rs::hero_values::HeroValues {
     .expect("the test hero values load")
 }
 
-/// A program with a `settings.heroes` block and a rule whose actions are
-/// given verbatim; the event player triggers them.
 fn hero_settings_program(heroes: &str, actions: &str) -> String {
     format!(
         r#"
@@ -61,7 +59,6 @@ rule ("act") {{
     )
 }
 
-/// A scenario with the given players and one join event on `event_player`.
 fn hero_settings_scenario(players: &str, event_player: &str) -> String {
     format!(
         r#"{{ "scenarioVersion": 1, "seconds": 1,
@@ -80,7 +77,6 @@ fn hero_settings_scenario_v2(players: &str, event_player: &str) -> String {
     )
 }
 
-/// A version-2 player row declaring `state` keys.
 fn state_player(id: &str, hero: &str, team: &str, state: &str) -> String {
     format!(r#"{{ "id": "{id}", "hero": "{hero}", "team": "{team}", "state": {state} }}"#)
 }

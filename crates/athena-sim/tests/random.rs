@@ -210,8 +210,6 @@ fn a_draw_is_recorded_on_the_tick_changes() {
     );
 }
 
-/// A `Wait Until` in a `Call Subroutine` frame keeps the subroutine's
-/// rule index on the draws its per-tick re-checks record.
 #[test]
 fn a_wait_until_recheck_records_the_subroutines_rule() {
     let text = r#"
@@ -254,8 +252,6 @@ rule ("Subroutine sub") {
     assert!(rules.iter().all(|rule| *rule == 1), "{rules:?}");
 }
 
-/// Finite bounds can still span a range `Max - Min` cannot hold: the run
-/// stops `not_modeled`, as for a non-finite bound.
 #[test]
 fn a_non_finite_range_is_not_modeled() {
     for value in [
@@ -271,8 +267,6 @@ fn a_non_finite_range_is_not_modeled() {
     }
 }
 
-/// `seed` is an unsigned 64-bit integer: `u64::MAX` loads, `null` is not
-/// "absent" and `2^64` is past the range.
 #[test]
 fn the_seed_is_an_unsigned_64_bit_integer() {
     let text = set_global("Random Integer(0, 9)");

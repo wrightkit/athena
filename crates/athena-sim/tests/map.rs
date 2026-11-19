@@ -74,8 +74,6 @@ fn without_the_field_a_current_map_read_is_a_missing_input() {
     assert_eq!(trace.missing_inputs[0].input, MissingInputKind::Map);
 }
 
-/// `map` names a catalog `Map` member, like `hero` names a `Hero` one:
-/// an unknown name is a load error and an empty one is malformed.
 #[test]
 fn an_unknown_or_empty_map_fails_the_load() {
     let text = set_global("Current Map");

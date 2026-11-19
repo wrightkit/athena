@@ -123,7 +123,6 @@ rule ("kill") {
 }
 "#;
 
-/// Reads `Hero` and `Team Of` of the event player.
 const HERO_TEAM: &str = r#"
 variables {
     global:
@@ -144,7 +143,6 @@ rule ("who") {
 }
 "#;
 
-/// Reads an event value.
 const DAMAGE_RULE: &str = r#"
 variables {
     global:
@@ -163,7 +161,6 @@ rule ("hit") {
 }
 "#;
 
-/// Writes a log line when the event fires.
 const LOGGER: &str = r#"
 rule ("log") {
     event {

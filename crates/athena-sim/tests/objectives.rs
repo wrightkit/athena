@@ -28,7 +28,6 @@ rule ("probe") {{
     )
 }
 
-/// Three objective positions, entry `i` the point `(10·i + 1, i, 0)`.
 const OBJECTIVES: &str = r#""objectives": [
         { "x": 1, "y": 0, "z": 0 },
         { "x": 11, "y": 1, "z": 0 },

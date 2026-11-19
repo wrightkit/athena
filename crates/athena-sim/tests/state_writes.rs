@@ -13,7 +13,6 @@ fn run(text: &str, scenario: &str) -> athena_sim::Trace {
     run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// One `Ongoing - Global` rule running `actions`.
 fn program(actions: &str) -> String {
     format!(
         r#"

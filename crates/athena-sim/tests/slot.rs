@@ -3,7 +3,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, RunError, ScenarioError, Val, run_scenario};
 
-/// Reads `Slot Of` of the event player.
 const SLOT_OF: &str = r#"
 variables {
     global:
@@ -22,7 +21,6 @@ rule ("slot") {
 }
 "#;
 
-/// Reads `Slot Of` of a non-player operand.
 const SLOT_OF_NUMBER: &str = r#"
 variables {
     global:
