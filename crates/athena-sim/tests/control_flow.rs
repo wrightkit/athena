@@ -300,8 +300,6 @@ rule ("t") {
     assert_eq!(*ended(&trace), RunEnd::Finished);
 }
 
-/// `Loop If Condition Is True` re-checks the rule's condition list on
-/// every pass, not the run-start edge.
 #[test]
 fn loop_if_condition_is_true_rechecks_the_rule_conditions() {
     let text = r#"
@@ -331,8 +329,6 @@ rule ("t") {
     assert_eq!(trace.globals["passes"], Val::number(3.0));
 }
 
-/// `Loop If Condition Is False` falls through while the conditions hold
-/// and restarts once one fails — which here never stops.
 #[test]
 fn loop_if_condition_is_false_restarts_when_a_condition_fails() {
     let holds = r#"
@@ -385,8 +381,6 @@ rule ("t") {
     assert!(stop.construct.contains("steps"), "{stop:?}");
 }
 
-/// `Wait` + `Loop If Condition Is True` is the classic periodic pattern:
-/// each wake re-checks the conditions and restarts the list.
 #[test]
 fn a_wait_inside_a_restarted_list_periodically_reruns() {
     let text = r#"
@@ -467,8 +461,6 @@ rule ("t") {
     assert_eq!(trace.globals["y"], Val::number(3.0));
 }
 
-/// `Continue` in a `For` lands on its `End`, which steps the variable —
-/// it does not reset it.
 #[test]
 fn continue_in_a_for_steps_the_variable() {
     let text = r#"

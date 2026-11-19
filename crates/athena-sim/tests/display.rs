@@ -264,7 +264,6 @@ fn identical_display_values_compare_equal() {
         let trace = run(&set_global(value));
         assert_eq!(global(&trace), &Val::Bool(true), "{value}");
     }
-    // `!=` answers false on the same structural match.
     let trace = run(&set_global(
         "Compare(Icon String(Bolt), !=, Icon String(Bolt))",
     ));
@@ -277,15 +276,11 @@ fn identical_display_values_compare_equal() {
 #[test]
 fn any_other_comparison_on_a_display_value_is_not_modeled() {
     for value in [
-        // A display value against a literal string.
         "Compare(Icon String(Bolt), ==, \"Bolt\")",
         "Compare(\"Bolt\", ==, Icon String(Bolt))",
         "Compare(Icon String(Bolt), !=, Icon String(Warning))",
-        // Two producers that differ.
         "Compare(Icon String(Bolt), ==, Hero Icon String(Hero(Ana)))",
-        // Same producer, different arguments.
         "Compare(Icon String(Bolt), ==, Icon String(Warning))",
-        // A `Custom String` output in a comparison.
         "Compare(Custom String(\"{0}\", Icon String(Bolt)), ==, Custom String(\"{0}\", Icon String(Bolt)))",
     ] {
         let trace = run(&set_global(value));

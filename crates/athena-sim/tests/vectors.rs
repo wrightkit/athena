@@ -387,7 +387,6 @@ rule ("probe") {
     );
     assert_eq!(global(&trace), &vec(11.0, 22.0, 33.0));
 
-    // A `Player` operand without a scenario `position` is a missing input.
     let trace = run_with(
         &modify_global("Vector(1, 2, 3)", "Add", "Host Player"),
         &format!("{HOST} }}"),
@@ -470,7 +469,6 @@ fn vectors_compare_by_component() {
         ("Compare(Vector(1, 2, 3), ==, Vector(1, 2, 3))", true),
         ("Compare(Vector(1, 2, 3), ==, Vector(1, 2, 4))", false),
         ("Compare(Vector(1, 2, 3), !=, Vector(0, 0, 0))", true),
-        // A vector is never a number, an array or a text.
         ("Compare(Vector(1, 2, 3), ==, 0)", false),
         ("Compare(Vector(1, 2, 3), ==, Array(1, 2, 3))", false),
     ] {
@@ -517,7 +515,6 @@ fn a_missing_position_is_a_missing_input_naming_the_field() {
     assert_eq!(input.name.as_deref(), Some("position"));
     assert_eq!(input.tick, Some(0));
 
-    // The same for a `Player` operand of an arithmetic value.
     let trace = run_with(&set_global("Add(Host Player, 1)"), &format!("{HOST} }}"));
     assert_eq!(trace.outcome, Outcome::MissingInput);
     assert_eq!(trace.missing_inputs[0].input, MissingInputKind::Position);
@@ -748,7 +745,6 @@ fn players_within_radius_filters_by_team_and_distance() {
         r#"{ "id": "p3", "team": "team1", "position": { "x": 3, "y": 0, "z": 0 } }"#
     );
 
-    // All teams, radius 4 from the origin: p1 and p3, roster order.
     let trace = run_with(
         &set_global("Players Within Radius(Vector(0, 0, 0), 4, All Teams, Off)"),
         players,
@@ -758,7 +754,6 @@ fn players_within_radius_filters_by_team_and_distance() {
         &Val::Array(vec![Val::Player("p1".into()), Val::Player("p3".into())])
     );
 
-    // Team 2 alone: p2 is over 11 m out — an empty array.
     let trace = run_with(
         &set_global("Players Within Radius(Vector(0, 0, 0), 4, Team 2, Off)"),
         players,

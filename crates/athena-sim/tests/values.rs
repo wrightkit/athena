@@ -129,7 +129,6 @@ fn a_non_finite_number_literal_stops_at_evaluation() {
         assert_not_modeled(&trace, "number literal produced a non-finite number");
     }
 
-    // The `For` start argument evaluates the same literal.
     let text = format!(
         r#"
 variables {{
@@ -287,7 +286,6 @@ fn value_in_array_yields_null_when_no_element_exists() {
     let trace = run(&set_global("Value In Array(Array(1, 2), 0)"));
     assert_eq!(global(&trace), &Val::number(1.0));
 
-    // Out-of-range and negative indexes already yielded `Null`.
     let trace = run(&set_global("Value In Array(Array(1, 2), 9)"));
     assert_eq!(global(&trace), &Val::Null);
 
@@ -306,7 +304,6 @@ fn value_in_array_yields_null_when_no_element_exists() {
     let trace = run(&set_global("Value In Array(First Of(Null), True)"));
     assert_eq!(global(&trace), &Val::Null);
 
-    // A `Player` is not an array either.
     let scenario = r#"{
         "scenarioVersion": 1,
         "seconds": 1,
@@ -358,11 +355,9 @@ fn array_slice_clamps_its_bounds() {
         &Val::Array(vec![Val::number(2.0), Val::number(3.0)])
     );
 
-    // A start past the end yields the empty array.
     let trace = run(&set_global("Array Slice(Array(1, 2), 9, 2)"));
     assert_eq!(global(&trace), &Val::Array(vec![]));
 
-    // A count past the end stops at the end.
     let trace = run(&set_global("Array Slice(Array(1, 2, 3), 1, 99)"));
     assert_eq!(
         global(&trace),
@@ -398,7 +393,6 @@ fn remove_from_array_drops_every_match() {
     let trace = run(&set_global("Remove From Array(Null, 1)"));
     assert_eq!(global(&trace), &Val::Array(vec![]));
 
-    // An absent operand removes nothing.
     let trace = run(&set_global("Remove From Array(Array(1, 2), 9)"));
     assert_eq!(
         global(&trace),
@@ -523,12 +517,10 @@ fn at_index_writes_append_clamp_or_skip() {
         Val::Array(vec![Val::number(10.0), Val::number(15.0)])
     );
     assert_eq!(trace.globals["skipped"], Val::Null);
-    // Index 1 is modified; index 9 writes nothing.
     assert_eq!(
         trace.globals["m"],
         Val::Array(vec![Val::number(1.0), Val::number(12.0)])
     );
-    // The element writes record their effective index.
     let indices: Vec<_> = trace
         .timeline
         .entries

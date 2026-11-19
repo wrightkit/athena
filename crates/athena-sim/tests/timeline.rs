@@ -166,7 +166,6 @@ rule ("init") {
 }
 "#;
     let trace = run_text(text, athena_sim::Options { seconds: 1.0 }).unwrap();
-    // The loop without a wait runs to the step limit on tick 0.
     assert!(matches!(trace.outcome, Outcome::NotModeled(_)));
     assert!(trace.timeline.truncated);
     let [entry] = trace.timeline.entries.as_slice() else {
@@ -360,7 +359,6 @@ rule ("init") {
     };
     assert_eq!(run.rule, 0);
     assert_eq!(run.ended, RunEnd::Stopped);
-    // The outcome's location serializes into the trace JSON as documented.
     let location = &serde_json::to_value(&trace).unwrap()["outcome"]["location"];
     assert_eq!(
         *location,

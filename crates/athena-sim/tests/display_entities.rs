@@ -311,7 +311,6 @@ rule ("init") {
         stop.construct.contains("getLastCreatedHealthPool"),
         "{stop:?}"
     );
-    // The icon was still recorded — the viewer sees what is on screen.
     let [icon] = trace.effects.as_slice() else {
         panic!("expected one entity, got {:?}", trace.effects);
     };
