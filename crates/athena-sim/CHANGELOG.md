@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.2](https://github.com/wrightkit/athena/compare/v0.13.1...v0.13.2) (2026-11-19)
+
+
+### Code Refactoring
+
+* remove redundant comments ([#153](https://github.com/wrightkit/athena/issues/153)) ([85e8d66](https://github.com/wrightkit/athena/commit/85e8d6658d20651bc8f2fa9fcbd1a4e246f4cfdc))
+
 ## [0.13.1](https://github.com/wrightkit/athena/compare/v0.13.0...v0.13.1) (2026-11-03)
 
 
