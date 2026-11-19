@@ -1,8 +1,3 @@
-//! The `Modify` operator set and the array-element writes the
-//! `Set`/`Modify * Variable At Index` actions make: `apply_modify` for
-//! the whole-value operators, `set_at`/`modify_at` for an element, each
-//! reading `Null` as the empty array.
-
 use std::collections::BTreeMap;
 
 use workshop_rs::{ModifyOp, Value};
@@ -14,8 +9,6 @@ use crate::unsupported;
 use crate::vector::arithmetic;
 use crate::{Stop, Val};
 
-/// The array a `Modify` array operation reads: an array as itself, `Null`
-/// as the empty array. Anything else is not an array.
 fn array_operand(value: Val) -> Result<Vec<Val>, Stop> {
     match value {
         Val::Array(items) => Ok(items),
@@ -24,13 +17,6 @@ fn array_operand(value: Val) -> Result<Vec<Val>, Stop> {
     }
 }
 
-/// The value a `Modify` operation writes from the variable's `old` value
-/// and the evaluated `operand`: `Add`/`Subtract`/`Multiply`/`Divide` run
-/// the vector-aware arithmetic of the value forms, reading a `Player`
-/// operand's `position` from `players`; `Modulo`/`Min`/`Max`/`Raise To
-/// Power` read both as numbers; the array operations keep `operand`
-/// whole. `Remove From Array By Value` drops every element equal to
-/// `operand`.
 pub(crate) fn apply_modify(
     old: Val,
     op: &ModifyOp,
@@ -73,10 +59,6 @@ pub(crate) fn apply_modify(
     })
 }
 
-/// Write `value` at `index` of the array `slot` holds — `Null` counts as an
-/// empty array and an index past the end appends; a negative index writes
-/// nothing. Returns the effective index, the element `old` and the stored
-/// `new`, or `None` when nothing was written.
 pub(crate) fn set_at(
     slot: &mut Val,
     index: f64,
@@ -101,9 +83,6 @@ pub(crate) fn set_at(
     Ok(Some((effective as u64, old, value)))
 }
 
-/// Apply `op` with `operand` to the element at `index` of the array `slot`
-/// holds; an index outside the array writes nothing. Returns like
-/// [`set_at`].
 pub(crate) fn modify_at(
     slot: &mut Val,
     index: f64,
@@ -126,8 +105,6 @@ pub(crate) fn modify_at(
     Ok(Some((index as u64, old, new)))
 }
 
-/// The `Modify` operation a `Modify * At Index` action's operator argument
-/// names — a zero-argument `Value::Call` on an operator catalog id.
 pub(crate) fn modify_op(value: &Value) -> Result<ModifyOp, Stop> {
     if let Value::Call { name, args } = value
         && args.is_empty()

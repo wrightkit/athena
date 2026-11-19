@@ -25,13 +25,11 @@ use crate::hero_settings;
 use crate::scenario::Team;
 use crate::{Finite, NotModeled, PlayerWorld, PoolState, Stop, UltimateState, Val};
 
-/// The resolved world state of a scenario player.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WorldSlot {
     /// Loaded but never resolved; `run` resolves every player before the
     /// first tick, so a run never observes this.
     Unresolved,
-    /// The player's world state.
     Resolved(Resolved),
     /// The catalog could not supply the state, or a hero setting the
     /// simulator does not apply was authored for the player; touching the
@@ -39,19 +37,12 @@ pub(crate) enum WorldSlot {
     Failed(NotModeled),
 }
 
-/// A resolved player: the reported world state plus the hero-setting
-/// scales `Damage`/`Heal` consult for the dealer and the target.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Resolved {
-    /// The reported world state.
     pub world: PlayerWorld,
-    /// `damageDealt%` scale when this player deals damage.
     pub damage_dealt: f64,
-    /// `damageReceived%` scale when this player takes damage.
     pub damage_received: f64,
-    /// `healingDealt%` scale when this player heals.
     pub healing_dealt: f64,
-    /// `healingReceived%` scale when this player is healed.
     pub healing_received: f64,
 }
 

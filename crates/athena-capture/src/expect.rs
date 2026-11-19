@@ -62,8 +62,6 @@ impl Expect {
         match ends {
             0 => Err(Error::Incomplete(self.end.clone())),
             1 if run.last().is_some_and(|l| l.message.starts_with(&self.end)) => Ok(run),
-            // A single end line that is not last means extra probe lines
-            // followed the finished run — not several runs.
             1 => {
                 let end_at = run
                     .iter()
@@ -116,9 +114,6 @@ impl VerdictSpec {
     }
 }
 
-/// The `distinct-samples` verdict: a valid run is the start line plus
-/// exactly `expected` sample lines, the start must report a spawned
-/// player at a nonzero position, and the sampled positions must change.
 fn distinct_samples(
     run: &[Line],
     start_prefix: &str,
@@ -150,8 +145,6 @@ fn distinct_samples(
         ));
     }
 
-    // Positions are distinct when any coordinate differs past the printed
-    // tolerance; a stuck counter would mean the player never moved.
     let mut distinct: Vec<Vec<f64>> = Vec::new();
     for line in &run[1..] {
         if !line.message.starts_with(sample_prefix) {
@@ -181,7 +174,6 @@ fn distinct_samples(
     })
 }
 
-/// The `pos=(x, y, z)` tuple of a log line, as numbers.
 fn position(line: &str) -> Result<Vec<f64>, Error> {
     let invalid = || Error::Invalid(format!("the line {line:?} has no pos=(x, y, z)"));
     let at = line.find("pos=(").ok_or_else(invalid)? + "pos=(".len();

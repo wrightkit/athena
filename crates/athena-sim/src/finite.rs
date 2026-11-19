@@ -27,9 +27,6 @@ impl Finite {
         Self(value)
     }
 
-    /// The checked construction a produced scalar takes: a finite
-    /// result wraps; a non-finite one is the run's `not_modeled`,
-    /// naming `construct`.
     pub(crate) fn produced(value: f64, construct: &str) -> Result<Self, NotModeled> {
         if value.is_finite() {
             Ok(Self(value))
@@ -47,13 +44,11 @@ impl Finite {
 }
 
 impl fmt::Debug for Finite {
-    /// The wrapped number, so a `Val` debugs like the value it holds.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-// Counts and ids fit in an `f64` exactly and are always finite.
 impl From<usize> for Finite {
     fn from(value: usize) -> Self {
         Self(value as f64)

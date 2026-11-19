@@ -1,10 +1,3 @@
-//! Player-event dispatch: the injected events a scenario schedules
-//! and the events a modeled state change (`Damage`, `Heal`) raises.
-//! Both reach an `Event::Player` rule only when the kind matches and
-//! the event player satisfies the rule's team/player filters; an
-//! instance that is not free queues the event and fires it when its
-//! run is idle.
-
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
@@ -18,13 +11,6 @@ use crate::sched::{event_player, record_stop, run_and_record};
 use crate::step::{World, conditions_hold};
 use crate::{Finite, MissingInput, MissingInputKind, RuleRun, RunEnd, Stop};
 
-/// Fire the events `world.pending_events` holds — raised by a modeled
-/// state change like `Damage`/`Heal` — in the order they occurred: each
-/// event runs the `Event::Player` rules whose kind and team/player
-/// filters match, in rule-file order. An instance that is not free —
-/// suspended on `Wait`, mid-run, or still holding earlier events —
-/// queues the event instead; its own visit's pending loop fires it
-/// when the run is idle, like an injected event's.
 pub(crate) fn dispatch(
     instances: &mut [Instance<'_>],
     rule_list: &[&Rule],
@@ -51,9 +37,6 @@ pub(crate) fn dispatch(
     Ok(())
 }
 
-/// Queue `ctx` on every `Event::Player` instance whose event kind is
-/// `ctx.kind` and whose team/player filters the event player satisfies:
-/// an injected event's dispatch.
 pub(crate) fn queue(
     instances: &mut [Instance<'_>],
     world: &mut World,
@@ -68,11 +51,6 @@ pub(crate) fn queue(
     Ok(())
 }
 
-/// Check the conditions of `instance`'s `Event::Player` rule against
-/// the event bound on it, and run when they hold: the sequence an
-/// event-triggered run follows, shared by the injected events' pending
-/// loop and the immediate dispatch of the events a modeled state
-/// change raises.
 pub(crate) fn fire(
     instance: &mut Instance<'_>,
     rule_list: &[&Rule],
@@ -82,7 +60,6 @@ pub(crate) fn fire(
     tick: u64,
     now: Finite,
 ) -> Result<(), Stop> {
-    // Each event's condition check is its own `Evaluate Once` pass.
     let pass = RefCell::new(BTreeMap::new());
     let env = Env {
         globals: &world.globals,
@@ -130,10 +107,6 @@ pub(crate) fn fire(
     Ok(())
 }
 
-/// Whether `instance`'s `Event::Player` rule fires for `ctx`: `None`
-/// when its event kind does not match, otherwise the team/player
-/// filters' verdict on the event player — `missing_input` when a
-/// filtered rule cannot read one.
 fn eligible(
     instance: &Instance<'_>,
     world: &mut World,
@@ -146,8 +119,6 @@ fn eligible(
     if kind.catalog_id() != ctx.kind {
         return Ok(None);
     }
-    // The team/player filters read the event player: an event that
-    // does not name one can only satisfy `All`.
     let eligible = match &ctx.player {
         Some(id) => player_matches(
             *team,

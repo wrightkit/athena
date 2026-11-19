@@ -13,10 +13,8 @@ use crate::eval::{Env, eval, viewers};
 use crate::unsupported;
 use crate::{Change, HudArgs, HudElement, HudKind, Stop, Val};
 
-/// The display elements a run created and the text id of the newest one.
 #[derive(Default)]
 pub(crate) struct Hud {
-    /// In creation order; an element's `id` is its index.
     pub elements: Vec<HudElement>,
     /// The `id` of the newest text element — `hudText`, `progressBarHud`,
     /// `inWorldText` or `progressBarInWorldText`; what `Last Text ID`
@@ -50,7 +48,6 @@ pub(crate) fn text_kind(kind: HudKind) -> bool {
 }
 
 impl Hud {
-    /// The live text elements `getNumberOfTextIds` counts.
     pub(crate) fn text_count(&self) -> u64 {
         self.elements
             .iter()
@@ -89,8 +86,6 @@ fn create_element(
         .push(Change::HudCreate { id, element: kind });
 }
 
-/// Mark a live element of `kind` with `id` destroyed on `tick`; an id no
-/// live element holds destroys nothing.
 fn destroy_element(
     hud: &RefCell<Hud>,
     kind: HudKind,
@@ -110,9 +105,6 @@ fn destroy_element(
     }
 }
 
-/// Execute a modeled display action against `hud`; `None` when `name` is
-/// not one of them. Element creations and destructions are appended to
-/// `changes`.
 pub(crate) fn action(
     name: &str,
     args: &[Value],
@@ -426,7 +418,6 @@ fn destroy(
         "destroyInWorldText" => HudKind::InWorldText,
         _ => HudKind::ProgressBarInWorldText,
     };
-    // An unknown, `null` or already-destroyed text id destroys nothing.
     match eval(text_id, env)? {
         Val::Null => {}
         Val::Number(id) => destroy_element(hud, kind, id.get(), tick, changes),

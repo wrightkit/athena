@@ -1,7 +1,3 @@
-//! Program loading: enabled rules become `Instance`s — one per matching
-//! scenario player for `Ongoing - Each Player` — with their block maps and
-//! the subroutine table.
-
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -11,22 +7,17 @@ use crate::blocks::{Blocks, block_maps};
 use crate::scenario::{EventCtx, Player, Team};
 use crate::{Stop, StopLocation, Val};
 
-/// The position of a rule execution in progress: the rule whose actions the
-/// program counter reads. A `Call Subroutine` action pushes a frame.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct Frame {
     pub rule_idx: usize,
     pub pc: usize,
 }
 
-/// What ends or cancels the suspension of a rule run besides its wake tick.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum WaitMode {
     Ignore,
     AbortWhenFalse,
     RestartWhenTrue,
-    /// A `Wait Until`; the frame points at that action, whose condition is
-    /// checked every tick.
     Until(Frame),
 }
 
@@ -40,10 +31,7 @@ pub(crate) struct Instance<'a> {
     pub wake: Option<u64>,
     pub wait_mode: WaitMode,
     pub prev: bool,
-    /// Player events — injected or raised — that triggered this rule and
-    /// wait for it to be idle.
     pub pending: VecDeque<EventCtx>,
-    /// The player event the current run executes for, if event-triggered.
     pub event: Option<EventCtx>,
     /// The clause head a false `If`/`Else If` jumped to, as a frame
     /// position. A head that is not this target was reached by fall-through
@@ -70,7 +58,6 @@ pub(crate) struct Instance<'a> {
 pub(crate) struct Loaded<'a> {
     pub rules: Vec<&'a Rule>,
     pub blocks: Vec<Blocks>,
-    /// Subroutine name → rule index.
     pub subroutines: BTreeMap<String, usize>,
     pub instances: Vec<Instance<'a>>,
 }

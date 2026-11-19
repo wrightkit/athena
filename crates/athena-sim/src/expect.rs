@@ -1,10 +1,6 @@
-//! The `expect` entries of a scenario: the observations checked at the
-//! end of a complete run, parsed to [`Expectation`]s.
-
 use crate::scenario::{format_error, value_to_val};
 use crate::{ScenarioError, Val};
 
-/// One expected observation checked at the end of a complete run.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Expectation {
     Global {

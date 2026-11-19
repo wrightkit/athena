@@ -23,11 +23,8 @@ use crate::hud::enum_member;
 use crate::unsupported;
 use crate::{Change, EffectArgs, EffectElement, EffectKind, Stop, Val};
 
-/// The entities a run created or played and the `id` of the newest
-/// durable one, which `Last Created Entity` reads.
 #[derive(Default)]
 pub(crate) struct Effects {
-    /// In creation order; an entity's `id` is its index.
     pub elements: Vec<EffectElement>,
     /// The `id` of the newest durable entity. A `playEffect` has no
     /// entity id to hand out.
@@ -45,16 +42,12 @@ fn counted_entity_kind(kind: EffectKind) -> bool {
 }
 
 impl Effects {
-    /// Whether a live entity of `id` exists; what `Entity Exists`
-    /// reads of a number.
     pub(crate) fn entity_exists(&self, id: f64) -> bool {
         self.elements
             .iter()
             .any(|element| element.destroyed_tick.is_none() && element.id as f64 == id)
     }
 
-    /// The live `effect`/`beam`/`icon` entities `getNumberOfEntityIds`
-    /// counts.
     pub(crate) fn entity_count(&self) -> u64 {
         self.elements
             .iter()
@@ -93,9 +86,6 @@ fn record(
         .push(Change::EffectCreate { id, element: kind });
 }
 
-/// Mark a live entity of one of `kinds` with `id` destroyed on `tick`; an
-/// id no live entity of those kinds holds destroys nothing, the same
-/// rule a display-element destroy follows.
 fn destroy_kinds(
     effects: &RefCell<Effects>,
     kinds: &[EffectKind],
@@ -116,7 +106,6 @@ fn destroy_kinds(
     }
 }
 
-/// Mark every live entity of one of `kinds` destroyed on `tick`.
 fn destroy_all_kinds(
     effects: &RefCell<Effects>,
     kinds: &[EffectKind],
@@ -140,8 +129,6 @@ fn destroy_all_kinds(
     }
 }
 
-/// Execute a modeled entity action against `effects`; `None` when `name`
-/// is not one of them.
 pub(crate) fn action(
     name: &str,
     args: &[Value],

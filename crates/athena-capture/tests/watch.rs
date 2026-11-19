@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use athena_capture::{Event, ScanState, foreign_end, load_expects, scan_once};
 use common::{P5_START, copy_probe, p5_log, recorded, recorded_capture, unique_dir};
 
-/// A temp `probes/` tree with fresh copies of `ids`, and a `logs/` dir.
 fn tree(ids: &[&str]) -> (PathBuf, PathBuf) {
     let root = unique_dir("watch");
     let probes = root.join("probes");
@@ -45,8 +44,6 @@ fn a_finished_log_is_ingested_once_per_probe() {
     );
     assert_eq!(recorded(&probe)["runs"], 1);
 
-    // A rescan with the same state stays quiet; a restarted watch reports
-    // the dedup skip once.
     assert!(scan_once(&logs, &expects, &mut state).is_empty());
     let mut restarted = ScanState::default();
     assert_eq!(
@@ -54,7 +51,6 @@ fn a_finished_log_is_ingested_once_per_probe() {
         ["duplicate:p1-wait-rounding"]
     );
 
-    // The same text under a new file name is another run.
     fs::write(logs.join("run-2.txt"), &capture).unwrap();
     assert_eq!(
         kinds(&scan_once(&logs, &expects, &mut restarted)),
@@ -80,7 +76,6 @@ fn a_log_without_an_end_line_waits_for_the_next_scan() {
     assert!(scan_once(&logs, &expects, &mut state).is_empty());
     assert_eq!(recorded(&probe)["runs"], 0);
 
-    // The file keeps being written; once the end line lands it ingests.
     fs::write(logs.join("run.txt"), &full).unwrap();
     assert_eq!(
         kinds(&scan_once(&logs, &expects, &mut state)),
@@ -102,7 +97,6 @@ fn a_file_with_two_runs_of_one_probe_records_the_first() {
         ["ingested:p1-wait-rounding"]
     );
     assert_eq!(recorded(&probe)["runs"], 1);
-    // The second segment stays untouched and a rescan stays quiet.
     assert!(scan_once(&logs, &expects, &mut state).is_empty());
     assert_eq!(recorded(&probe)["runs"], 1);
 }
@@ -114,8 +108,6 @@ fn a_skipped_segment_does_not_burn_a_later_valid_run() {
     let expects = load_expects(&probes).unwrap();
     let mut state = ScanState::default();
 
-    // The first segment is a run the verdict rejects (the player never
-    // spawned); the valid run in the same file is still recorded.
     let bad = p5_log("P5 start spawned=假 pos=(1.00, 2.00, 3.00)", 188, 38);
     let good = p5_log(P5_START, 188, 38);
     fs::write(logs.join("runs.txt"), format!("{bad}{good}")).unwrap();
@@ -138,7 +130,6 @@ fn a_skipped_segment_does_not_burn_a_later_valid_run() {
     assert!(scan_once(&logs, &expects, &mut state).is_empty());
 }
 
-/// Rewrite a copied probe's `end` (and its last expected line) to `token`.
 fn retag_end(probe_dir: &std::path::Path, token: &str) {
     let file = probe_dir.join("expect.json");
     let text = fs::read_to_string(&file).unwrap();
@@ -170,7 +161,6 @@ fn the_p3_siblings_resolve_by_their_unique_end_lines() {
     assert_ne!(expects[0].1.end, expects[1].1.end);
     let mut state = ScanState::default();
 
-    // The stale captures re-tagged with each probe's new end token.
     let original = recorded_capture("p3-same-tick-rule-order", "stale/capture.txt")
         .replace("P3 done", "P3a done");
     let driver_last = recorded_capture("p3-same-tick-rule-order-driver-last", "stale/capture.txt")
@@ -200,8 +190,6 @@ fn a_log_holding_two_sibling_runs_attributes_each_segment() {
     let expects = load_expects(&probes).unwrap();
     let mut state = ScanState::default();
 
-    // One file, two complete runs back to back: same `P3` prefix, so each
-    // segment must keep only the lines of its own run.
     let original = recorded_capture("p3-same-tick-rule-order", "stale/capture.txt")
         .replace("P3 done", "P3a done");
     let driver_last = recorded_capture("p3-same-tick-rule-order-driver-last", "stale/capture.txt")
@@ -232,7 +220,6 @@ fn probes_sharing_an_end_line_are_attributed_by_their_expected_lines() {
         "p3-same-tick-rule-order",
         "p3-same-tick-rule-order-driver-last",
     ]);
-    // The fallback path: force the two copies back to a shared `P3 done`.
     for id in [
         "p3-same-tick-rule-order",
         "p3-same-tick-rule-order-driver-last",
@@ -260,7 +247,6 @@ fn probes_sharing_an_end_line_are_attributed_by_their_expected_lines() {
         ]
     );
 
-    // A P3 run matching neither expectation has no unique owner.
     let wrong = recorded_capture("p3-same-tick-rule-order", "stale/capture.txt")
         .replace("t_ms=0", "t_ms=999");
     fs::write(logs.join("c.txt"), wrong).unwrap();
@@ -271,8 +257,6 @@ fn probes_sharing_an_end_line_are_attributed_by_their_expected_lines() {
         }
         other => panic!("expected one Skipped, got {}", kinds(other).join(", ")),
     }
-    // The segment was reported but no (file, probe) slot was spent, so a
-    // valid segment appended to the same file still ingests.
     let valid = recorded_capture("p3-same-tick-rule-order", "stale/capture.txt");
     fs::write(logs.join("c.txt"), valid).unwrap();
     assert_eq!(
@@ -292,6 +276,5 @@ fn a_log_holding_another_probes_end_line_is_foreign() {
         foreign_end(&text, &probes.join("p1-wait-rounding"), &expects).as_deref(),
         Some("p3-same-tick-rule-order")
     );
-    // The probe's own end line is not foreign.
     assert!(foreign_end(&text, &probes.join("p3-same-tick-rule-order"), &expects).is_none());
 }

@@ -29,13 +29,8 @@ use crate::{Change, Finite, Stop, Val};
 /// measured, clamped inputs included (#143).
 const MEASURED_SLOW_MOTION: RangeInclusive<f64> = -50.0..=200.0;
 
-/// The match clock: how far the run's game time has come, whether
-/// `Pause Match Time` holds it, the countdown `Match Time` reports
-/// and the last `Set Slow Motion` percent.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Clock {
-    /// `Pause Match Time` holds the clock; it advances only while
-    /// this is false.
     pub paused: bool,
     /// The seconds `Match Time` reports; `None` until a `Set Match
     /// Time` writes it — the lobby's phase limit is not an input the
@@ -44,14 +39,10 @@ pub(crate) struct Clock {
     /// The last `Set Slow Motion` percent; `100` is the client's
     /// normal rate. Recorded only; it scales nothing (P8, P9).
     pub slow_motion: Finite,
-    /// The game-time seconds elapsed; `Total Time Elapsed` reads the
-    /// start offset plus this.
     pub elapsed: Finite,
 }
 
 impl Clock {
-    /// The start-of-run clock: unpaused, at the normal rate, with no
-    /// match countdown set.
     pub(crate) fn new() -> Self {
         Self {
             paused: false,
@@ -94,8 +85,6 @@ impl Clock {
     }
 }
 
-/// Execute a match-clock action against `world`; `None` when `name`
-/// is not one of them.
 pub(crate) fn action(
     name: &str,
     args: &[Value],
@@ -121,8 +110,6 @@ fn run(
     rule_idx: usize,
     now: Finite,
 ) -> Result<(), Stop> {
-    // The caller's `Env` cannot cross this call — it shares a borrow of
-    // `world.players` — so the `Env` is built here, as in `actions.rs`.
     let env = world.env(
         inst.event.as_ref(),
         inst.each_player.as_deref(),
@@ -130,9 +117,6 @@ fn run(
         rule_idx,
         now,
     );
-    // Each arm evaluates its arguments left to right first, then writes
-    // the clock field and records the `matchClock` change; a write
-    // records even when it changes nothing — the action ran.
     match name {
         "pauseMatchTime" | "unpauseMatchTime" => {
             let [] = args else {

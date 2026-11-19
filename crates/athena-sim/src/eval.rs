@@ -73,7 +73,6 @@ pub(crate) struct Env<'a> {
 }
 
 impl Env<'_> {
-    /// The scenario `id` this env's evaluation binds as `Event Player`.
     pub(crate) fn event_player(&self) -> Option<String> {
         self.event
             .and_then(|event| event.player.clone())
@@ -82,8 +81,6 @@ impl Env<'_> {
 }
 
 impl World {
-    /// The evaluation `Env` over this world's current state, for one rule
-    /// run or condition check.
     pub(crate) fn env<'a>(
         &'a self,
         event: Option<&'a EventCtx>,
@@ -124,7 +121,6 @@ fn missing<T>(
     Err(MissingInput::new(input, player, name, construct).into())
 }
 
-/// Resolve a Workshop player expression to a scenario player `id`.
 pub(crate) fn player_id(value: &Value, env: &Env) -> Result<String, Stop> {
     match eval(value, env)? {
         Val::Player(id) => Ok(id),
@@ -166,8 +162,6 @@ pub(crate) fn viewers(value: &Value, env: &Env) -> Result<Vec<String>, Stop> {
     }
 }
 
-/// The slot names a scenario player's `buttons` map may name — the values
-/// [`button_slot`] yields.
 pub(crate) const BUTTON_SLOTS: &[&str] = &[
     "ability1",
     "ability2",
@@ -181,8 +175,6 @@ pub(crate) const BUTTON_SLOTS: &[&str] = &[
     "reload",
 ];
 
-/// The `Button` enum member to the cooldown slot name the player-state
-/// table reports it under.
 pub(crate) fn button_slot(button: &Value) -> Result<&'static str, Stop> {
     let Value::Enum { value, .. } = button else {
         return unsupported(format!("{button:?} where a button is needed"));
@@ -319,8 +311,6 @@ pub(crate) fn eval(value: &Value, env: &Env) -> Result<Val, Stop> {
             if env.element.is_some() {
                 return unsupported("evaluateOnce inside an element context");
             }
-            // `evaluateOnce` is handled ahead of `call`, so a sentinel
-            // operand is annotated here for the same stop.
             let resolved = crate::ambiguous::resolve_args(name, args);
             let [operand] = arguments::<1>(name, &resolved)?;
             let site = value as *const Value as usize;

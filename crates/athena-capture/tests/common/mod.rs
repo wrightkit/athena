@@ -21,8 +21,6 @@ pub fn unique_dir(tag: &str) -> PathBuf {
     dir
 }
 
-/// Copy `expect.json`, `probe.zh-CN.ow` and `capture.json` of probe `id`
-/// into `dir`, without the captures and with `runs` reset to 0.
 pub fn copy_probe(id: &str, dir: &Path) {
     fs::create_dir_all(dir).unwrap();
     for file in ["probe.zh-CN.ow", "expect.json", "capture.json"] {
@@ -40,14 +38,12 @@ pub fn copy_probe(id: &str, dir: &Path) {
     fs::write(dir.join("capture.json"), reset.join("\n") + "\n").unwrap();
 }
 
-/// A fresh copy of probe `id` in a unique temp directory.
 pub fn fresh_probe(id: &str) -> PathBuf {
     let dir = unique_dir(id);
     copy_probe(id, &dir);
     dir
 }
 
-/// Ingest expecting a saved run.
 pub fn saved(dir: &Path, log: &str, source: &str) -> Report {
     match ingest(dir, log, source).unwrap() {
         Outcome::Saved(report) => report,
@@ -63,8 +59,6 @@ pub fn recorded_capture(id: &str, file: &str) -> String {
     fs::read_to_string(probes().join(id).join(file)).unwrap()
 }
 
-/// A P5 log: the `start` line plus `samples` `P5 i=` lines cycling through
-/// `distinct` positions (`distinct` of 1 is a stuck position).
 pub fn p5_log(start: &str, samples: usize, distinct: usize) -> String {
     let mut log = format!("[00:00:33] {start}\n");
     for i in 0..samples {

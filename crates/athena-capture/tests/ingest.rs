@@ -108,7 +108,6 @@ fn the_same_source_is_skipped_not_counted_twice() {
     ));
     assert_eq!(recorded(&dir)["runs"], 1);
     assert!(!dir.join("capture-2.txt").exists());
-    // Byte-identical text under another file name is a distinct run.
     saved(&dir, &log, "run-2.txt");
     assert_eq!(recorded(&dir)["runs"], 2);
     assert!(dir.join("capture-2.txt").exists());
@@ -122,8 +121,6 @@ fn the_same_source_is_skipped_not_counted_twice() {
 fn a_capture_json_without_sources_starts_empty() {
     let id = "p1-wait-rounding";
     let dir = fresh_probe(id);
-    // A capture.json written before `sources` existed has no such line;
-    // remove it (and the comma it leaves behind) to reproduce one.
     let text = fs::read_to_string(dir.join("capture.json")).unwrap();
     let mut lines: Vec<String> = text
         .lines()
@@ -162,7 +159,6 @@ fn a_provisional_result_is_marked_in_notes_until_three_runs_agree() {
     );
     saved(&dir, &log, "run-3.txt");
     assert_eq!(recorded(&dir)["result"], "match");
-    // Final: the marker goes, only the human text stays.
     assert_eq!(recorded(&dir)["notes"].as_str().unwrap(), human);
 }
 
@@ -222,8 +218,6 @@ fn runs_that_disagree_stay_inconclusive() {
     }
     assert_eq!(recorded(&dir)["result"], "inconclusive");
     assert_eq!(recorded(&dir)["runs"], 3);
-    // Three runs that disagree are still provisional; the marker counts
-    // the largest agreeing side.
     let record = recorded(&dir);
     let notes = record["notes"].as_str().unwrap();
     assert_eq!(notes.matches("[ingest: ").count(), 1, "{notes}");
@@ -281,8 +275,6 @@ fn a_pretty_printed_sources_array_is_replaced_whole() {
     let dir = fresh_probe(id);
     let log = recorded_capture(id, "capture.txt");
     saved(&dir, &log, "run-1.txt");
-    // Re-format the record as a JSON formatter would: `sources` over
-    // several lines. Later runs must still leave valid JSON.
     let text = fs::read_to_string(dir.join("capture.json")).unwrap();
     let spread = text.replace(
         "  \"sources\": [\"run-1.txt\"]",
@@ -328,7 +320,6 @@ fn an_end_line_followed_by_more_probe_lines_is_end_not_last() {
     let id = "p1-wait-rounding";
     let dir = fresh_probe(id);
     let full = recorded_capture(id, "capture.txt");
-    // One end line, then a stray probe line after it: not several runs.
     let extra = format!("{full}[00:00:09] P1 stray");
     assert!(matches!(
         ingest(&dir, &extra, "x.txt"),
@@ -339,9 +330,6 @@ fn an_end_line_followed_by_more_probe_lines_is_end_not_last() {
 
 #[test]
 fn a_stray_next_slot_file_is_overwritten_not_counted_as_a_run() {
-    // A crash between the capture write and the capture.json write leaves
-    // a stray file the record does not count; the next ingest overwrites
-    // it instead of failing `RunCount`.
     let id = "p1-wait-rounding";
     let dir = fresh_probe(id);
     fs::write(dir.join("capture.txt"), "stray\n").unwrap();
@@ -357,11 +345,9 @@ fn a_stray_next_slot_file_is_overwritten_not_counted_as_a_run() {
 #[test]
 fn p5_verdict_counts_the_distinct_positions() {
     let id = "p5-value-refresh-rate";
-    // About 38 distinct positions, the refresh-rate hypothesis: match.
     let dir = fresh_probe(id);
     let report = saved(&dir, &p5_log(P5_START, 188, 38), "run.txt");
     assert_eq!(report.verdicts, [Verdict::Match]);
-    // Every sample distinct, the recorded behavior: mismatch.
     let dir = fresh_probe(id);
     let report = saved(&dir, &p5_log(P5_START, 188, 188), "run.txt");
     assert_eq!(report.verdicts, [Verdict::Mismatch]);
@@ -372,8 +358,6 @@ fn invalid_p5_runs_are_rejected_and_write_nothing() {
     let id = "p5-value-refresh-rate";
     let dir = fresh_probe(id);
     let before = fs::read_to_string(dir.join("capture.json")).unwrap();
-    // A dropped middle sample: the end line is still there, but the run
-    // no longer holds exactly 188 samples.
     let dropped = p5_log(P5_START, 188, 38)
         .lines()
         .filter(|line| !line.contains("P5 i=5 "))
@@ -396,7 +380,6 @@ fn invalid_p5_runs_are_rejected_and_write_nothing() {
             "case {n}"
         );
     }
-    // A run that never reaches the end line is a rejection too.
     assert!(matches!(
         ingest(&dir, &p5_log(P5_START, 187, 38), "run-4.txt"),
         Err(Error::Incomplete(_))

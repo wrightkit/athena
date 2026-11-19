@@ -18,8 +18,6 @@ use crate::step::{TICK_EVENT_LIMIT, World, dead, world_state};
 use crate::unsupported;
 use crate::{Change, Finite, PlayerWorld, Stop, Val};
 
-/// Execute a modeled status/button/rule action against `world`; `None`
-/// when `name` is not one of them.
 pub(crate) fn action(
     name: &str,
     args: &[Value],
@@ -57,9 +55,6 @@ fn run(
     subroutines: &BTreeMap<String, usize>,
     now: Finite,
 ) -> Result<(), Stop> {
-    // The caller's `Env` cannot cross this call — it shares a borrow of
-    // `world.players` — so the `Env` is built here. Each arm evaluates
-    // its arguments through `env` first, then mutates `world`.
     let env = world.env(
         inst.event.as_ref(),
         inst.each_player.as_deref(),
@@ -72,8 +67,6 @@ fn run(
             let [player, damager, amount] = args else {
                 return unsupported("damage arguments");
             };
-            // Arguments evaluate left to right. `Null` has no
-            // dealer scale; a player deals with its `damageDealt%`.
             let ids = player_ids(player, &env)?;
             let damager = eval(damager, &env)?;
             let amount = number(&eval(amount, &env)?)?;
@@ -99,8 +92,6 @@ fn run(
                     let before = pools(&target.world);
                     let health = target.world.health.current;
                     state::damage(&mut target.world, applied.get(), "action damage")?;
-                    // The hit kills when the pool had health and now has
-                    // none; the gate already ruled out a declared death.
                     let died = health.get() > 0.0 && target.world.health.current.get() == 0.0;
                     let after = pools(&target.world);
                     for ((field, old), (_, new)) in before.into_iter().zip(after) {
@@ -142,8 +133,6 @@ fn run(
             let [player, healer, amount] = args else {
                 return unsupported("heal arguments");
             };
-            // Same shape as `damage`, with `healingDealt%` and
-            // `healingReceived%` scales.
             let ids = player_ids(player, &env)?;
             let healer = eval(healer, &env)?;
             let amount = number(&eval(amount, &env)?)?;
@@ -298,9 +287,6 @@ fn run(
             }
         }
         "startRule" => {
-            // `Start Rule(subroutine, ifAlreadyExecuting)` launches the
-            // subroutine's own rule instance; the request is applied when
-            // the tick loop visits that instance.
             let [subroutine, behavior] = args else {
                 return unsupported("startRule arguments");
             };
@@ -342,8 +328,6 @@ fn run(
     Ok(())
 }
 
-/// The `(field, current)` pairs `Damage` reports for the pools that
-/// exist, in the order the pools absorb damage.
 fn pools(world: &PlayerWorld) -> [(&'static str, Option<Finite>); 3] {
     [
         ("shield", world.shield.as_ref().map(|pool| pool.current)),
@@ -378,9 +362,6 @@ fn raise(
     Ok(())
 }
 
-/// The event values a `Damage`/`Heal` raise binds: `Attacker` is the
-/// action's dealer (`Null` for the environment), `Victim` the target,
-/// and `key` — `eventDamage` or `eventHealing` — the applied amount.
 fn event_values(cause: &Val, victim: &str, key: &str, amount: Finite) -> BTreeMap<String, Val> {
     BTreeMap::from([
         ("attacker".to_string(), cause.clone()),

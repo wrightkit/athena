@@ -48,27 +48,17 @@ use workshop_rs::settings::{PathPart, Settings, SettingsNode, definition};
 use crate::Val;
 use crate::scenario::Team;
 
-/// Per-player multipliers collected from the applied hero settings. Every
-/// factor starts at `1.0`; each authored occurrence multiplies in.
 #[derive(Debug, Clone)]
 pub(crate) struct HeroModifiers {
-    /// `health%` scale applied to every pool.
     pub health: f64,
-    /// `damageDealt%` when this player deals damage.
     pub damage_dealt: f64,
-    /// `damageReceived%` when this player takes damage.
     pub damage_received: f64,
-    /// `healingDealt%` when this player heals.
     pub healing_dealt: f64,
-    /// `healingReceived%` when this player is healed.
     pub healing_received: f64,
-    /// Team-scope `abilityCooldown%` scale shared by every slot.
     pub cooldown_all: f64,
-    /// Per-slot `abilityNCooldown%`/`secondaryFireCooldown%` scales by slot.
     pub cooldown_slots: BTreeMap<String, f64>,
 }
 
-/// The team groups a player reads: `allTeams` plus its own team.
 fn applies_to_team(group: &str, team: Option<Team>) -> bool {
     group == "allTeams" || team.is_some_and(|team| team.as_str() == group)
 }
@@ -111,8 +101,6 @@ const UNAPPLIED_STATE: &[(&str, &[&str])] = &[
     ("shieldBashCooldown%", &[]),
 ];
 
-/// Whether the leaf sits inside the player's hero group or directly under
-/// the team group.
 #[derive(Clone, Copy)]
 enum Scope {
     Team,
@@ -268,7 +256,6 @@ fn leaf_modifier(
                     // could move: the setting is skipped, not
                     // simulated.
                 }
-                // An undeclared member cannot be shown inert.
                 None if !declared(leaf, scope) => return Err(unapplied(name, &[])),
                 None => {}
             },
