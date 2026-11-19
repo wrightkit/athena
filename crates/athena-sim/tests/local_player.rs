@@ -6,7 +6,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, RunError, ScenarioError, Val, run_scenario};
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn global_rule(actions: &str) -> String {
     format!(
         r#"

@@ -8,7 +8,6 @@ fn run(text: &str) -> athena_sim::Trace {
     run_text(text, Options { seconds: 2.0 }).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -53,7 +52,6 @@ fn evaluate_once_inside_an_element_context_is_not_modeled() {
         "Is True For All(Array(1, 2), Evaluate Once(True))",
         "Is True For Any(Array(1, 2, 3), Compare(Evaluate Once(Current Array Index), ==, 2))",
         "Mapped Array(Array(1, 2), Evaluate Once(Current Array Element))",
-        // The element context reaches through an operand's own values.
         "Is True For Any(Array(1), Is True For Any(Array(2), Evaluate Once(True)))",
     ] {
         let trace = run(&set_global(value));
@@ -240,7 +238,6 @@ fn filtered_array_keeps_the_elements_the_condition_holds_for() {
     let trace = run(&set_global("Filtered Array(Null, Current Array Element)"));
     assert_eq!(global(&trace), &Val::Array(vec![]));
 
-    // The bound element is read inside a nested array value too.
     let trace = run(&set_global(
         "Filtered Array(Array(1, 2), Array Contains(Array(2, 3), Current Array Element))",
     ));
@@ -333,7 +330,6 @@ fn mapped_array_collects_the_per_element_result() {
         assert_eq!(global(&trace), &Val::Array(vec![]), "{array}");
     }
 
-    // A non-array operand stops the same way the other array values do.
     let trace = run(&set_global("Mapped Array(5, Current Array Element)"));
     let Outcome::NotModeled(stop) = &trace.outcome else {
         panic!("{:?}", trace.outcome);

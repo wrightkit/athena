@@ -259,7 +259,6 @@ rule ("chains") {
 fn a_fresh_chain_does_not_inherit_a_previous_chains_clause_jump() {
     let trace = run(CONSECUTIVE_CHAINS);
     assert_eq!(trace.outcome, Outcome::Complete);
-    // Only the true clause of the second chain runs.
     assert_eq!(trace.globals["hits"], Val::number(1.0));
 }
 

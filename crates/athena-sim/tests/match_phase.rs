@@ -73,7 +73,6 @@ fn a_phase_read_without_the_field_is_a_missing_input() {
     assert_eq!(input.name.as_deref(), Some("matchPhase"));
     assert_eq!(input.tick, Some(0));
 
-    // A run without a scenario reports it the same way.
     let trace = run_text(&text, athena_sim::Options { seconds: 1.0 })
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(trace.outcome, Outcome::MissingInput);

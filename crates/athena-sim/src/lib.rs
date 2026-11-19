@@ -656,8 +656,6 @@ impl fmt::Display for RunError {
 
 impl std::error::Error for RunError {}
 
-/// Why a run stopped before its time was up. The variants are boxed so
-/// `Result<_, Stop>` stays small.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Stop {
     NotModeled(Box<NotModeled>),
@@ -676,8 +674,6 @@ impl Stop {
         }
     }
 
-    /// Fill in where the run stopped when the raising code did not say;
-    /// a location already set by a site closer to the construct wins.
     pub(crate) fn stopped_at(mut self, location: StopLocation) -> Self {
         match &mut self {
             Self::NotModeled(stop) => {

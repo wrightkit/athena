@@ -40,7 +40,6 @@ fn a_hud_text_visible_to_one_team_lists_only_its_members() {
         panic!("expected one HUD element, got {:?}", trace.hud);
     };
     assert_eq!(hud.kind, HudKind::HudText);
-    // Team 1 only: `p2` on team 2 is not a recipient.
     assert_eq!(hud.recipients, ["p1"]);
     assert_eq!(hud.created_tick, 0);
     assert_eq!(hud.destroyed_tick, None);
@@ -135,7 +134,6 @@ fn a_progress_bar_records_its_arguments() {
     assert_eq!(bar.args.spec_visibility.as_deref(), Some("VISIBLE_ALWAYS"));
     // `Last Text ID` was the progress bar; the kind-scoped destroy hit it.
     assert_eq!(bar.destroyed_tick, Some(0));
-    // The HUD text is the only element left present.
     assert_eq!(hud_text.kind, HudKind::HudText);
     assert_eq!(hud_text.destroyed_tick, None);
 }
@@ -308,7 +306,6 @@ fn the_trace_json_covers_hud() {
     assert_eq!(hud["headerColor"], "WHITE");
     assert_eq!(hud["reevaluation"], "VISIBILITY_AND_STRING");
     assert_eq!(hud["specVisibility"], "DEFAULT");
-    // Fields the action does not take are absent.
     assert!(hud.get("value").is_none());
     assert!(hud.get("progressBarColor").is_none());
 }

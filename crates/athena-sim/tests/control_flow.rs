@@ -365,7 +365,6 @@ rule ("t") {
 "#;
     let trace = run(holds);
     assert_eq!(trace.outcome, Outcome::Complete);
-    // The conditions held, so no restart and the action after ran once.
     assert_eq!(trace.globals["i"], Val::number(11.0));
 
     let fails = r#"

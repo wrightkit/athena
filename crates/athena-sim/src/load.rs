@@ -40,8 +40,6 @@ pub(crate) struct Instance<'a> {
     /// by a nested chain or a subroutine frame can never satisfy the
     /// enclosing chain's search.
     pub clause_jump: Option<Frame>,
-    /// An `Abort`/`Abort If` ended the run in progress; the timeline
-    /// records it `aborted` rather than `finished`.
     pub aborted: bool,
     /// `Evaluate Once` pins of the run in progress, keyed by the value's
     /// site in the parsed program: a `For`/`While`/`Loop` body or a
@@ -62,12 +60,6 @@ pub(crate) struct Loaded<'a> {
     pub instances: Vec<Instance<'a>>,
 }
 
-/// Whether a scenario player satisfies a rule event's `team`/`target`
-/// filters: `Team 1`/`Team 2` match the declared `team`, a hero name matches
-/// the catalog member the declared `hero` resolves to, `Slot N` matches the
-/// declared `slot`, and `All` imposes no constraint. A player that does not
-/// declare the read field does not match; a filter the `team` arm rejects
-/// first is never evaluated.
 pub(crate) fn player_matches(
     team: EventTeam,
     target: &EventTarget,
@@ -102,9 +94,6 @@ pub(crate) fn load<'a>(
         .filter(|rule| !rule.disabled)
         .enumerate()
     {
-        // An `Ongoing - Each Player` rule becomes one instance per matching
-        // scenario player; a filter matching nobody yields no instance, so
-        // the rule never fires. Every other event gets a single instance.
         let each_players: Vec<Option<String>> = match &rule.event {
             Event::Global | Event::Player { .. } | Event::Subroutine(_) => vec![None],
             Event::EachPlayer | Event::EachPlayerWithFilters { .. } => {

@@ -10,7 +10,6 @@ fn run(text: &str) -> athena_sim::Trace {
     run_text(text, Options { seconds: 2.0 }).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"

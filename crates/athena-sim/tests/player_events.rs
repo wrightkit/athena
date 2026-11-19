@@ -191,7 +191,6 @@ fn a_modeled_damage_hit_raises_the_damage_events_in_occurrence_order() {
         trace.timeline.entries[0].rules[6].event_player.as_deref(),
         Some("p1")
     );
-    // The killing damage wrote the `isDead` cell.
     assert_eq!(trace.players["p2"].state["isDead"], Val::Bool(true));
 }
 
@@ -242,7 +241,6 @@ rule ("dealt") {
     let trace = run(text, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
     assert_eq!(trace.globals["took"], Val::number(1.0));
-    // The dealt rule never ran: the variable stays `null`.
     assert_eq!(trace.globals["dealt"], Val::Null);
     assert_eq!(trace.globals["atk"], Val::Null);
 }
@@ -372,7 +370,6 @@ rule ("bastion") {
     assert_eq!(trace.outcome, Outcome::Complete);
     assert_eq!(trace.globals["team2"], Val::number(1.0));
     assert_eq!(trace.globals["reaper"], Val::number(1.0));
-    // The non-matching rules never ran: the variables stay `null`.
     assert_eq!(trace.globals["team1"], Val::Null);
     assert_eq!(trace.globals["bastion"], Val::Null);
 }
@@ -618,7 +615,6 @@ rule ("events") {
     let trace = run(text, DUEL);
     assert_eq!(trace.outcome, Outcome::Complete);
     assert_eq!(trace.globals["dead"], Val::Bool(true));
-    // Only the killing hit's `Player Took Damage` ran.
     assert_eq!(trace.globals["events"], Val::number(1.0));
 }
 
@@ -710,18 +706,14 @@ fn event_attacker_and_victim_values_are_player_ids_or_null() {
                     "values": {values} }}] }}"#
         )
     };
-    // A declared player id loads.
     run_scenario(LEFT_RULE, &base(r#"{ "attacker": "p1", "victim": "p1" }"#))
         .unwrap_or_else(|error| panic!("{error}"));
-    // `null` loads.
     run_scenario(LEFT_RULE, &base(r#"{ "attacker": null }"#))
         .unwrap_or_else(|error| panic!("{error}"));
-    // An undeclared id refuses.
     assert!(matches!(
         scenario_error(&base(r#"{ "attacker": "ghost" }"#)),
         ScenarioError::Load(_)
     ));
-    // Every other JSON kind refuses.
     for value in ["5", "true", "[]", "{}"] {
         let json = base(&format!(r#"{{ "victim": {value} }}"#));
         assert!(

@@ -8,7 +8,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, RunError, ScenarioError, Val, run_scenario, run_text};
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -54,7 +53,6 @@ fn objective_position_returns_the_entry_at_the_evaluated_index() {
         assert_eq!(trace.globals["g"], expected, "{index}");
     }
 
-    // The argument evaluates: `Add(1, 1)` names index 2.
     let trace = run(&set_global("Objective Position(Add(1, 1))"));
     assert_eq!(trace.globals["g"], vec(21.0, 2.0, 0.0));
 }
@@ -71,7 +69,6 @@ fn the_boolean_form_reads_as_indexes_0_and_1() {
 
 #[test]
 fn a_missing_field_or_entry_is_a_missing_input_naming_objectives_i() {
-    // No `objectives` field at all.
     let scenario = r#"{ "scenarioVersion": 1, "seconds": 1, "players": [] }"#;
     let text = set_global("Objective Position(0)");
     let trace = run_scenario(&text, scenario).unwrap_or_else(|error| panic!("{error}"));
@@ -84,7 +81,6 @@ fn a_missing_field_or_entry_is_a_missing_input_naming_objectives_i() {
     assert_eq!(input.name.as_deref(), Some("objectives[0]"));
     assert_eq!(input.tick, Some(0));
 
-    // A run without a scenario reports it the same way.
     let trace = run_text(&text, athena_sim::Options { seconds: 1.0 })
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(trace.outcome, Outcome::MissingInput);

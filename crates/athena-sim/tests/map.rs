@@ -7,7 +7,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, RunError, ScenarioError, Val, run_scenario, run_text};
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -69,7 +68,6 @@ fn without_the_field_a_current_map_read_is_a_missing_input() {
     assert_eq!(input.name.as_deref(), Some("map"));
     assert_eq!(input.tick, Some(0));
 
-    // A run without a scenario reports it the same way.
     let trace = run_text(&text, athena_sim::Options { seconds: 1.0 })
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(trace.outcome, Outcome::MissingInput);

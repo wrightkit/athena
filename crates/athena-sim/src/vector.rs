@@ -157,7 +157,6 @@ pub(crate) fn produced(v: Vec3, construct: &str) -> Result<Val, Stop> {
     }
 }
 
-/// The scenario player's `position`; a live input the run cannot guess.
 fn position(players: &BTreeMap<String, Player>, id: &str, construct: &str) -> Result<Vec3, Stop> {
     let Some(player) = players.get(id) else {
         return unsupported(format!("`{id}` is not a scenario player"));
@@ -173,7 +172,6 @@ fn position(players: &BTreeMap<String, Player>, id: &str, construct: &str) -> Re
     }
 }
 
-/// The scenario player's `facing`; likewise a live input.
 fn facing(players: &BTreeMap<String, Player>, id: &str, construct: &str) -> Result<Facing, Stop> {
     let Some(player) = players.get(id) else {
         return unsupported(format!("`{id}` is not a scenario player"));
@@ -325,7 +323,6 @@ fn transform(value: &Value, env: &Env) -> Result<String, Stop> {
     }
 }
 
-/// The vector-family `Value::Call` values.
 pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
     match name {
         "vector" => {
@@ -564,8 +561,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             };
             produced(rotated, name)
         }
-        // The empty-world geometry reads have their own dispatcher; it
-        // ends unknown names in `not_modeled` the same way.
         other => crate::geometry::call(other, args, env),
     }
 }
