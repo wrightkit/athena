@@ -31,7 +31,6 @@ fn test_values() -> workshop_rs::hero_values::HeroValues {
     .expect("the test hero values load")
 }
 
-/// One host player whose catalog state resolves.
 const ANA: &str = r#"{ "scenarioVersion": 1, "seconds": 2,
     "players": [{ "id": "p1", "hero": "Ana", "host": true }] }"#;
 

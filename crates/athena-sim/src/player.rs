@@ -1,10 +1,3 @@
-//! Player-roster and player-state values: `All Players`, `Host Player`,
-//! `All Heroes`, the `Hero Of`/`Team Of`, `Is Hero Being Played` and
-//! `Players On Hero` reads, spawn/alive state, the
-//! cooldown/status/button reads a scenario player's resolved world
-//! state answers, and the no-extra-argument reads a scenario player's
-//! `state` map answers.
-
 use std::collections::BTreeMap;
 
 use workshop_rs::Value;
@@ -128,7 +121,6 @@ fn visit_on_team(
     Ok(())
 }
 
-/// The value names this module owns.
 const NAMES: &[&str] = &[
     "allPlayers",
     "allHeroes",
@@ -149,10 +141,6 @@ const NAMES: &[&str] = &[
     "getAbilityCooldown",
 ];
 
-/// `Some(result)` when `name` is a player-roster or player-state value;
-/// `None` leaves dispatch to the next family. The [`crate::state_reads`]
-/// `STATE_READS` table names the scenario-`state` reads alongside the
-/// static names.
 pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Option<Result<Val, Stop>> {
     if !NAMES.contains(&name) && crate::state_reads::state_read(name).is_none() {
         return None;
@@ -330,7 +318,6 @@ fn dispatch(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         // hero the selection screen shows; the screen is not modeled.
         "isHeroBeingPlayed" => {
             let (hero, team) = hero_team_args(name, args, env)?;
-            // The first match decides the read.
             let mut found = false;
             visit_on_team(env.players, &team, name, |_, member| {
                 found = member == hero;

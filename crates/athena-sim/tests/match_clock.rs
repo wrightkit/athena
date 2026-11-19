@@ -161,7 +161,6 @@ fn match_time_before_any_set_is_not_modeled() {
 
 #[test]
 fn a_countdown_reaching_zero_ends_the_run() {
-    // The phase boundary a zeroed countdown crosses is not modeled.
     let trace = run(
         "        Set Match Time(0.01);
         Wait(0.016, Ignore Condition);",

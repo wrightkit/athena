@@ -6,7 +6,6 @@ fn run(text: &str) -> athena_sim::Trace {
     run_text(text, Options { seconds: 2.0 }).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// `For Global Variable` with an `If` in its body.
 const FOR_IF: &str = r#"
 variables {
     global:
@@ -37,7 +36,6 @@ fn a_for_global_variable_containing_an_if_runs_to_the_expected_values() {
     assert_eq!(trace.globals["total"], Val::number(7.0));
 }
 
-/// A `For` inside each branch of an `If`/`Else` chain.
 const FOR_IN_IF: &str = r#"
 variables {
     global:
@@ -90,7 +88,6 @@ fn a_for_inside_an_if_pairs_its_end_with_the_for_not_the_if() {
     assert_eq!(trace.globals["j"], Val::Null);
 }
 
-/// A `Wait` inside a `For` body suspends and resumes the loop.
 const FOR_WAIT: &str = r#"
 variables {
     global:
@@ -155,7 +152,6 @@ fn a_for_counts_down_and_skips_an_already_passed_range() {
     assert_eq!(trace.globals["never"], Val::number(5.0));
 }
 
-/// `For Player Variable` on the `Event Player`.
 const FOR_PLAYER: &str = r#"
 variables {
     player:
@@ -259,7 +255,6 @@ rule ("chains") {
 fn a_fresh_chain_does_not_inherit_a_previous_chains_clause_jump() {
     let trace = run(CONSECUTIVE_CHAINS);
     assert_eq!(trace.outcome, Outcome::Complete);
-    // Only the true clause of the second chain runs.
     assert_eq!(trace.globals["hits"], Val::number(1.0));
 }
 

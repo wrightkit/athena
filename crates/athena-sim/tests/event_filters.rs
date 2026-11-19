@@ -7,7 +7,6 @@ fn run(text: &str, scenario: &str) -> athena_sim::Trace {
     run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// `Ongoing - Each Player` writing the event player's team back to it.
 const EACH_PLAYER: &str = r#"
 variables {
     player:
@@ -52,8 +51,6 @@ fn an_each_player_rule_instantiates_once_per_matching_player() {
     );
 }
 
-/// An each-player rule filtered by hero name, and a filtered `Player Died`
-/// rule that the scenario never triggers.
 const FILTERED_RULES: &str = r#"
 variables {
     global:
@@ -136,7 +133,6 @@ fn a_rule_filtered_to_an_empty_team_never_fires_and_does_not_stop_the_run() {
     assert_eq!(trace.globals["hits"], Val::Null);
 }
 
-/// A `Player Died` rule filtered to `Team 2`.
 const TEAM_DIED: &str = r#"
 variables {
     global:

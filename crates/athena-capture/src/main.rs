@@ -54,9 +54,6 @@ fn report(outcome: Result<(), athena_capture::Error>) -> ExitCode {
     }
 }
 
-/// A log holding a different probe's end line would save a run poisoned by
-/// the other probe's lines; refuse it. The check is best-effort: it needs
-/// the probes dir, and a missing or unreadable one just skips it.
 fn guard_foreign_run(
     log: &Path,
     text: &str,

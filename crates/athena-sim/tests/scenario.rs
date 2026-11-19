@@ -123,7 +123,6 @@ rule ("kill") {
 }
 "#;
 
-/// Reads `Hero` and `Team Of` of the event player.
 const HERO_TEAM: &str = r#"
 variables {
     global:
@@ -144,7 +143,6 @@ rule ("who") {
 }
 "#;
 
-/// Reads an event value.
 const DAMAGE_RULE: &str = r#"
 variables {
     global:
@@ -163,7 +161,6 @@ rule ("hit") {
 }
 "#;
 
-/// Writes a log line when the event fires.
 const LOGGER: &str = r#"
 rule ("log") {
     event {
@@ -369,7 +366,6 @@ fn two_events_at_the_same_time_fire_in_file_order() {
     }"#;
     let trace = run(KILL_RULE, scenario);
     assert_eq!(trace.outcome, Outcome::Complete);
-    // Two final blows: streak 0 + 1 + 1, delta 1 twice.
     assert_eq!(trace.globals["score"], Val::number(2.0));
 }
 
@@ -435,9 +431,7 @@ fn the_trace_json_carries_missing_inputs_and_expectations() {
 
 #[test]
 fn a_program_needing_an_input_has_no_scenario_default() {
-    // `run_text` has no scenario: every live input is missing.
     let trace = run_text(HERO_TEAM, Options { seconds: 1.0 }).unwrap();
-    // No event fires: the run completes; reads happen only inside events.
     assert_eq!(trace.outcome, Outcome::Complete);
     let scenario = r#"{
         "scenarioVersion": 1,
@@ -472,7 +466,6 @@ fn malformed_scenarios_are_refused() {
         scenario_error(r#"{ "scenarioVersion": "1" }"#),
         ScenarioError::Version { .. }
     ));
-    // A field the schema forbids is an unknown-field error.
     assert!(matches!(
         scenario_error(r#"{ "scenarioVersion": 1, "seconds": 1, "players": [], "mode": "x" }"#),
         ScenarioError::Format(_)
@@ -502,7 +495,6 @@ fn the_loader_checks_what_the_schema_cannot() {
         Err(RunError::Scenario(error)) => error,
         other => panic!("expected a scenario refusal, got {other:?}"),
     };
-    // Duplicate player id.
     assert!(matches!(
         scenario_error(
             r#"{ "scenarioVersion": 1, "seconds": 1,
@@ -510,7 +502,6 @@ fn the_loader_checks_what_the_schema_cannot() {
         ),
         ScenarioError::Load(_)
     ));
-    // `eventPlayer` is not a declared player.
     assert!(matches!(
         scenario_error(
             r#"{ "scenarioVersion": 1, "seconds": 1, "players": [],
@@ -518,7 +509,6 @@ fn the_loader_checks_what_the_schema_cannot() {
         ),
         ScenarioError::Load(_)
     ));
-    // An expectation names an undeclared player.
     assert!(matches!(
         scenario_error(
             r#"{ "scenarioVersion": 1, "seconds": 1, "players": [],
@@ -526,7 +516,6 @@ fn the_loader_checks_what_the_schema_cannot() {
         ),
         ScenarioError::Load(_)
     ));
-    // A hero `workshop-rs` does not know.
     assert!(matches!(
         scenario_error(
             r#"{ "scenarioVersion": 1, "seconds": 1,

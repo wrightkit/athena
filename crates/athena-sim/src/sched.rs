@@ -26,7 +26,6 @@ const TICK_S: f64 = 0.016;
 /// capture reads t0 = 3.023.
 const START_OFFSET_S: f64 = 0.015;
 
-/// The condition of the `Wait Until` action the frame points at.
 fn until_holds(rules: &[&Rule], frame: Frame, env: &Env) -> Result<bool, Stop> {
     let Some(Action::Call { args, .. }) = rules[frame.rule_idx].actions.get(frame.pc) else {
         unreachable!("a Wait Until frame points at its action");
@@ -150,8 +149,6 @@ pub(crate) fn run(
     }
 }
 
-/// Expectations are checked at the end of a complete run only; a partial run
-/// reports `not_evaluated` for every one.
 fn expectations(
     expect: &[Expectation],
     world: &World,
@@ -214,8 +211,6 @@ fn expectations(
         .collect()
 }
 
-/// The run's `Event Player`: the triggering event's player, or the
-/// player an `Ongoing - Each Player` instance is bound to.
 pub(crate) fn event_player(inst: &Instance<'_>) -> Option<String> {
     inst.event
         .as_ref()
@@ -235,7 +230,6 @@ pub(crate) fn run_and_record(
     tick: u64,
     now: Finite,
 ) -> Result<(), Stop> {
-    // A flag left by an earlier `Abort` would mislabel the next run.
     inst.aborted = false;
     let result = run_instance(inst, rule_list, blocks, subroutines, world, tick, now);
     let ended = match &result {
@@ -315,7 +309,6 @@ fn tick_loop(
         let now = Finite::produced(START_OFFSET_S + world.clock.elapsed.get(), "match clock")
             .map_err(|error| Stop::from(error).at(tick))?;
         let result = run_tick(&mut loaded, world, events, tick, now);
-        // A tick that stopped the run still records what it did.
         let mut rules = std::mem::take(&mut world.runs);
         let mut changes = std::mem::take(world.changes.get_mut());
         let keep = TIMELINE_RULE_LIMIT.saturating_sub(rules_recorded);
@@ -408,8 +401,6 @@ fn run_tick(
                 // (P2). An `Ongoing - Each Player` instance runs this same
                 // ongoing logic with `Event Player` bound to its player.
                 let each_player = instance.each_player.clone();
-                // One condition check is a pass: `Evaluate Once` sites
-                // in the conditions re-pin every check.
                 let pass = RefCell::new(BTreeMap::new());
                 let env = Env {
                     globals: &world.globals,
@@ -454,7 +445,6 @@ fn run_tick(
                             if !holds {
                                 instance.frames.clear();
                                 instance.wake = None;
-                                // The suspended run dies on this tick.
                                 world.runs.push(RuleRun {
                                     rule: instance.rule_idx,
                                     name: instance.rule.name.clone(),

@@ -12,10 +12,8 @@ fn scenario(players: &str) -> String {
     format!(r#"{{ "scenarioVersion": 1, "seconds": 2, "players": {players} }}"#)
 }
 
-/// Two players on different teams.
 const TWO_TEAMS: &str = r#"[{ "id": "p1", "team": "team1" }, { "id": "p2", "team": "team2" }]"#;
 
-/// One HUD text, visible to `All Players(Team 1)`.
 const TEAM_HUD: &str = r#"
 variables {
     global:
@@ -40,7 +38,6 @@ fn a_hud_text_visible_to_one_team_lists_only_its_members() {
         panic!("expected one HUD element, got {:?}", trace.hud);
     };
     assert_eq!(hud.kind, HudKind::HudText);
-    // Team 1 only: `p2` on team 2 is not a recipient.
     assert_eq!(hud.recipients, ["p1"]);
     assert_eq!(hud.created_tick, 0);
     assert_eq!(hud.destroyed_tick, None);
@@ -87,18 +84,15 @@ fn a_destroyed_element_keeps_its_entry_with_destroyed_tick() {
     let [first, second] = trace.hud.as_slice() else {
         panic!("expected two HUD elements, got {:?}", trace.hud);
     };
-    // `Last Text ID` named the newest element.
     assert_eq!(trace.globals["t"], Val::number(1.0));
     assert_eq!(second.id, 1);
     assert_eq!(second.destroyed_tick, Some(0));
     // Wait(0.5) wakes on tick 32 (0.5 / 0.016 = 31.25, rounded up).
     assert_eq!(first.id, 0);
     assert_eq!(first.destroyed_tick, Some(32));
-    // Both stay listed: present means `destroyedTick` is `null`.
     assert_eq!(trace.hud.len(), 2);
 }
 
-/// A progress bar and a HUD text, each destroyed by its own destroy action.
 const PROGRESS_BAR: &str = r#"
 rule ("init") {
     event {
@@ -133,14 +127,11 @@ fn a_progress_bar_records_its_arguments() {
     assert_eq!(bar.args.text_color, Some(Val::Text("RED".into())));
     assert_eq!(bar.args.reevaluation.as_deref(), Some("NONE"));
     assert_eq!(bar.args.spec_visibility.as_deref(), Some("VISIBLE_ALWAYS"));
-    // `Last Text ID` was the progress bar; the kind-scoped destroy hit it.
     assert_eq!(bar.destroyed_tick, Some(0));
-    // The HUD text is the only element left present.
     assert_eq!(hud_text.kind, HudKind::HudText);
     assert_eq!(hud_text.destroyed_tick, None);
 }
 
-/// Messages and an objective description in an event rule.
 const MESSAGES: &str = r#"
 variables {
     player:
@@ -308,7 +299,6 @@ fn the_trace_json_covers_hud() {
     assert_eq!(hud["headerColor"], "WHITE");
     assert_eq!(hud["reevaluation"], "VISIBILITY_AND_STRING");
     assert_eq!(hud["specVisibility"], "DEFAULT");
-    // Fields the action does not take are absent.
     assert!(hud.get("value").is_none());
     assert!(hud.get("progressBarColor").is_none());
 }

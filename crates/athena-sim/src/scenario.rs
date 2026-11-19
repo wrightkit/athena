@@ -18,7 +18,6 @@ use crate::{ScenarioError, Val};
 /// moves them to `vars` and makes `state` the player-state map.
 const SUPPORTED_VERSIONS: &[u64] = &[1, 2];
 
-/// A scenario `team` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Team {
     Team1,
@@ -45,7 +44,6 @@ impl Team {
     }
 }
 
-/// A player as a scenario declares it.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Player {
     /// Hero name; the program may read it, and a missing one is a missing
@@ -59,7 +57,6 @@ pub(crate) struct Player {
     /// the hero in the gameplay dataset for the hero values catalog. Empty
     /// when `hero` is absent.
     pub hero_spellings: Vec<String>,
-    /// Team; likewise a live input.
     pub team: Option<Team>,
     /// The player `Host Player` returns; at most one player has it.
     pub host: bool,
@@ -106,15 +103,10 @@ pub(crate) struct Player {
     pub world: crate::state::WorldSlot,
 }
 
-/// The runtime context of a player event — injected by the scenario or
-/// raised by a modeled state change — while a rule it triggered runs.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct EventCtx {
-    /// The Workshop event name.
     pub kind: String,
-    /// The `id` of the event player, if the event declares one.
     pub player: Option<String>,
-    /// The event's `values` map.
     pub values: BTreeMap<String, Val>,
     /// `true` when a modeled state change (`Damage`/`Heal`) raised the
     /// event. Only an injected event takes scenario `values`, so an
@@ -123,16 +115,11 @@ pub(crate) struct EventCtx {
     pub raised: bool,
 }
 
-/// An event the scenario injects.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct InjectedEvent {
-    /// The Workshop event name, for example `playerDealtFinalBlow`.
     pub kind: String,
-    /// Seconds from the first tick.
     pub time: f64,
-    /// The `id` of the event player; a live input when the program reads it.
     pub event_player: Option<String>,
-    /// Event values by event-value name.
     pub values: BTreeMap<String, Val>,
 }
 
@@ -169,16 +156,12 @@ pub(crate) struct ServerLoad {
     pub peak: f64,
 }
 
-/// A validated scenario.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Scenario {
     /// Simulated seconds, greater than zero.
     pub seconds: f64,
-    /// Players by their scenario `id`.
     pub players: BTreeMap<String, Player>,
-    /// Injected events in file order.
     pub events: Vec<InjectedEvent>,
-    /// Expectations in file order.
     pub expect: Vec<Expectation>,
     /// The `random.seed`: the source `Random *` values draw from.
     /// `None` when the scenario supplies none; a random read is then a
@@ -260,7 +243,6 @@ struct PlayerDoc {
     team: Option<TeamDoc>,
     #[serde(default)]
     host: bool,
-    /// `true` marks the player `Local Player` returns; like `host`.
     #[serde(default)]
     local: bool,
     /// scenarioVersion 1: the player's variables. scenarioVersion 2:
@@ -282,7 +264,6 @@ struct PlayerDoc {
     /// degrees, supplied whole or not at all.
     #[serde(default, deserialize_with = "object_or_absent")]
     facing: Option<FacingDoc>,
-    /// The player's lobby slot, an integer from 0 to 11.
     slot: Option<u8>,
 }
 
@@ -561,8 +542,6 @@ pub(crate) fn load(json: &str, catalog: &Catalog) -> Result<Scenario, ScenarioEr
         }
         let mut values = BTreeMap::new();
         for (name, value) in &event.values {
-            // The player-typed event values name a scenario player by
-            // `id`, like `eventPlayer` itself; `null` stays `null`.
             let value = match (name.as_str(), value) {
                 ("attacker" | "victim", serde_json::Value::String(id)) => {
                     if !players.contains_key(id) {

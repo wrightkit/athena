@@ -8,7 +8,6 @@ fn run(text: &str) -> athena_sim::Trace {
     run_text(text, Options { seconds: 2.0 }).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -46,12 +45,10 @@ fn text(value: &str) -> Val {
 fn char_in_string_reads_the_character_or_empty_string() {
     for (value, expected) in [
         ("Char In String(Custom String(\"abc\"), 1)", "b"),
-        // A boolean index reads as 0/1.
         ("Char In String(Custom String(\"abc\"), False)", "a"),
         ("Char In String(Custom String(\"abc\"), True)", "b"),
         // Characters index as characters, not UTF-8 bytes.
         ("Char In String(Custom String(\"堡垒\"), 1)", "垒"),
-        // Out of bounds, negative, and the empty string: `""`.
         ("Char In String(Custom String(\"abc\"), 3)", ""),
         ("Char In String(Custom String(\"abc\"), -1)", ""),
         ("Char In String(Empty Array, False)", ""),
@@ -75,7 +72,6 @@ fn string_split_splits_around_the_separator() {
         &Val::Array(vec![text("9"), text("8"), text("7")])
     );
 
-    // A separator the source does not contain yields the source alone.
     let trace = run(&set_global(
         "String Split(Custom String(\"abc\"), Custom String(\"-\"))",
     ));
@@ -88,7 +84,6 @@ fn string_split_splits_around_the_separator() {
     ));
     assert_eq!(global(&trace), &Val::Array(vec![text("a"), text("b")]));
 
-    // The empty source yields the empty array.
     let trace = run(&set_global(
         "String Split(Empty Array, Custom String(\"-\"))",
     ));
@@ -132,7 +127,6 @@ fn index_of_string_char_finds_the_first_index_or_minus_one() {
     }
 }
 
-/// `String Replace` replaces every occurrence of the pattern.
 #[test]
 fn string_replace_replaces_all_occurrences() {
     let trace = run(&set_global(
@@ -140,7 +134,6 @@ fn string_replace_replaces_all_occurrences() {
     ));
     assert_eq!(global(&trace), &text("x and x"));
 
-    // The empty source and the missing pattern leave nothing to do.
     let trace = run(&set_global(
         "String Replace(Empty Array, Custom String(\"a\"), Custom String(\"b\"))",
     ));
@@ -154,9 +147,7 @@ fn string_replace_replaces_all_occurrences() {
 #[test]
 fn a_produced_string_over_511_bytes_is_not_modeled() {
     for value in [
-        // A `Custom String` renders past the boundary.
         format!("Custom String(\"{}\")", "a".repeat(600)),
-        // `String Replace` expands past it.
         format!(
             "String Replace(Custom String(\"{}\"), Custom String(\"a\"), Custom String(\"垒\"))",
             "a".repeat(300)
@@ -176,8 +167,6 @@ fn a_produced_string_over_511_bytes_is_not_modeled() {
     }
 }
 
-/// An empty `String Replace` pattern names no occurrence; the run
-/// stops.
 #[test]
 fn string_replace_with_an_empty_pattern_is_not_modeled() {
     let trace = run(&set_global(

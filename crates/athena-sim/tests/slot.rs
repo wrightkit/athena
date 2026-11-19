@@ -3,7 +3,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, RunError, ScenarioError, Val, run_scenario};
 
-/// Reads `Slot Of` of the event player.
 const SLOT_OF: &str = r#"
 variables {
     global:
@@ -22,7 +21,6 @@ rule ("slot") {
 }
 "#;
 
-/// Reads `Slot Of` of a non-player operand.
 const SLOT_OF_NUMBER: &str = r#"
 variables {
     global:
@@ -95,7 +93,6 @@ fn the_slot_field_is_validated() {
         Err(RunError::Scenario(error)) => error,
         other => panic!("expected a scenario refusal, got {other:?}"),
     };
-    // `slot` past 11 is malformed, as is a non-integer.
     for slot in ["12", "1.5", "\"3\""] {
         let json = format!(
             r#"{{ "scenarioVersion": 1, "seconds": 1,
@@ -106,7 +103,6 @@ fn the_slot_field_is_validated() {
             "slot {slot}: expected a format refusal"
         );
     }
-    // Two players may not share a slot.
     assert!(matches!(
         scenario_error(
             r#"{ "scenarioVersion": 1, "seconds": 1,
@@ -114,7 +110,6 @@ fn the_slot_field_is_validated() {
         ),
         ScenarioError::Load(_)
     ));
-    // The bounds are inclusive and version 2 takes the field too.
     for json in [
         r#"{ "scenarioVersion": 1, "seconds": 1,
             "players": [{ "id": "p1", "slot": 0 }, { "id": "p2", "slot": 11 }] }"#,

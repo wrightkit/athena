@@ -9,7 +9,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, Val, run_scenario};
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -69,10 +68,8 @@ fn the_players_on_the_team_with_the_hero_in_roster_order() {
 #[test]
 fn no_matching_player_is_the_empty_array() {
     for (hero, team) in [
-        // No player plays the hero at all.
         ("Ashe", "Team 1"),
         ("Ashe", "All Teams"),
-        // The hero is played, but on the other team.
         ("Reaper", "Team 1"),
         ("Ana", "Team 2"),
     ] {
@@ -112,7 +109,6 @@ fn a_player_without_a_hero_is_a_missing_input() {
     assert_eq!(input.player.as_deref(), Some("p1"));
     assert_eq!(input.tick, Some(0));
 
-    // The same player under `All Teams` is read too.
     let trace = run(
         &set_global("Players On Hero(Hero(Ana), All Teams)"),
         scenario,
@@ -149,9 +145,6 @@ fn a_non_member_argument_is_not_modeled() {
     }
 }
 
-/// The result is a player array the array values read: `Count Of` its
-/// length, `Filtered Array` over its elements, `Array Contains` its
-/// membership.
 #[test]
 fn the_result_feeds_the_array_values() {
     let trace = run(

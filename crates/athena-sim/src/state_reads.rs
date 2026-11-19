@@ -1,10 +1,5 @@
-//! The version-2 `state` map's read table: the no-extra-argument
-//! player reads a scenario player's `state` object answers, and the
-//! per-key `state` JSON value to `Val` mapping.
-
 use crate::{ScenarioError, Val};
 
-/// The JSON type a `state` key takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StateType {
     Bool,
@@ -13,7 +8,6 @@ pub(crate) enum StateType {
 }
 
 impl StateType {
-    /// The article-and-name a malformed-scenario error reports.
     fn desc(self) -> &'static str {
         match self {
             Self::Bool => "a boolean",
@@ -42,8 +36,6 @@ pub(crate) struct StateRead {
     pub derived: bool,
 }
 
-/// The player-state table: one row per modeled no-extra-argument
-/// player read. Adding a read is one row plus a test.
 pub(crate) const STATE_READS: &[StateRead] = &[
     StateRead {
         id: "getHealth",
@@ -167,21 +159,16 @@ pub(crate) const STATE_READS: &[StateRead] = &[
     },
 ];
 
-/// The read a value `id` names, when `id` is a player-state value.
 pub(crate) fn state_read(id: &str) -> Option<&'static StateRead> {
     STATE_READS.iter().find(|read| read.id == id)
 }
 
-/// The table row a `state` map `key` declares, when `key` is a known
-/// `state` key. `derived` rows name no key of their own.
 pub(crate) fn state_key(key: &str) -> Option<&'static StateRead> {
     STATE_READS
         .iter()
         .find(|read| read.key == key && !read.derived)
 }
 
-/// The `{ "x": n, "y": n, "z": n }` a `state` vector takes; anything
-/// else — a missing or extra key, a non-number component — is malformed.
 fn state_vector(
     object: &serde_json::Map<String, serde_json::Value>,
 ) -> Option<crate::vector::Vec3> {
@@ -195,8 +182,6 @@ fn state_vector(
     })
 }
 
-/// One `state` map entry to its `Val`; a wrong JSON type is malformed
-/// naming the key.
 pub(crate) fn state_value(
     read: &StateRead,
     player: &str,

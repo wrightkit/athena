@@ -1,24 +1,15 @@
-//! Jump targets for the block actions (`While`, `For`, `If`) of one rule.
-
 use workshop_rs::Action;
 
 use crate::Stop;
 use crate::unsupported;
 
-/// Jump targets for the block actions of one rule.
 pub(crate) struct Blocks {
-    /// `While`/`For` → its `End`; `End` → its opener (a loop head or `If`).
     pub pairs: Vec<Option<usize>>,
-    /// `If`/`ElseIf` → the next clause head or `End`; `Else` → the `End`.
     pub next_clause: Vec<Option<usize>>,
-    /// `ElseIf`/`Else` → the `End` of the chain, where fall-through exits.
     pub chain_end: Vec<Option<usize>>,
-    /// The innermost `While`/`For` head each action sits inside; `Break`
-    /// lands past its `End`, `Continue` lands on it.
     pub enclosing: Vec<Option<usize>>,
 }
 
-/// A block that stays open until its `End` line.
 enum Open {
     While(usize),
     For(usize),

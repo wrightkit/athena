@@ -9,7 +9,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, RunEnd, Val, run_scenario};
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -98,7 +97,6 @@ fn a_player_without_a_hero_is_a_missing_input() {
     assert_eq!(input.player.as_deref(), Some("p1"));
     assert_eq!(input.tick, Some(0));
 
-    // The same player under `All Teams` is read too.
     let trace = run(
         &set_global("Is Hero Being Played(Hero(Ana), All Teams)"),
         scenario,

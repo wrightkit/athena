@@ -13,7 +13,6 @@ fn seeded(text: &str, seed: u64) -> athena_sim::Trace {
     run_scenario(text, &scenario).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -87,7 +86,6 @@ fn without_a_source_a_random_value_is_a_missing_input() {
     assert_eq!(input.name.as_deref(), Some("random"));
     assert_eq!(input.tick, Some(0));
 
-    // A run without a scenario reports it the same way.
     let trace = run_text(&text, athena_sim::Options { seconds: 1.0 })
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(trace.outcome, Outcome::MissingInput);
@@ -126,7 +124,6 @@ fn random_real_stays_inside_min_max() {
         };
         assert!(n.get() >= 2.0 && n.get() < 5.0, "seed {seed}: {n:?}");
     }
-    // Swapped bounds cover the same interval.
     let trace = seeded(&set_global("Random Real(5, 2)"), 1);
     let Val::Number(n) = global(&trace) else {
         panic!("{:?}", trace.globals["g"]);
@@ -175,7 +172,6 @@ fn randomized_array_keeps_the_elements() {
         sorted.sort_by(f64::total_cmp);
         assert_eq!(sorted, [1.0, 2.0, 3.0, 4.0, 5.0], "seed {seed}");
     }
-    // Empty and one-element arrays come back unchanged.
     for (value, expected) in [
         ("Randomized Array(Empty Array)", Val::Array(vec![])),
         ("Randomized Array(Null)", Val::Array(vec![])),
@@ -214,8 +210,6 @@ fn a_draw_is_recorded_on_the_tick_changes() {
     );
 }
 
-/// A `Wait Until` in a `Call Subroutine` frame keeps the subroutine's
-/// rule index on the draws its per-tick re-checks record.
 #[test]
 fn a_wait_until_recheck_records_the_subroutines_rule() {
     let text = r#"
@@ -258,8 +252,6 @@ rule ("Subroutine sub") {
     assert!(rules.iter().all(|rule| *rule == 1), "{rules:?}");
 }
 
-/// Finite bounds can still span a range `Max - Min` cannot hold: the run
-/// stops `not_modeled`, as for a non-finite bound.
 #[test]
 fn a_non_finite_range_is_not_modeled() {
     for value in [
@@ -275,8 +267,6 @@ fn a_non_finite_range_is_not_modeled() {
     }
 }
 
-/// `seed` is an unsigned 64-bit integer: `u64::MAX` loads, `null` is not
-/// "absent" and `2^64` is past the range.
 #[test]
 fn the_seed_is_an_unsigned_64_bit_integer() {
     let text = set_global("Random Integer(0, 9)");

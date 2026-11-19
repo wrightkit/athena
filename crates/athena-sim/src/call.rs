@@ -1,8 +1,3 @@
-//! Catalog-call values: the `Value::Call` arms — arithmetic, arrays,
-//! strings and the `Random *` draws a scenario's `random` source feeds.
-//! The player-roster and player-state reads have their own dispatcher
-//! in `player.rs`.
-
 use workshop_rs::Value;
 
 use crate::ambiguous;
@@ -97,8 +92,6 @@ fn string(value: &Val) -> Result<String, Stop> {
     }
 }
 
-/// The `Env` an element-context array value's per-element operand sees:
-/// the caller's `env` with `element` bound to the element and its index.
 fn element_env<'a>(env: &Env<'a>, element: &'a Val, index: usize) -> Env<'a> {
     Env {
         element: Some((element, index as u64)),
@@ -132,8 +125,6 @@ impl Random {
     }
 }
 
-/// Consume one draw of the scenario's `random` source, or stop the run
-/// when the scenario supplies none.
 fn draw(env: &Env, construct: &str) -> Result<f64, Stop> {
     match env.random {
         Some(random) => Ok(random.borrow_mut().fraction()),
@@ -146,8 +137,6 @@ fn draw(env: &Env, construct: &str) -> Result<f64, Stop> {
     }
 }
 
-/// Record a `Random *` value's draw on the tick's changes and yield its
-/// produced value.
 fn drawn(env: &Env, construct: &str, value: Val) -> Val {
     env.changes.borrow_mut().push(Change::RandomDraw {
         rule: env.rule,
@@ -341,7 +330,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
         }
         "ifThenElse" => {
             let [condition, when_true, when_false] = arguments::<3>(name, args)?;
-            // Only the taken branch is read.
             if truthy(&eval(condition, env)?)? {
                 eval(when_true, env)
             } else {
@@ -610,7 +598,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
                         keyed.into_iter().map(|(_, item)| item.clone()).collect(),
                     ))
                 }
-                // `Mapped Array` collects the operand's per-element result.
                 "mappedArray" => {
                     let mut mapped = Vec::with_capacity(items.len());
                     for (index, item) in items.iter().enumerate() {
@@ -780,9 +767,6 @@ pub(crate) fn call(name: &str, args: &[Value], env: &Env) -> Result<Val, Stop> {
             }
             produced(source.replace(&pattern, &replacement), name)
         }
-        // The player-roster and player-state family has its own
-        // dispatcher, then the vector family; each ends the unknown
-        // names it owns in `not_modeled` the same way.
         other => crate::player::call(other, args, env)
             .unwrap_or_else(|| crate::vector::call(other, args, env)),
     }

@@ -134,8 +134,6 @@ pub fn ingest(dir: &Path, log: &str, source: &str) -> Result<Outcome, Error> {
 
     let saved = saved_captures(dir).len() as u64;
     let runs = record["runs"].as_u64().unwrap_or_default();
-    // One file past `runs` is the crash leftover described above; more is
-    // a corrupted directory.
     if saved != runs && saved != runs + 1 {
         return Err(Error::RunCount {
             recorded: runs,
@@ -144,8 +142,6 @@ pub fn ingest(dir: &Path, log: &str, source: &str) -> Result<Outcome, Error> {
     }
 
     let run = expect.run(log)?;
-    // Only the recorded captures are judged; the possible stray is never
-    // read as a run.
     let mut verdicts = judge_all(dir, &expect, runs as usize)?;
     verdicts.push(expect.judge(&run)?);
     let result = result_of(&verdicts);
@@ -177,9 +173,6 @@ fn json_string(value: &impl serde::Serialize) -> String {
     serde_json::to_string(value).expect("strings serialize")
 }
 
-/// `notes` keeps its human text; `ingest` manages only a trailing
-/// `[ingest: …]` marker so a provisional result says so until three runs
-/// agree.
 fn updated_notes(record: &Value, result: &str, verdicts: &[Verdict]) -> String {
     let human = strip_marker(record["notes"].as_str().unwrap_or_default());
     if result != "inconclusive" {
@@ -195,7 +188,6 @@ fn updated_notes(record: &Value, result: &str, verdicts: &[Verdict]) -> String {
     }
 }
 
-/// The note without its trailing `[ingest: …]` marker, if it has one.
 fn strip_marker(notes: &str) -> &str {
     let end = notes.trim_end();
     let Some(at) = end.rfind("[ingest: ") else {
@@ -209,13 +201,6 @@ fn strip_marker(notes: &str) -> &str {
     }
 }
 
-/// Replace the value of the one two-space-indented `"key": value` line,
-/// keeping the rest of the file, its key order and its formatting. The
-/// convention's `capture.json` keeps that exact two-space shape; a file
-/// that drifts (other indentation, two keys at that indent) fails instead
-/// of being normalized silently. A value that spans several lines, as in a
-/// pretty-printed array, is replaced whole: its lines run up to the next
-/// two-space key or the closing brace.
 fn set_top_level(text: &str, key: &str, value: &str) -> Option<String> {
     let prefix = format!("  \"{key}\": ");
     let is_key = |line: &str| line.starts_with("  \"") || line == "}";
@@ -241,8 +226,6 @@ fn set_top_level(text: &str, key: &str, value: &str) -> Option<String> {
     (found == 1).then(|| lines.join("\n") + "\n")
 }
 
-/// Like `set_top_level`, but a key the file does not have yet is added as
-/// the last field instead of failing. A duplicated key still fails.
 fn upsert_top_level(text: &str, key: &str, value: &str) -> Option<String> {
     if text
         .lines()

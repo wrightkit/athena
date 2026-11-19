@@ -13,7 +13,6 @@ use crate::ingest::{Outcome, ingest};
 use crate::log::lines;
 use crate::{Error, io};
 
-/// How often `watch` looks at the log directory again.
 const POLL: Duration = Duration::from_secs(1);
 
 /// One ingest or skip `watch` reports, one line each.
@@ -102,8 +101,6 @@ pub fn foreign_end(text: &str, probe: &Path, expects: &[(PathBuf, Expect)]) -> O
         .map(|(dir, _)| name(dir))
 }
 
-/// The probe whose expected `lines` the segment's run matches, when
-/// several probes share the end line that closed it.
 fn owner_of<'a>(
     expects: &'a [(PathBuf, Expect)],
     closers: &[usize],
@@ -150,9 +147,6 @@ pub fn scan_once(
             continue;
         };
         let log_lines = lines(&text);
-        // Close a segment at every line that is some probe's end. The run
-        // inside a segment is judged on its own lines only, so same-prefix
-        // probes cannot contaminate each other.
         let mut segments = Vec::new();
         let mut start = 0;
         for (index, line) in log_lines.iter().enumerate() {
@@ -172,8 +166,6 @@ pub fn scan_once(
                 .iter()
                 .map(|line| format!("{}\n", line.raw))
                 .collect();
-            // A segment already handled is not reported again; a file that
-            // is rewritten gets fresh content and is processed again.
             let mut hash = DefaultHasher::new();
             run_text.hash(&mut hash);
             if !state.reported.insert((path.clone(), hash.finish())) {
@@ -198,9 +190,6 @@ pub fn scan_once(
                 continue;
             }
             let event = try_ingest(dir, &path, &run_text, &name(&path));
-            // Only a recorded run spends the file's one slot for this
-            // probe; a skipped segment can still be followed by a valid
-            // later segment.
             if !matches!(event, Event::Skipped { .. }) {
                 state.attempted.insert((path.clone(), dir.clone()));
             }
@@ -232,12 +221,8 @@ fn try_ingest(dir: &Path, path: &Path, text: &str, source: &str) -> Event {
 /// probes under `probes_dir`. Stops on stdin EOF (Ctrl-D) or Ctrl-C.
 pub fn watch(log_dir: &Path, probes_dir: &Path) -> Result<(), Error> {
     let expects = load_expects(probes_dir)?;
-    // Fail fast on a missing or unreadable log dir instead of polling it
-    // forever.
     fs::read_dir(log_dir).map_err(io(log_dir))?;
     let mut state = ScanState::default();
-    // stdin reaching EOF stops the loop; a channel carries the signal so
-    // the poll interval can be a timed wait.
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         for _ in std::io::stdin().lock().lines() {}

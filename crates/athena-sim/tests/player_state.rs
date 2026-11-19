@@ -6,7 +6,6 @@
 
 use athena_sim::{MissingInputKind, Outcome, RunError, ScenarioError, Val, run_scenario};
 
-/// The scenario-format message a malformed scenario reports.
 fn format_error(error: RunError) -> String {
     let RunError::Scenario(ScenarioError::Format(message)) = error else {
         panic!("expected a format error, got {error:?}");
@@ -14,7 +13,6 @@ fn format_error(error: RunError) -> String {
     message
 }
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -166,7 +164,6 @@ const READS: &[(&str, &str, &str, &str, &str)] = &[
     ),
 ];
 
-/// A scenario v2 player whose `state` holds every declared key.
 fn player(state: &str) -> String {
     format!(r#"{{ "id": "p1", "host": true, "hero": "ana", "state": {{ {state} }} }}"#)
 }

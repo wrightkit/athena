@@ -7,7 +7,6 @@ use athena_sim::{
     MissingInputKind, Options, Outcome, RunError, ScenarioError, Val, run_scenario, run_text,
 };
 
-/// One `Ongoing - Global` rule that writes `g` once at tick 0.
 fn set_global(value: &str) -> String {
     format!(
         r#"
@@ -96,12 +95,10 @@ fn vector_builds_and_its_components_read_back() {
 /// measured). Other operand types stay `not_modeled`.
 #[test]
 fn a_null_operand_in_a_vector_position_is_the_zero_vector() {
-    // `g` is declared but never set.
     for component in ["X Component Of", "Y Component Of", "Z Component Of"] {
         let trace = run(&set_global(&format!("{component}(Global.g)")));
         assert_eq!(global(&trace), &Val::number(0.0), "{component}");
     }
-    // A literal `Null` operand evaluates to the same `Null`.
     let trace = run(&set_global("Y Component Of(Null)"));
     assert_eq!(global(&trace), &Val::number(0.0));
 
@@ -114,7 +111,6 @@ fn a_null_operand_in_a_vector_position_is_the_zero_vector() {
     let trace = run(&set_global("Normalize(Global.g)"));
     assert_not_modeled(&trace, "normalize of a zero-length vector");
 
-    // A number, a boolean, an array or a text is not a vector.
     let trace = run(&set_global("Y Component Of(5)"));
     assert_not_modeled(&trace, "__yComponentOf__ on Number(5.0)");
     let trace = run(&set_global("Y Component Of(Array(1, 2, 3))"));
@@ -123,7 +119,6 @@ fn a_null_operand_in_a_vector_position_is_the_zero_vector() {
         "__yComponentOf__ on Array([Number(1.0), Number(2.0), Number(3.0)])",
     );
 
-    // The same read after the variable is set yields the component.
     let text = r#"
 variables {
     global:
@@ -274,7 +269,6 @@ fn vector_arithmetic_is_componentwise_with_scalar_broadcast() {
         ("Add(Vector(1, 2, 3), 1)", vec(2.0, 3.0, 4.0)),
         ("Subtract(10, Vector(1, 2, 3))", vec(9.0, 8.0, 7.0)),
         ("Divide(1, Vector(1, 2, 4))", vec(1.0, 0.5, 0.25)),
-        // Purely numeric operands still yield a number.
         ("Add(2, 3)", Val::number(5.0)),
         ("Divide(10, 4)", Val::number(2.5)),
     ] {
@@ -393,7 +387,6 @@ rule ("probe") {
     );
     assert_eq!(global(&trace), &vec(11.0, 22.0, 33.0));
 
-    // A `Player` operand without a scenario `position` is a missing input.
     let trace = run_with(
         &modify_global("Vector(1, 2, 3)", "Add", "Host Player"),
         &format!("{HOST} }}"),
@@ -476,7 +469,6 @@ fn vectors_compare_by_component() {
         ("Compare(Vector(1, 2, 3), ==, Vector(1, 2, 3))", true),
         ("Compare(Vector(1, 2, 3), ==, Vector(1, 2, 4))", false),
         ("Compare(Vector(1, 2, 3), !=, Vector(0, 0, 0))", true),
-        // A vector is never a number, an array or a text.
         ("Compare(Vector(1, 2, 3), ==, 0)", false),
         ("Compare(Vector(1, 2, 3), ==, Array(1, 2, 3))", false),
     ] {
@@ -523,7 +515,6 @@ fn a_missing_position_is_a_missing_input_naming_the_field() {
     assert_eq!(input.name.as_deref(), Some("position"));
     assert_eq!(input.tick, Some(0));
 
-    // The same for a `Player` operand of an arithmetic value.
     let trace = run_with(&set_global("Add(Host Player, 1)"), &format!("{HOST} }}"));
     assert_eq!(trace.outcome, Outcome::MissingInput);
     assert_eq!(trace.missing_inputs[0].input, MissingInputKind::Position);
@@ -754,7 +745,6 @@ fn players_within_radius_filters_by_team_and_distance() {
         r#"{ "id": "p3", "team": "team1", "position": { "x": 3, "y": 0, "z": 0 } }"#
     );
 
-    // All teams, radius 4 from the origin: p1 and p3, roster order.
     let trace = run_with(
         &set_global("Players Within Radius(Vector(0, 0, 0), 4, All Teams, Off)"),
         players,
@@ -764,7 +754,6 @@ fn players_within_radius_filters_by_team_and_distance() {
         &Val::Array(vec![Val::Player("p1".into()), Val::Player("p3".into())])
     );
 
-    // Team 2 alone: p2 is over 11 m out — an empty array.
     let trace = run_with(
         &set_global("Players Within Radius(Vector(0, 0, 0), 4, Team 2, Off)"),
         players,

@@ -13,7 +13,6 @@ fn run(text: &str, scenario: &str) -> athena_sim::Trace {
     run_scenario(text, scenario).unwrap_or_else(|error| panic!("{error}"))
 }
 
-/// One `Ongoing - Global` rule running `actions`.
 fn program(actions: &str) -> String {
     format!(
         r#"
@@ -411,7 +410,6 @@ fn every_stored_modifier_records_its_effect() {
         assert_eq!(*change.0, "p1", "{call}");
         assert_eq!(change.1.as_str(), *id, "{call}");
         assert_eq!(*change.2, *args, "{call}");
-        // No `state` cell and no world value moved.
         assert!(
             !trace.timeline.entries[0]
                 .changes

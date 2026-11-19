@@ -1,8 +1,3 @@
-//! One step of a rule instance: the action interpreter `run_instance`
-//! runs a frame stack until a `Wait` suspends it or it finishes, plus
-//! the `World` it reads and writes, recording the state changes in
-//! `world.changes` for the tick's timeline entry.
-
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
@@ -36,8 +31,6 @@ fn wait_ticks(seconds: f64) -> u64 {
     ((seconds * 1000.0 / (TICK_S * 1000.0) - 1e-9).ceil() as u64).max(1)
 }
 
-/// Whether a `For` control variable at `value` reached or passed the range
-/// stop. The direction of "passed" follows the sign of `step`.
 fn for_done(value: f64, stop: f64, step: f64) -> bool {
     if step >= 0.0 {
         value >= stop
@@ -76,14 +69,11 @@ pub(crate) struct World {
     /// `RefCell` so an `Env` — which borrows the world's other fields —
     /// can record a `randomDraw`.
     pub changes: RefCell<Vec<Change>>,
-    /// The scenario's `random` source; `None` when it supplies none.
     pub random: Option<RefCell<Random>>,
-    /// The scenario's `serverLoad` numbers; `None` when it supplies none.
     pub server_load: Option<ServerLoad>,
     /// The catalog `Map` member id the scenario's `map` resolved to;
     /// `None` when it supplies none.
     pub map: Option<String>,
-    /// The scenario's `matchPhase`; `None` when it supplies none.
     pub match_phase: Option<crate::scenario::Phase>,
     /// The catalog `Gamemode` member id the scenario's `gameMode`
     /// resolved to; `None` when it supplies none.
@@ -94,7 +84,6 @@ pub(crate) struct World {
     /// The match clock `Pause`/`Set Match Time`/`Set Slow Motion`
     /// write and `Match Time`/`Total Time Elapsed` read (athena#120).
     pub clock: crate::clock::Clock,
-    /// The recorded timeline.
     pub timeline: Timeline,
 }
 
@@ -179,7 +168,6 @@ fn skip_count(value: &Val) -> Result<usize, Stop> {
     }
 }
 
-/// The step at which `pc` moves past the frame's last action.
 fn advance(inst: &mut Instance<'_>) {
     inst.frames.last_mut().expect("a running frame").pc += 1;
 }
@@ -292,8 +280,6 @@ pub(crate) fn run_instance(
             }
             Action::If { condition } => {
                 if flag(eval(condition, &env)?)? {
-                    // A new chain starts clean; a stale jump would read the
-                    // next `ElseIf`/`Else` as a clause head to evaluate.
                     inst.clause_jump = None;
                     advance(inst);
                 } else {
@@ -360,8 +346,6 @@ pub(crate) fn run_instance(
                     old,
                     new: Val::Number(start),
                 });
-                // The loop-exit check runs at the `For` line once, then at
-                // each `End`; a value already past the stop never enters.
                 inst.frames.last_mut().expect("a running frame").pc =
                     if for_done(start.get(), stop, step) {
                         map.pairs[pc].expect("paired at load") + 1
@@ -404,8 +388,6 @@ pub(crate) fn run_instance(
             }
             Action::End => {
                 let open = map.pairs[pc].expect("paired at load");
-                // `While` ends re-enter the head to re-check the condition;
-                // `For` ends step the variable and re-check the bound.
                 let next = match &rule.actions[open] {
                     Action::While { .. } => open,
                     Action::ForGlobalVariable {
@@ -489,8 +471,6 @@ pub(crate) fn run_instance(
                             flag(eval(condition, &env)?)?
                         }
                     };
-                    // `Abort` kills the whole run, subroutine frames
-                    // included; the run records `aborted`, not `finished`.
                     if fire {
                         inst.frames.clear();
                         inst.clause_jump = None;
@@ -532,9 +512,6 @@ pub(crate) fn run_instance(
                             flag(eval(condition, &env)?)?
                         }
                         "loopIfConditionIsTrue" => {
-                            // A condition re-check is its own
-                            // `Evaluate Once` scope, like the
-                            // scheduler's per-tick check.
                             let pass = RefCell::new(BTreeMap::new());
                             conditions_hold(rule, &Env { once: &pass, ..env })?
                         }
@@ -543,9 +520,6 @@ pub(crate) fn run_instance(
                             !conditions_hold(rule, &Env { once: &pass, ..env })?
                         }
                     };
-                    // The restarts jump to the head of the action list the
-                    // frame executes — inside a `Call Subroutine`, the
-                    // subroutine's own.
                     inst.frames.last_mut().expect("a running frame").pc =
                         if again { 0 } else { pc + 1 };
                 }
@@ -557,8 +531,6 @@ pub(crate) fn run_instance(
                         return unsupported(format!("{name} outside a loop"));
                     };
                     let end = map.pairs[open].expect("paired at load");
-                    // `Continue` lands on the `End`, which steps a `For` or
-                    // re-enters a `While` head; `Break` lands past it.
                     inst.frames.last_mut().expect("a running frame").pc =
                         if name == "break" { end + 1 } else { end };
                 }
@@ -589,7 +561,6 @@ pub(crate) fn run_instance(
                         },
                         other => return unsupported(format!("wait behavior {other:?}")),
                     };
-                    // The rule's condition is tracked for global rules only.
                     if mode != WaitMode::Ignore && inst.event.is_some() {
                         return unsupported("wait behavior in an event-triggered rule");
                     }
@@ -696,9 +667,6 @@ pub(crate) fn run_instance(
                     let id = player_id(player, &env)?;
                     let index = number(&eval(index, &env)?)?;
                     let operand = eval(operand, &env)?;
-                    // The operand can read a player's `position`, so the
-                    // variable's slot is worked on a copy and committed
-                    // when the write applies.
                     let Some(target) = world.players.get(&id) else {
                         return unsupported(format!("player variable of undeclared player `{id}`"));
                     };
@@ -738,8 +706,6 @@ pub(crate) fn run_instance(
                                 )
                             })
                             .or_else(|| crate::noop::action(other, args, &env));
-                    // `env` shares a borrow of `world.players`, so it ends
-                    // here and the delegated actions take `world` itself.
                     let result = result
                         .or_else(|| {
                             crate::actions::action(
